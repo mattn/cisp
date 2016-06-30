@@ -5,7 +5,7 @@
 #include <ctype.h>
 
 enum T {
-  NODE_NIL, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE,
+  NODE_NIL, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_IDENT,
   NODE_PLUS, NODE_MINUS, NODE_MUL, NODE_DIV,
   NODE_IF,
   NODE_PRINT,
@@ -133,11 +133,25 @@ parse_paren(NODE *node, const char *p) {
 }
 
 static const char*
+parse_ident(NODE *node, const char *p) {
+  const char *t = p;
+  while (*p && isalpha(*p)) p++;
+  while (*p && isdigit(*p)) p++;
+  node->t = NODE_IDENT;
+  node->u.s = (char*) malloc((size_t)(p - t) + 1);
+  memset(node->u.s, 0, (size_t)(p - t) + 1);
+  memcpy(node->u.s, t, (size_t)(p - t));
+  node->r++;
+  return p;
+}
+
+static const char*
 parse_any(NODE *node, const char *p) {
   if (!p) return NULL;
   p = skip_white(p);
   if (*p == '(') return parse_paren(node, p + 1); 
   if (*p == '-' || isdigit(*p)) return parse_number(node, p);
+  if (isalpha(*p)) return parse_ident(node, p);
   if (*p) return raise(p);
   return p;
 }
@@ -156,6 +170,7 @@ print_node(NODE *node) {
   switch (node->t) {
   case NODE_INT: printf("%ld", node->u.i); break;
   case NODE_DOUBLE: printf("%f", node->u.d); break;
+  case NODE_IDENT: printf("%s", node->u.s); break;
   case NODE_NIL: printf("nil"); break;
   case NODE_PLUS: printf("(+"); print_args(node); printf(")"); break;
   case NODE_MINUS: printf("(-"); print_args(node); printf(")"); break;
@@ -347,6 +362,10 @@ eval_node(NODE *node) {
     c->r++;
     return c;
   case NODE_QUOTE:
+    node->r++;
+    return node;
+  case NODE_IDENT:
+    /* TODO */
     node->r++;
     return node;
   case NODE_INT:
