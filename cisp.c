@@ -49,6 +49,7 @@ raise(const char *p) {
 static const char* parse_any(NODE *node, const char *p);
 static const char* parse_paren(NODE *node, const char *p);
 static const char* parse_ident(NODE *node, const char *p);
+static NODE* eval_node(ENV *env, NODE *node);
 static void print_node(NODE *node);
 static void free_node(NODE *node);
 
@@ -287,6 +288,7 @@ print_node(NODE *node) {
   case NODE_LIST: printf("("); print_list(node); printf(")"); break;
   case NODE_SETQ: printf("(setq"); print_args(node); printf(")"); break;
   case NODE_DEFUN: printf("(defun"); print_args(node); printf(")"); break;
+  case NODE_PROGN: print_args(node); break;
   }
 }
 
@@ -309,7 +311,8 @@ free_env(ENV *env) {
 }
 
 static long
-int_value(NODE *node) {
+int_value(ENV *env, NODE *node) {
+  node = eval_node(env, node);
   switch (node->t) {
   case NODE_INT: return node->u.i; break;
   case NODE_DOUBLE: return (long)node->u.d; break;
@@ -318,7 +321,8 @@ int_value(NODE *node) {
 }
 
 static double
-double_value(NODE *node) {
+double_value(ENV *env, NODE *node) {
+  node = eval_node(env, node);
   switch (node->t) {
   case NODE_INT: return (double)node->u.i; break;
   case NODE_DOUBLE: return node->u.d; break;
@@ -360,12 +364,12 @@ eval_node(ENV *env, NODE *node) {
       switch (nn->t) {
       case NODE_INT:
         if (c->t == NODE_DOUBLE) {
-          nn->u.d = double_value(nn) + double_value(c);
+          nn->u.d = double_value(env, nn) + double_value(env, c);
           nn->t = c->t;
         } else
-          nn->u.i += int_value(c);
+          nn->u.i += int_value(env, c);
         break;
-      case NODE_DOUBLE: nn->u.d += double_value(c); break;
+      case NODE_DOUBLE: nn->u.d += double_value(env, c); break;
       default: break;
       }
     }
@@ -383,12 +387,12 @@ eval_node(ENV *env, NODE *node) {
       switch (nn->t) {
       case NODE_INT:
         if (c->t == NODE_DOUBLE) {
-          nn->u.d = double_value(nn) - double_value(c);
+          nn->u.d = double_value(env, nn) - double_value(env, c);
           nn->t = c->t;
         } else
-          nn->u.i -= int_value(c);
+          nn->u.i -= int_value(env, c);
         break;
-      case NODE_DOUBLE: nn->u.d -= double_value(c); break;
+      case NODE_DOUBLE: nn->u.d -= double_value(env, c); break;
       default: break;
       }
     }
@@ -406,12 +410,12 @@ eval_node(ENV *env, NODE *node) {
       switch (nn->t) {
       case NODE_INT:
         if (c->t == NODE_DOUBLE) {
-          nn->u.d = double_value(nn) * double_value(c);
+          nn->u.d = double_value(env, nn) * double_value(env, c);
           nn->t = c->t;
         } else
-          nn->u.i *= int_value(c);
+          nn->u.i *= int_value(env, c);
         break;
-      case NODE_DOUBLE: nn->u.d *= double_value(c); break;
+      case NODE_DOUBLE: nn->u.d *= double_value(env, c); break;
       default: break;
       }
     }
@@ -429,12 +433,12 @@ eval_node(ENV *env, NODE *node) {
       switch (nn->t) {
       case NODE_INT:
         if (c->t == NODE_DOUBLE) {
-          nn->u.d = double_value(nn) / double_value(c);
+          nn->u.d = double_value(env, nn) / double_value(env, c);
           nn->t = c->t;
         } else
-          nn->u.i /= int_value(c);
+          nn->u.i /= int_value(env, c);
         break;
-      case NODE_DOUBLE: nn->u.d /= double_value(c); break;
+      case NODE_DOUBLE: nn->u.d /= double_value(env, c); break;
       default: break;
       }
     }
@@ -456,31 +460,32 @@ eval_node(ENV *env, NODE *node) {
       r = 1;
       break;
     }
-    c =  node->c[r > 0 ? 1 : 2];
+	print_node(node->c[2]);
+    c =  eval_node(env, node->c[r > 0 ? 1 : 2]);
     c->r++;
     return c;
   case NODE_GT:
     nn = new_node();
     nn->t = NODE_INT;
-    nn->u.i = double_value(node->c[0]) > double_value(node->c[1]);
+    nn->u.i = double_value(env, node->c[0]) > double_value(env, node->c[1]);
     nn->r++;
     return nn;
   case NODE_GE:
     nn = new_node();
     nn->t = NODE_INT;
-    nn->u.i = double_value(node->c[0]) >= double_value(node->c[1]);
+    nn->u.i = double_value(env, node->c[0]) >= double_value(env, node->c[1]);
     nn->r++;
     return nn;
   case NODE_LT:
     nn = new_node();
     nn->t = NODE_INT;
-    nn->u.i = double_value(node->c[0]) < double_value(node->c[1]);
+    nn->u.i = double_value(env, node->c[0]) < double_value(env, node->c[1]);
     nn->r++;
     return nn;
   case NODE_LE:
     nn = new_node();
     nn->t = NODE_INT;
-    nn->u.i = double_value(node->c[0]) <= double_value(node->c[1]);
+    nn->u.i = double_value(env, node->c[0]) <= double_value(env, node->c[1]);
     nn->r++;
     return nn;
   case NODE_PRINT:
@@ -524,7 +529,7 @@ eval_node(ENV *env, NODE *node) {
     }
     newenv = new_env(env);
     c = x->c[1]->c[0];
-    for (i = 0; i < c->n; i++) {
+    for (i = 0; i < node->n; i++) {
       ni = (ITEM*) malloc(sizeof(ITEM));
       memset(ni, 0, sizeof(ITEM));
       ni->k = c->c[i]->u.s;
@@ -610,6 +615,7 @@ main(int argc, char* argv[]) {
     if (!parse_args(top, p)) {
       exit(1);
     }
+    print_node(top);
     free(p);
     env = new_env(NULL);
     ret = eval_node(env, top);
