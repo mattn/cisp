@@ -209,11 +209,23 @@ print_args(NODE *node) {
 }
 
 static void
+print_str(NODE *node) {
+  const char* p = node->u.s;
+  putchar('"');
+  while (*p) {
+    if (*p == '\\') putchar(*p);
+    putchar(*p);
+    p++;
+  }
+  putchar('"');
+}
+
+static void
 print_node(NODE *node) {
   switch (node->t) {
   case NODE_INT: printf("%ld", node->u.i); break;
   case NODE_DOUBLE: printf("%f", node->u.d); break;
-  case NODE_STRING: printf("%s", node->u.s); break;
+  case NODE_STRING: print_str(node); break;
   case NODE_IDENT: printf("%s", node->u.s); break;
   case NODE_NIL: printf("nil"); break;
   case NODE_PLUS: printf("(+"); print_args(node); printf(")"); break;
