@@ -9,6 +9,8 @@ enum T {
   NODE_PLUS, NODE_MINUS, NODE_MUL, NODE_DIV,
   NODE_IF,
   NODE_PRINT,
+  NODE_LT, NODE_LE,
+  NODE_GT, NODE_GE,
 };
 
 typedef struct _NODE {
@@ -109,6 +111,14 @@ parse_paren(NODE *node, const char *p) {
     node->t = NODE_IF;
   } else if (!strncmp(t, "print", (size_t)(p - t))) {
     node->t = NODE_PRINT;
+  } else if (!strncmp(t, "<", (size_t)(p - t))) {
+    node->t = NODE_GT;
+  } else if (!strncmp(t, "<=", (size_t)(p - t))) {
+    node->t = NODE_GE;
+  } else if (!strncmp(t, ">", (size_t)(p - t))) {
+    node->t = NODE_LT;
+  } else if (!strncmp(t, ">=", (size_t)(p - t))) {
+    node->t = NODE_LE;
   } else return raise(t);
   p = parse_args(node, p);
   if (p && *p && node->n == 0) raise(p);
@@ -137,43 +147,19 @@ print_args(NODE *node) {
 static void
 print_node(NODE *node) {
   switch (node->t) {
-  case NODE_PLUS:
-    printf("(+");
-    print_args(node);
-    printf(")");
-    break;
-  case NODE_MINUS:
-    printf("(-");
-    print_args(node);
-    printf(")");
-    break;
-  case NODE_MUL:
-    printf("(*");
-    print_args(node);
-    printf(")");
-    break;
-  case NODE_DIV:
-    printf("(/");
-    print_args(node);
-    printf(")");
-    break;
-  case NODE_IF:
-    printf("(if");
-    print_args(node);
-    printf(")");
-    break;
-  case NODE_INT:
-    printf("%ld", node->u.i);
-    break;
-  case NODE_DOUBLE:
-    printf("%f", node->u.d);
-    break;
-  case NODE_NIL:
-    printf("nil");
-    break;
-  case NODE_PRINT:
-    printf("print");
-    break;
+  case NODE_PLUS: printf("(+"); print_args(node); printf(")"); break;
+  case NODE_MINUS: printf("(-"); print_args(node); printf(")"); break;
+  case NODE_MUL: printf("(*"); print_args(node); printf(")"); break;
+  case NODE_DIV: printf("(/"); print_args(node); printf(")"); break;
+  case NODE_IF: printf("(if"); print_args(node); printf(")"); break;
+  case NODE_GT: printf("(>"); print_args(node); printf(")"); break;
+  case NODE_GE: printf("(>="); print_args(node); printf(")"); break;
+  case NODE_LT: printf("(<"); print_args(node); printf(")"); break;
+  case NODE_LE: printf("(<="); print_args(node); printf(")"); break;
+  case NODE_INT: printf("%ld", node->u.i); break;
+  case NODE_DOUBLE: printf("%f", node->u.d); break;
+  case NODE_NIL: printf("nil"); break;
+  case NODE_PRINT: printf("print"); break;
   }
 }
 
@@ -313,6 +299,7 @@ eval_node(NODE *node) {
     c = node->c[2];
     c->r++;
     return c;
+  /* TODO: GT GE LT LE */
   case NODE_PRINT:
     print_node(node);
     return node;
