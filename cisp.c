@@ -26,6 +26,16 @@ typedef struct _NODE {
   struct _NODE **c;
 } NODE;
 
+typedef struct {
+  const char *k;
+  NODE *v;
+} ITEM;
+
+typedef struct {
+  int n;
+  ITEM **c;
+} ENV;
+
 static char*
 raise(const char *p) {
   if (!p) return NULL;
