@@ -7,7 +7,7 @@
 enum T {
   NODE_NIL, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_IDENT,
   NODE_PLUS, NODE_MINUS, NODE_MUL, NODE_DIV,
-  NODE_IF,
+  NODE_IF, NODE_DEFUN,
   NODE_PRINT, NODE_SETQ,
   NODE_LT, NODE_LE,
   NODE_GT, NODE_GE,
@@ -119,6 +119,7 @@ parse_paren(NODE *node, const char *p) {
   else if (!strncmp(t, "print", (size_t)(p - t))) node->t = NODE_PRINT;
   else if (!strncmp(t, "quote", (size_t)(p - t))) node->t = NODE_QUOTE;
   else if (!strncmp(t, "setq", (size_t)(p - t))) node->t = NODE_SETQ;
+  else if (!strncmp(t, "defun", (size_t)(p - t))) node->t = NODE_DEFUN;
   else return raise(t);
 
   p = parse_args(node, p);
@@ -137,6 +138,7 @@ parse_paren(NODE *node, const char *p) {
   case NODE_PRINT: if (node->n != 1) return raise(p); break;
   case NODE_QUOTE: if (node->n != 1) return raise(p); break;
   case NODE_SETQ: if (node->n != 2) return raise(p); break;
+  case NODE_DEFUN: if (node->n < 3) return raise(p); break;
   }
   node->r++;
   return p;
@@ -493,6 +495,7 @@ main(int argc, char* argv[]) {
     fsize = ftell(fp);
     fseek(fp, 0, SEEK_SET);  //same as rewind(f);
     p = (char*) malloc(fsize + 1);
+    memset(p, 0, fsize+1);
     fread(p, fsize, 1, fp);
     fclose(fp);
 
