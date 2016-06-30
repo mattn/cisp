@@ -5,7 +5,7 @@
 #include <ctype.h>
 
 enum T {
-  NODE_NIL, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_IDENT,
+  NODE_NIL, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_IDENT, NODE_LIST, NODE_PROGN, NODE_CALL,
   NODE_PLUS, NODE_MINUS, NODE_MUL, NODE_DIV,
   NODE_IF, NODE_DEFUN,
   NODE_PRINT, NODE_SETQ,
@@ -32,8 +32,10 @@ typedef struct {
 } ITEM;
 
 typedef struct {
-  int n;
-  ITEM **c;
+  int nv;
+  ITEM **lv;
+  int nf;
+  ITEM **lf;
 } ENV;
 
 static char*
@@ -97,8 +99,10 @@ parse_args(NODE *node, const char *p) {
     node->n++;
     p = skip_white(p);
   }
-  if (p && *p == ')') p++;
-  else return raise(p);
+  if (p && *p) {
+    if (*p == ')') p++;
+    else return raise(p);
+  }
   return p;
 }
 
@@ -120,7 +124,7 @@ parse_paren(NODE *node, const char *p) {
   else if (!strncmp(t, "quote", (size_t)(p - t))) node->t = NODE_QUOTE;
   else if (!strncmp(t, "setq", (size_t)(p - t))) node->t = NODE_SETQ;
   else if (!strncmp(t, "defun", (size_t)(p - t))) node->t = NODE_DEFUN;
-  else return raise(t);
+  else node->t = NODE_CALL;
 
   p = parse_args(node, p);
   if (p && *p && node->n == 0) return raise(p);
@@ -161,7 +165,12 @@ static const char*
 parse_quote(NODE *node, const char *p) {
   NODE *child = NULL;
   child = new_node();
-  p = parse_ident(child, p);
+  if (*p == '(') {
+    child->t = NODE_LIST;
+    p = parse_args(child, p+1);
+  } else {
+    p = parse_ident(child, p);
+  }
   if (!p) {
     free_node(child);
     return NULL;
@@ -204,7 +213,7 @@ static const char*
 parse_any(NODE *node, const char *p) {
   if (!p) return NULL;
   p = skip_white(p);
-  if (*p == '(') return parse_paren(node, p + 1); 
+  if (*p == '(') return parse_paren(node, p + 1);
   if (*p == '-' || isdigit(*p)) return parse_number(node, p);
   if (*p == '\'') return parse_quote(node, p + 1);
   if (*p == '"') return parse_string(node, p + 1);
@@ -218,6 +227,15 @@ print_args(NODE *node) {
   int i;
   for (i = 0; i < node->n; i++) {
     printf(" ");
+    print_node(node->c[i]);
+  }
+}
+
+static void
+print_list(NODE *node) {
+  int i;
+  for (i = 0; i < node->n; i++) {
+    if (i > 0) printf(" ");
     print_node(node->c[i]);
   }
 }
@@ -252,8 +270,10 @@ print_node(NODE *node) {
   case NODE_LT: printf("(<"); print_args(node); printf(")"); break;
   case NODE_LE: printf("(<="); print_args(node); printf(")"); break;
   case NODE_PRINT: printf("(print"); print_args(node); printf(")"); break;
-  case NODE_QUOTE: print_node(node->c[0]); break;
+  case NODE_QUOTE: printf("'"); print_node(node->c[0]); break;
+  case NODE_LIST: printf("("); print_list(node); printf(")"); break;
   case NODE_SETQ: printf("(setq"); print_args(node); printf(")"); break;
+  case NODE_DEFUN: printf("(defun"); print_args(node); printf(")"); break;
   }
 }
 
@@ -447,20 +467,40 @@ eval_node(ENV *env, NODE *node) {
     ni->k = x->u.s;
     ni->v = node->c[1];
     ni->v->r++;
-    env->c = (ITEM**) realloc(env->c, sizeof(ITEM) * (env->n + 1));
-    env->c[env->n] = ni;
-    env->n++;
+    env->lv = (ITEM**) realloc(env->lv, sizeof(ITEM) * (env->nv + 1));
+    env->lv[env->nv] = ni;
+    env->nv++;
     node->c[1]->r++;
     return node->c[1];
   case NODE_IDENT:
-    for (i = 0; i < env->n; i++) {
-      if (!strcmp(env->c[i]->k, node->u.s)) {
-        c = env->c[i]->v;
+    for (i = 0; i < env->nv; i++) {
+      if (!strcmp(env->lv[i]->k, node->u.s)) {
+        c = env->lv[i]->v;
         c->r++;
         return c;
       }
     }
     return new_node();
+  case NODE_CALL:
+    /* TODO: call */
+    break;
+  case NODE_DEFUN:
+    x = node->c[0];
+    if (x->t != NODE_IDENT) {
+      /* TODO: error */
+      return new_node();
+    }
+    ni = (ITEM*) malloc(sizeof(ITEM));
+    memset(ni, 0, sizeof(ITEM));
+    ni->k = x->u.s;
+    ni->v = node;
+    ni->v->r++;
+    env->lf = (ITEM**) realloc(env->lf, sizeof(ITEM) * (env->nf + 1));
+    env->lf[env->nf] = ni;
+    env->nf++;
+    node->c[1]->r++;
+    node->r++;
+    return node;
   case NODE_INT:
     node->r++;
     return node;
@@ -473,6 +513,19 @@ eval_node(ENV *env, NODE *node) {
   case NODE_STRING:
     node->r++;
     return node;
+  case NODE_LIST:
+    node->r++;
+    return node;
+  case NODE_PROGN:
+    c = NULL;
+    for (i = 0; i < node->n; i++) {
+      c = eval_node(env, node->c[i]);
+    }
+    if (c) {
+      c->r++;
+      return c;
+    }
+    return new_node();
   }
   return new_node();
 }
@@ -500,7 +553,8 @@ main(int argc, char* argv[]) {
     fclose(fp);
 
     top = new_node();
-    if (!parse_any(top, p)) {
+    top->t = NODE_PROGN;
+    if (!parse_args(top, p)) {
       exit(1);
     }
     free(p);
