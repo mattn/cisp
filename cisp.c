@@ -31,11 +31,12 @@ typedef struct {
   NODE *v;
 } ITEM;
 
-typedef struct {
+typedef struct _ENV {
   int nv;
   ITEM **lv;
   int nf;
   ITEM **lf;
+  struct _ENV *p;
 } ENV;
 
 static char*
@@ -47,6 +48,7 @@ raise(const char *p) {
 
 static const char* parse_any(NODE *node, const char *p);
 static const char* parse_paren(NODE *node, const char *p);
+static const char* parse_ident(NODE *node, const char *p);
 static void print_node(NODE *node);
 static void free_node(NODE *node);
 
@@ -62,6 +64,14 @@ new_node() {
   memset(node, 0, sizeof(NODE));
   node->t = NODE_INT;
   return node;
+}
+
+static ENV*
+new_env(ENV *p) {
+  ENV* env = (ENV*) malloc(sizeof(ENV));
+  memset(env, 0, sizeof(ENV));
+  env->p = p;
+  return env;
 }
 
 static const char*
@@ -124,7 +134,10 @@ parse_paren(NODE *node, const char *p) {
   else if (!strncmp(t, "quote", (size_t)(p - t))) node->t = NODE_QUOTE;
   else if (!strncmp(t, "setq", (size_t)(p - t))) node->t = NODE_SETQ;
   else if (!strncmp(t, "defun", (size_t)(p - t))) node->t = NODE_DEFUN;
-  else node->t = NODE_CALL;
+  else {
+    p = parse_ident(node, t);
+    node->t = NODE_CALL;
+  }
 
   p = parse_args(node, p);
   if (p && *p && node->n == 0) return raise(p);
@@ -288,6 +301,13 @@ free_node(NODE *node) {
   }
 }
 
+static void
+free_env(ENV *env) {
+  free(env->lv);
+  free(env->lf);
+  free(env);
+}
+
 static long
 int_value(NODE *node) {
   switch (node->t) {
@@ -307,7 +327,23 @@ double_value(NODE *node) {
 }
 
 static NODE*
+look_ident(ENV *env, const char *k) {
+  int i;
+  for (i = 0; i < env->nv; i++) {
+    if (!strcmp(env->lv[i]->k, k)) {
+      NODE *c = env->lv[i]->v;
+      c->r++;
+      return c;
+    }
+  }
+  if (env->p) look_ident(env->p, k);
+  /* TODO: error */
+  return new_node();
+}
+
+static NODE*
 eval_node(ENV *env, NODE *node) {
+  ENV *newenv;
   NODE *nn, *c, *x;
   ITEM *ni;
   int i, r;
@@ -473,17 +509,34 @@ eval_node(ENV *env, NODE *node) {
     node->c[1]->r++;
     return node->c[1];
   case NODE_IDENT:
-    for (i = 0; i < env->nv; i++) {
-      if (!strcmp(env->lv[i]->k, node->u.s)) {
-        c = env->lv[i]->v;
-        c->r++;
-        return c;
+    return look_ident(env, node->u.s);
+  case NODE_CALL:
+    x = NULL;
+    for (i = 0; i < env->nf; i++) {
+      if (!strcmp(env->lf[i]->k, node->u.s)) {
+        x = env->lf[i]->v;
+        break;
       }
     }
-    return new_node();
-  case NODE_CALL:
-    /* TODO: call */
-    break;
+    if (!x) {
+      /* TODO: error */
+      return new_node();
+    }
+    newenv = new_env(env);
+    c = x->c[1]->c[0];
+    for (i = 0; i < c->n; i++) {
+      ni = (ITEM*) malloc(sizeof(ITEM));
+      memset(ni, 0, sizeof(ITEM));
+      ni->k = c->c[i]->u.s;
+      ni->v = node->c[i];
+      ni->v->r++;
+      newenv->lv = (ITEM**) realloc(newenv->lv, sizeof(ITEM) * (newenv->nv + 1));
+      newenv->lv[newenv->nv] = ni;
+      newenv->nv++;
+    }
+    c = eval_node(newenv, x->c[2]);
+    free_env(newenv);
+    return c;
   case NODE_DEFUN:
     x = node->c[0];
     if (x->t != NODE_IDENT) {
@@ -532,7 +585,7 @@ eval_node(ENV *env, NODE *node) {
 
 int
 main(int argc, char* argv[]) {
-  ENV env = {0};
+  ENV *env;
   NODE *top, *ret;
   char buf[BUFSIZ], *p;
 
@@ -558,14 +611,17 @@ main(int argc, char* argv[]) {
       exit(1);
     }
     free(p);
-    ret = eval_node(&env, top);
+    env = new_env(NULL);
+    ret = eval_node(env, top);
     print_node(ret);
     puts("");
     free_node(ret);
     free_node(top);
+    free_env(env);
     exit(0);
   }
 
+  env = new_env(NULL);
   while (1) {
     printf("> ");
     if (!fgets(buf , sizeof(buf), stdin)) break;
@@ -573,11 +629,12 @@ main(int argc, char* argv[]) {
     if (!parse_any(top, buf)) {
       continue;
     }
-    ret = eval_node(&env, top);
+    ret = eval_node(env, top);
     print_node(ret);
     puts("");
     free_node(ret);
     free_node(top);
   }
+  free_env(env);
   return 0;
 }
