@@ -22,10 +22,10 @@ typedef struct _NODE {
   struct _NODE **c;
 } NODE;
 
-static void
+static char*
 raise(const char *p) {
   fprintf(stderr, "invalid token: %s\n", p);
-  exit(1);
+  return NULL;
 }
 
 static const char* parse_any(NODE *node, const char *p);
@@ -79,7 +79,7 @@ parse_args(NODE *node, const char *p) {
     p = skip_white(p);
   }
   if (*p == ')') p++;
-  else raise(p);
+  else return raise(p);
   return p;
 }
 
@@ -98,7 +98,7 @@ parse_paren(NODE *node, const char *p) {
   } else if (!strncmp(t, "/", (size_t)(p - t))) {
     node->t = NODE_DIV;
   } else
-    raise(t);
+    return raise(t);
   if (*p != ')') {
     p = parse_args(node, p);
   }
@@ -110,7 +110,7 @@ parse_any(NODE *node, const char *p) {
   p = skip_white(p);
   if (*p == '(') return parse_paren(node, p + 1); 
   if (isdigit(*p)) return parse_number(node, p);
-  if (*p) raise(p);
+  if (*p) return raise(p);
   return p;
 }
 
@@ -151,7 +151,7 @@ print_node(NODE *node) {
     break;
   case NODE_DOUBLE:
     printf("%f", node->u.d);
-	break;
+    break;
   }
 }
 
@@ -285,24 +285,28 @@ eval_node(NODE *node) {
 int
 main(int argc, char* argv[]) {
   NODE *top, *ret;
-  char buf[BUFSIZ];
+  char buf[BUFSIZ], *p;
 
   if (argc > 1) {
     top = new_node(), *ret;
-    parse_any(top, argv[1]);
+    if (!parse_any(top, argv[1])) {
+      exit(1);
+    }
     ret = eval_node(top);
     print_node(ret);
     puts("");
     free_node(ret);
     free_node(top);
-	exit(0);
+    exit(0);
   }
 
   while (1) {
     printf("> ");
     if (!fgets(buf , sizeof(buf), stdin)) break;
     top = new_node();
-    parse_any(top, buf);
+    if (!parse_any(top, buf)) {
+      exit(1);
+    }
     ret = eval_node(top);
     print_node(ret);
     puts("");
