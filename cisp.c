@@ -174,6 +174,24 @@ free_node(NODE *node) {
   }
 }
 
+static long
+int_value(NODE *node) {
+  switch (node->t) {
+  case NODE_INT: return node->u.i; break;
+  case NODE_DOUBLE: return (long)node->u.d; break;
+  }
+  return 0;
+}
+
+static double
+double_value(NODE *node) {
+  switch (node->t) {
+  case NODE_INT: return (double)node->u.i; break;
+  case NODE_DOUBLE: return node->u.d; break;
+  }
+  return 0.0;
+}
+
 static NODE*
 eval_node(NODE *node) {
   NODE *nn, *c;
@@ -184,20 +202,20 @@ eval_node(NODE *node) {
     for (i = 0; i < node->n; i++) {
       c = eval_node(node->c[i]);
       if (i == 0) {
-        nn->u.d = c->u.d;
+        nn->t = c->t;
+        nn->u = c->u;
         continue;
       }
-      switch (c->t) {
+      switch (nn->t) {
       case NODE_INT:
-        if (nn->t == NODE_INT) nn->u.i += (long)c->u.i;
-        else nn->u.d += (double)c->u.i;
+        if (c->t == NODE_DOUBLE) {
+          nn->u.d = double_value(nn) + double_value(c);
+          nn->t = c->t;
+        } else
+          nn->u.i += int_value(c);
         break;
-      case NODE_DOUBLE:
-        if (nn->t == NODE_INT) nn->u.i += (long)c->u.d;
-        else nn->u.d += (double)c->u.d;
-        break;
-      default:
-        break;
+      case NODE_DOUBLE: nn->u.d += double_value(c); break;
+      default: break;
       }
     }
     nn->r++;
@@ -207,20 +225,20 @@ eval_node(NODE *node) {
     for (i = 0; i < node->n; i++) {
       c = eval_node(node->c[i]);
       if (i == 0) {
-        nn->u.d = c->u.d;
+        nn->t = c->t;
+        nn->u = c->u;
         continue;
       }
-      switch (c->t) {
+      switch (nn->t) {
       case NODE_INT:
-        if (nn->t == NODE_INT) nn->u.i -= (long)c->u.i;
-        else nn->u.d += (double)c->u.i;
+        if (c->t == NODE_DOUBLE) {
+          nn->u.d = double_value(nn) - double_value(c);
+          nn->t = c->t;
+        } else
+          nn->u.i -= int_value(c);
         break;
-      case NODE_DOUBLE:
-        if (nn->t == NODE_INT) nn->u.i -= (long)c->u.d;
-        else nn->u.d += (double)c->u.d;
-        break;
-      default:
-        break;
+      case NODE_DOUBLE: nn->u.d -= double_value(c); break;
+      default: break;
       }
     }
     nn->r++;
@@ -230,20 +248,20 @@ eval_node(NODE *node) {
     for (i = 0; i < node->n; i++) {
       c = eval_node(node->c[i]);
       if (i == 0) {
-        nn->u.d = c->u.d;
+        nn->u = c->u;
+        nn->t = c->t;
         continue;
       }
-      switch (c->t) {
+      switch (nn->t) {
       case NODE_INT:
-        if (nn->t == NODE_INT) nn->u.i *= (long)c->u.i;
-        else nn->u.d += (double)c->u.i;
+        if (c->t == NODE_DOUBLE) {
+          nn->u.d = double_value(nn) * double_value(c);
+          nn->t = c->t;
+        } else
+          nn->u.i *= int_value(c);
         break;
-      case NODE_DOUBLE:
-        if (nn->t == NODE_INT) nn->u.i *= (long)c->u.d;
-        else nn->u.d += (double)c->u.d;
-        break;
-      default:
-        break;
+      case NODE_DOUBLE: nn->u.d *= double_value(c); break;
+      default: break;
       }
     }
     nn->r++;
@@ -253,20 +271,20 @@ eval_node(NODE *node) {
     for (i = 0; i < node->n; i++) {
       c = eval_node(node->c[i]);
       if (i == 0) {
-        nn->u.d = c->u.d;
+        nn->t = c->t;
+        nn->u = c->u;
         continue;
       }
-      switch (c->t) {
+      switch (nn->t) {
       case NODE_INT:
-        if (nn->t == NODE_INT) nn->u.i /= (long)c->u.i;
-        else nn->u.d += (double)c->u.i;
+        if (c->t == NODE_DOUBLE) {
+          nn->u.d = double_value(nn) / double_value(c);
+          nn->t = c->t;
+        } else
+          nn->u.i /= int_value(c);
         break;
-      case NODE_DOUBLE:
-        if (nn->t == NODE_INT) nn->u.i /= (long)c->u.d;
-        else nn->u.d += (double)c->u.d;
-        break;
-      default:
-        break;
+      case NODE_DOUBLE: nn->u.d /= double_value(c); break;
+      default: break;
       }
     }
     nn->r++;
