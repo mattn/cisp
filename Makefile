@@ -3,8 +3,8 @@ SRCS = \
 
 OBJS = $(subst .c,.o,$(SRCS))
 
-CFLAGS = 
-LIBS = 
+CFLAGS = -g
+LIBS = -g
 TARGET = cisp
 ifeq ($(OS),Windows_NT)
 TARGET := $(TARGET).exe

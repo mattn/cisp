@@ -5,8 +5,10 @@
 #include <ctype.h>
 
 enum T {
-  NODE_INT, NODE_DOUBLE, NODE_STRING,
+  NODE_NIL, NODE_INT, NODE_DOUBLE, NODE_STRING,
   NODE_PLUS, NODE_MINUS, NODE_MUL, NODE_DIV,
+  NODE_IF,
+  NODE_PRINT,
 };
 
 typedef struct _NODE {
@@ -24,6 +26,7 @@ typedef struct _NODE {
 
 static char*
 raise(const char *p) {
+  if (!p) return NULL;
   fprintf(stderr, "invalid token: %s\n", p);
   return NULL;
 }
@@ -31,10 +34,11 @@ raise(const char *p) {
 static const char* parse_any(NODE *node, const char *p);
 static const char* parse_paren(NODE *node, const char *p);
 static void print_node(NODE *node);
+static void free_node(NODE *node);
 
 static const char*
 skip_white(const char *p) {
-  while (isspace((int)*p)) p++;
+  if (p) while (isspace((int)*p)) p++;
   return p;
 }
 
@@ -49,42 +53,46 @@ new_node() {
 static const char*
 parse_number(NODE *node, const char* p) {
   const char *t = p;
-  while (*p && isdigit(*p)) {
-    p++;
-  }
+  if (*p == '-') p++;
+  while (*p && isdigit(*p)) p++;
   if (*p != '.') {
     node->t = NODE_INT;
     node->u.i = atoi(t);
-  } else {
+  } else if (*p) {
     p++;
-    while (*p && isdigit(*p)) {
-      p++;
-    }
+    while (*p && isdigit(*p)) p++;
     node->t = NODE_DOUBLE;
     node->u.d = atof(t);
   }
+  node->r++;
   return p;
 }
 
 static const char*
 parse_args(NODE *node, const char *p) {
+  if (!p) return NULL;
   p = skip_white(p);
-  while (*p && *p != ')') {
+  while (p && *p && *p != ')') {
     NODE *child = NULL;
     child = new_node();
     p = parse_any(child, p);
+    if (!p) {
+      free_node(child);
+      return NULL;
+    }
     node->c = (NODE**) realloc(node->c, sizeof(NODE) * (node->n + 1));
     node->c[node->n] = child;
     node->n++;
     p = skip_white(p);
   }
-  if (*p == ')') p++;
+  if (p && *p == ')') p++;
   else return raise(p);
   return p;
 }
 
 static const char*
 parse_paren(NODE *node, const char *p) {
+  if (!p) return NULL;
   const char *t = p;
   while (!isspace(*p) && *p != ')') {
     p++;
@@ -97,19 +105,22 @@ parse_paren(NODE *node, const char *p) {
     node->t = NODE_MUL;
   } else if (!strncmp(t, "/", (size_t)(p - t))) {
     node->t = NODE_DIV;
-  } else
-    return raise(t);
-  if (*p != ')') {
-    p = parse_args(node, p);
-  }
+  } else if (!strncmp(t, "if", (size_t)(p - t))) {
+    node->t = NODE_IF;
+  } else if (!strncmp(t, "print", (size_t)(p - t))) {
+    node->t = NODE_PRINT;
+  } else return raise(t);
+  p = parse_args(node, p);
+  if (p && *p && node->n == 0) raise(p);
   return p;
 }
 
 static const char*
 parse_any(NODE *node, const char *p) {
+  if (!p) return NULL;
   p = skip_white(p);
   if (*p == '(') return parse_paren(node, p + 1); 
-  if (isdigit(*p)) return parse_number(node, p);
+  if (*p == '-' || isdigit(*p)) return parse_number(node, p);
   if (*p) return raise(p);
   return p;
 }
@@ -146,11 +157,22 @@ print_node(NODE *node) {
     print_args(node);
     printf(")");
     break;
+  case NODE_IF:
+    printf("(if");
+    print_args(node);
+    printf(")");
+    break;
   case NODE_INT:
     printf("%ld", node->u.i);
     break;
   case NODE_DOUBLE:
     printf("%f", node->u.d);
+    break;
+  case NODE_NIL:
+    printf("nil");
+    break;
+  case NODE_PRINT:
+    printf("print");
     break;
   }
 }
@@ -158,27 +180,18 @@ print_node(NODE *node) {
 static void
 free_node(NODE *node) {
   int i;
-  switch (node->t) {
-  case NODE_PLUS:
+  node->r--;
+  if (node->r <= 0) {
     for (i = 0; i < node->n; i++)
       free_node(node->c[i]);
     free(node);
-    break;
-  case NODE_INT:
-    node->r--;
-    if (node->r <= 0) free(node);
-    break;
-  case NODE_DOUBLE:
-    node->r--;
-    if (node->r <= 0) free(node);
-    break;
   }
 }
 
 static NODE*
 eval_node(NODE *node) {
   NODE *nn, *c;
-  int i;
+  int i, r;
   switch (node->t) {
   case NODE_PLUS:
     nn = new_node();
@@ -272,10 +285,44 @@ eval_node(NODE *node) {
     }
     nn->r++;
     return nn;
+  case NODE_IF:
+    c = eval_node(node->c[0]);
+    switch (c->t) {
+    case NODE_NIL:
+      r = 0;
+      break;
+    case NODE_INT:
+      r = c->u.i;
+      break;
+    case NODE_DOUBLE:
+      r = (long) c->u.d;
+      break;
+    default:
+      r = 1;
+      break;
+    }
+    if (r) {
+      if (node->n == 1) return new_node();
+      if (node->n == 2) {
+        c =  node->c[1];
+        c->r++;
+        return c;
+      }
+      return new_node();
+    }
+    c = node->c[2];
+    c->r++;
+    return c;
+  case NODE_PRINT:
+    print_node(node);
+    return node;
   case NODE_INT:
     node->r++;
     return node;
   case NODE_DOUBLE:
+    node->r++;
+    return node;
+  case NODE_NIL:
     node->r++;
     return node;
   }
@@ -305,7 +352,7 @@ main(int argc, char* argv[]) {
     if (!fgets(buf , sizeof(buf), stdin)) break;
     top = new_node();
     if (!parse_any(top, buf)) {
-      exit(1);
+      continue;
     }
     ret = eval_node(top);
     print_node(ret);
