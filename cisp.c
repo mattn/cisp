@@ -96,9 +96,7 @@ static const char*
 parse_paren(NODE *node, const char *p) {
   if (!p) return NULL;
   const char *t = p;
-  while (!isspace(*p) && *p != ')') {
-    p++;
-  }
+  while (!isspace(*p) && *p != ')') p++;
   if (!strncmp(t, "+", (size_t)(p - t))) node->t = NODE_PLUS;
   else if (!strncmp(t, "-", (size_t)(p - t))) node->t = NODE_MINUS;
   else if (!strncmp(t, "*", (size_t)(p - t))) node->t = NODE_MUL;
@@ -158,6 +156,33 @@ parse_quote(NODE *node, const char *p) {
   node->c = (NODE**) realloc(node->c, sizeof(NODE) * (node->n + 1));
   node->c[node->n] = child;
   node->n++;
+  node->r++;
+  return p;
+}
+
+static const char*
+parse_string(NODE *node, const char *p) {
+  const char *t = p;
+  char *sp;
+  int n = 0;
+  while (*p) {
+    if (*p == '\\' && *(p + 1)) p++;
+    else if (*p == '"') break;
+    p++;
+    n++;
+  }
+  node->u.s = (char*) malloc(n + 1);
+  memset(node->u.s, 0, n + 1);
+  sp = node->u.s;
+  while (*t) {
+    if (*t == '\\' && *(t + 1)) t++;
+    else if (*t == '"') break;
+    *sp++ = *t++;
+  }
+
+  p++;
+  node->t = NODE_STRING;
+  node->r++;
   return p;
 }
 
@@ -168,6 +193,7 @@ parse_any(NODE *node, const char *p) {
   if (*p == '(') return parse_paren(node, p + 1); 
   if (*p == '-' || isdigit(*p)) return parse_number(node, p);
   if (*p == '\'') return parse_quote(node, p + 1);
+  if (*p == '"') return parse_string(node, p + 1);
   if (isalpha(*p)) return parse_ident(node, p);
   if (*p) return raise(p);
   return p;
@@ -187,6 +213,7 @@ print_node(NODE *node) {
   switch (node->t) {
   case NODE_INT: printf("%ld", node->u.i); break;
   case NODE_DOUBLE: printf("%f", node->u.d); break;
+  case NODE_STRING: printf("%s", node->u.s); break;
   case NODE_IDENT: printf("%s", node->u.s); break;
   case NODE_NIL: printf("nil"); break;
   case NODE_PLUS: printf("(+"); print_args(node); printf(")"); break;
@@ -392,6 +419,9 @@ eval_node(NODE *node) {
     node->r++;
     return node;
   case NODE_NIL:
+    node->r++;
+    return node;
+  case NODE_STRING:
     node->r++;
     return node;
   }
