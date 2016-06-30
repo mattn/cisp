@@ -112,16 +112,27 @@ parse_paren(NODE *node, const char *p) {
   } else if (!strncmp(t, "print", (size_t)(p - t))) {
     node->t = NODE_PRINT;
   } else if (!strncmp(t, "<", (size_t)(p - t))) {
-    node->t = NODE_GT;
-  } else if (!strncmp(t, "<=", (size_t)(p - t))) {
-    node->t = NODE_GE;
-  } else if (!strncmp(t, ">", (size_t)(p - t))) {
     node->t = NODE_LT;
-  } else if (!strncmp(t, ">=", (size_t)(p - t))) {
+  } else if (!strncmp(t, "<=", (size_t)(p - t))) {
     node->t = NODE_LE;
+  } else if (!strncmp(t, ">", (size_t)(p - t))) {
+    node->t = NODE_GT;
+  } else if (!strncmp(t, ">=", (size_t)(p - t))) {
+    node->t = NODE_GE;
   } else return raise(t);
   p = parse_args(node, p);
-  if (p && *p && node->n == 0) raise(p);
+  if (p && *p && node->n == 0) return raise(p);
+  switch (node->t) {
+  case NODE_PLUS: if (node->n < 2) return raise(p); break;
+  case NODE_MINUS: if (node->n < 2) return raise(p); break;
+  case NODE_MUL: if (node->n < 2) return raise(p); break;
+  case NODE_DIV: if (node->n < 2) return raise(p); break;
+  case NODE_IF: if (node->n != 3) return raise(p); break;
+  case NODE_GT: if (node->n != 2) return raise(p); break;
+  case NODE_GE: if (node->n != 2) return raise(p); break;
+  case NODE_LT: if (node->n != 2) return raise(p); break;
+  case NODE_LE: if (node->n != 2) return raise(p); break;
+  }
   return p;
 }
 
@@ -305,19 +316,33 @@ eval_node(NODE *node) {
       r = 1;
       break;
     }
-    if (r) {
-      if (node->n == 1) return new_node();
-      if (node->n == 2) {
-        c =  node->c[1];
-        c->r++;
-        return c;
-      }
-      return new_node();
-    }
-    c = node->c[2];
+    c =  node->c[r > 0 ? 1 : 2];
     c->r++;
     return c;
-  /* TODO: GT GE LT LE */
+  case NODE_GT:
+    nn = new_node();
+    nn->t = NODE_INT;
+    nn->u.i = double_value(node->c[0]) > double_value(node->c[1]);
+    nn->r++;
+    return nn;
+  case NODE_GE:
+    nn = new_node();
+    nn->t = NODE_INT;
+    nn->u.i = double_value(node->c[0]) >= double_value(node->c[1]);
+    nn->r++;
+    return nn;
+  case NODE_LT:
+    nn = new_node();
+    nn->t = NODE_INT;
+    nn->u.i = double_value(node->c[0]) < double_value(node->c[1]);
+    nn->r++;
+    return nn;
+  case NODE_LE:
+    nn = new_node();
+    nn->t = NODE_INT;
+    nn->u.i = double_value(node->c[0]) <= double_value(node->c[1]);
+    nn->r++;
+    return nn;
   case NODE_PRINT:
     print_node(node);
     return node;
