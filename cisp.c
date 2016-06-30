@@ -428,7 +428,7 @@ eval_node(ENV *env, NODE *node) {
     nn->r++;
     return nn;
   case NODE_PRINT:
-    c = eval_node(env, node->c[i]);
+    c = eval_node(env, node->c[0]);
     print_node(c);
     puts("");
     c->r++;
@@ -499,7 +499,7 @@ main(int argc, char* argv[]) {
     fread(p, fsize, 1, fp);
     fclose(fp);
 
-    top = new_node(), *ret;
+    top = new_node();
     if (!parse_any(top, p)) {
       exit(1);
     }
