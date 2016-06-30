@@ -146,11 +146,28 @@ parse_ident(NODE *node, const char *p) {
 }
 
 static const char*
+parse_quote(NODE *node, const char *p) {
+  NODE *child = NULL;
+  child = new_node();
+  p = parse_ident(child, p);
+  if (!p) {
+    free_node(child);
+    return NULL;
+  }
+  node->t = NODE_QUOTE;
+  node->c = (NODE**) realloc(node->c, sizeof(NODE) * (node->n + 1));
+  node->c[node->n] = child;
+  node->n++;
+  return p;
+}
+
+static const char*
 parse_any(NODE *node, const char *p) {
   if (!p) return NULL;
   p = skip_white(p);
   if (*p == '(') return parse_paren(node, p + 1); 
   if (*p == '-' || isdigit(*p)) return parse_number(node, p);
+  if (*p == '\'') return parse_quote(node, p + 1);
   if (isalpha(*p)) return parse_ident(node, p);
   if (*p) return raise(p);
   return p;
