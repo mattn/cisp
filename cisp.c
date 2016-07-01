@@ -355,8 +355,9 @@ look_ident(ENV *env, const char *k) {
       return c;
     }
   }
-  if (env->p) look_ident(env->p, k);
+  //if (env->p) look_ident(env->p, k);
   /* TODO: error */
+  puts("error");
   return new_node();
 }
 
@@ -372,6 +373,7 @@ look_func(ENV *env, const char *k) {
     }
   }
   /* TODO: error */
+  puts("error");
   return NULL;
 }
 
@@ -475,18 +477,24 @@ eval_node(ENV *env, NODE *node) {
     nn->r++;
     return nn;
   case NODE_PLUS1:
-    c = eval_node(env, node->c[0]);
+    c = new_node();
+    x = eval_node(env, node->c[0]);
+    c->t = x->t;
+    c->t = x->t;
     switch (c->t) {
-    case NODE_INT: c->u.i += 1; break;
-    case NODE_DOUBLE: c->u.d += 1.0; break;
+    case NODE_INT: c->u.i = x->u.i + 1; break;
+    case NODE_DOUBLE: c->u.d = x->u.i + 1.0; break;
     default: break;
     }
     return c;
   case NODE_MINUS1:
-    c = eval_node(env, node->c[0]);
+    c = new_node();
+    x = eval_node(env, node->c[0]);
+    c->t = x->t;
+    c->t = x->t;
     switch (c->t) {
-    case NODE_INT: c->u.i -= 1; break;
-    case NODE_DOUBLE: c->u.d -= 1.0; break;
+    case NODE_INT: c->u.i = x->u.i - 1; break;
+    case NODE_DOUBLE: c->u.d = x->u.i - 1.0; break;
     default: break;
     }
     return c;
@@ -579,7 +587,10 @@ eval_node(ENV *env, NODE *node) {
       newenv->lv[newenv->nv] = ni;
       newenv->nv++;
     }
-    c = eval_node(newenv, x->c[2]);
+    c = NULL;
+    for (i = 2; i < x->n; i++) {
+      c = eval_node(newenv, x->c[i]);
+    }
     free_env(newenv);
     return c;
   case NODE_DEFUN:
@@ -658,8 +669,6 @@ main(int argc, char* argv[]) {
     free(p);
     env = new_env(NULL);
     ret = eval_node(env, top);
-    print_node(ret);
-    puts("");
     free_node(ret);
     free_node(top);
     free_env(env);
