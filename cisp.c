@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <memory.h>
+#include <unistd.h>
 #include <ctype.h>
 
 enum T {
@@ -363,13 +364,17 @@ look_ident(ENV *env, const char *k) {
 
 static NODE*
 look_func(ENV *env, const char *k) {
-  while (env->p) env = env->p;
+  static ENV *global;
+  if (global == NULL) {
+    while (env->p) env = env->p;
+    global = env;
+  } else {
+    env = global;
+  }
   int i;
   for (i = 0; i < env->nf; i++) {
     if (!strcmp(env->lf[i]->k, k)) {
-      NODE *c = env->lf[i]->v;
-      c->r++;
-      return c;
+      return env->lf[i]->v;
     }
   }
   /* TODO: error */
@@ -677,7 +682,7 @@ main(int argc, char* argv[]) {
 
   env = new_env(NULL);
   while (1) {
-    printf("> ");
+    if (isatty(fileno(stdin))) printf("> ");
     if (!fgets(buf , sizeof(buf), stdin)) break;
     top = new_node();
     if (!parse_any(top, buf, 0)) {

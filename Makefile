@@ -3,8 +3,8 @@ SRCS = \
 
 OBJS = $(subst .c,.o,$(SRCS))
 
-CFLAGS = -g -Wall -Werror
-LIBS = -g
+CFLAGS = -O2 -funroll-loops -Wall -Werror
+LIBS = -O2 -funroll-loops
 TARGET = cisp
 ifeq ($(OS),Windows_NT)
 TARGET := $(TARGET).exe
@@ -22,3 +22,11 @@ $(TARGET) : $(OBJS)
 
 clean :
 	rm -f *.o $(TARGET)
+
+test :
+	ls t/*.t | xargs ./cisp
+
+prof :
+	gcc -o cisp -pg cisp.c
+	./cisp example/tak.l
+	gprof cisp.exe gmon.out -p | less
