@@ -6,7 +6,7 @@
 #include <ctype.h>
 
 enum T {
-  NODE_NIL, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_IDENT, NODE_LIST,
+  NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_IDENT, NODE_LIST,
   NODE_PLUS, NODE_MINUS, NODE_MUL, NODE_DIV,
   NODE_PLUS1, NODE_MINUS1,
   NODE_EQ,
@@ -204,6 +204,16 @@ static const char*
 parse_ident(NODE *node, const char *p) {
   const char *t = p;
   while (*p && isalpha(*p)) p++;
+  if (!strncmp(t, "nil", (size_t)(p - t))) {
+    node->t = NODE_NIL;
+    node->r++;
+    return p;
+  }
+  if (!strncmp(t, "t", (size_t)(p - t))) {
+    node->t = NODE_T;
+    node->r++;
+    return p;
+  }
   while (*p && isdigit(*p)) p++;
   node->t = NODE_IDENT;
   node->u.s = (char*) malloc((size_t)(p - t) + 1);
@@ -315,6 +325,7 @@ print_node(NODE *node) {
   case NODE_STRING: print_str(node); break;
   case NODE_IDENT: printf("%s", node->u.s); break;
   case NODE_NIL: printf("nil"); break;
+  case NODE_T: printf("t"); break;
   case NODE_PLUS: printf("(+"); print_args(node); printf(")"); break;
   case NODE_MINUS: printf("(-"); print_args(node); printf(")"); break;
   case NODE_MUL: printf("(*"); print_args(node); printf(")"); break;
@@ -369,6 +380,8 @@ static long
 int_value(ENV *env, NODE *node) {
   node = eval_node(env, node);
   switch (node->t) {
+  case NODE_NIL: return 0; break;
+  case NODE_T: return 1; break;
   case NODE_INT: return node->u.i; break;
   case NODE_DOUBLE: return (long)node->u.d; break;
   }
@@ -567,6 +580,9 @@ eval_node(ENV *env, NODE *node) {
     case NODE_NIL:
       r = 0;
       break;
+    case NODE_T:
+      r = 1;
+      break;
     case NODE_INT:
       r = c->u.i;
       break;
@@ -676,6 +692,9 @@ eval_node(ENV *env, NODE *node) {
     node->r++;
     return node;
   case NODE_NIL:
+    node->r++;
+    return node;
+  case NODE_T:
     node->r++;
     return node;
   case NODE_STRING:
