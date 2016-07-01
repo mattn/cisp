@@ -26,6 +26,9 @@ clean :
 test :
 	ls t/*.t | xargs ./cisp
 
+debug :
+	gcc -g -o cisp -pg cisp.c
+
 prof :
 	gcc -o cisp -pg cisp.c
 	./cisp example/tak.l
