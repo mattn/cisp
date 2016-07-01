@@ -191,6 +191,7 @@ parse_paren(NODE *node, const char *p) {
   case NODE_GE: if (node->n != 2) return raise(p); break;
   case NODE_LT: if (node->n != 2) return raise(p); break;
   case NODE_LE: if (node->n != 2) return raise(p); break;
+  case NODE_EQ: if (node->n != 2) return raise(p); break;
   case NODE_NOT: if (node->n != 1) return raise(p); break;
   case NODE_MOD: if (node->n != 2) return raise(p); break;
   case NODE_IF: if (node->n != 3) return raise(p); break;
@@ -340,6 +341,7 @@ print_node(NODE *node) {
   case NODE_DIV: printf("(/"); print_args(node); printf(")"); break;
   case NODE_PLUS1: printf("(1+"); print_args(node); printf(")"); break;
   case NODE_MINUS1: printf("(1-"); print_args(node); printf(")"); break;
+  case NODE_EQ: printf("(="); print_args(node); printf(")"); break;
   case NODE_NOT: printf("(not"); print_args(node); printf(")"); break;
   case NODE_MOD: printf("(mod"); print_args(node); printf(")"); break;
   case NODE_IF: printf("(if"); print_args(node); printf(")"); break;
@@ -395,6 +397,7 @@ int_value(ENV *env, NODE *node) {
   case NODE_T: return 1; break;
   case NODE_INT: return node->u.i; break;
   case NODE_DOUBLE: return (long)node->u.d; break;
+  case NODE_QUOTE: return int_value(env, node->c[0]); break;
   }
   return 0;
 }
@@ -635,9 +638,17 @@ eval_node(ENV *env, NODE *node) {
     nn->u.i = double_value(env, node->c[0]) <= double_value(env, node->c[1]);
     nn->r++;
     return nn;
+  case NODE_EQ:
+    nn = new_node();
+    nn->t = NODE_INT;
+    /* TODO: string comparison */
+    nn->u.i = int_value(env, node->c[0]) == int_value(env, node->c[1]);
+    nn->r++;
+    return nn;
   case NODE_PRINT:
     c = eval_node(env, node->c[0]);
     print_node(c);
+    puts("");
     c->r++;
     return c;
   case NODE_PRINTLN:
@@ -800,7 +811,7 @@ main(int argc, char* argv[]) {
     }
     fseek(fp, 0, SEEK_END);
     fsize = ftell(fp);
-    fseek(fp, 0, SEEK_SET);  //same as rewind(f);
+    fseek(fp, 0, SEEK_SET);
     p = (char*) malloc(fsize + 1);
     memset(p, 0, fsize+1);
     fread(p, fsize, 1, fp);
