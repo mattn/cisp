@@ -47,7 +47,7 @@ raise(const char *p) {
   return NULL;
 }
 
-static const char* parse_any(NODE *node, const char *p);
+static const char* parse_any(NODE *node, const char *p, int q);
 static const char* parse_paren(NODE *node, const char *p);
 static const char* parse_ident(NODE *node, const char *p);
 static NODE* eval_node(ENV *env, NODE *node);
@@ -101,7 +101,11 @@ parse_args(NODE *node, const char *p) {
   while (p && *p && *p != ')') {
     NODE *child = NULL;
     child = new_node();
-    p = parse_any(child, p);
+    if (node->t == NODE_DEFUN && node->n == 1) {
+      p = parse_any(child, p, 1);
+    } else {
+      p = parse_any(child, p, 0);
+    }
     if (!p) {
       free_node(child);
       return NULL;
@@ -229,10 +233,13 @@ parse_string(NODE *node, const char *p) {
 }
 
 static const char*
-parse_any(NODE *node, const char *p) {
+parse_any(NODE *node, const char *p, int q) {
   if (!p) return NULL;
   p = skip_white(p);
-  if (*p == '(') return parse_paren(node, p + 1);
+  if (*p == '(') {
+    if (q) return parse_quote(node, p);
+    return parse_paren(node, p + 1);
+  }
   if (*p == '-' || isdigit(*p)) return parse_number(node, p);
   if (*p == '\'') return parse_quote(node, p + 1);
   if (*p == '"') return parse_string(node, p + 1);
@@ -557,7 +564,7 @@ eval_node(ENV *env, NODE *node) {
     x = look_func(env, node->u.s);
     if (!x) {
       /* TODO: error */
-      puts("NOT FOUND");
+      puts("error");
       return new_node();
     }
     newenv = new_env(env);
@@ -664,7 +671,7 @@ main(int argc, char* argv[]) {
     printf("> ");
     if (!fgets(buf , sizeof(buf), stdin)) break;
     top = new_node();
-    if (!parse_any(top, buf)) {
+    if (!parse_any(top, buf, 0)) {
       continue;
     }
     ret = eval_node(env, top);
