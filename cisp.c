@@ -6,14 +6,17 @@
 #include <ctype.h>
 
 enum T {
-  NODE_NIL, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_IDENT, NODE_LIST, NODE_PROGN, NODE_CALL,
+  NODE_NIL, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_IDENT, NODE_LIST,
   NODE_PLUS, NODE_MINUS, NODE_MUL, NODE_DIV,
   NODE_PLUS1, NODE_MINUS1,
-  NODE_NOT, NODE_IF, NODE_DEFUN,
-  NODE_PRINT, NODE_SETQ,
   NODE_EQ,
   NODE_LT, NODE_LE,
   NODE_GT, NODE_GE,
+  NODE_NOT, NODE_MOD,
+  NODE_IF, NODE_DEFUN, NODE_CALL,
+  NODE_PRINT, NODE_SETQ,
+  NODE_PROGN,
+  NODE_COND,
   NODE_ERROR,
 };
 
@@ -59,7 +62,12 @@ static void free_node(NODE *node);
 
 static const char*
 skip_white(const char *p) {
-  if (p) while (isspace((int)*p)) p++;
+  if (!p) return NULL;
+  while (*p && isspace((int)*p)) p++;
+  if (*p == ';') {
+    p++;
+    while (*p && *p != '\n') p++;
+  }
   return p;
 }
 
@@ -67,7 +75,7 @@ static NODE*
 new_node() {
   NODE* node = (NODE*) malloc(sizeof(NODE));
   memset(node, 0, sizeof(NODE));
-  node->t = NODE_INT;
+  node->t = NODE_NIL;
   return node;
 }
 
@@ -151,10 +159,13 @@ parse_paren(NODE *node, const char *p) {
   else if (!strncmp(t, "1+", (size_t)(p - t))) node->t = NODE_PLUS1;
   else if (!strncmp(t, "1-", (size_t)(p - t))) node->t = NODE_MINUS1;
   else if (!strncmp(t, "not", (size_t)(p - t))) node->t = NODE_NOT;
+  else if (!strncmp(t, "mod", (size_t)(p - t))) node->t = NODE_MOD;
   else if (!strncmp(t, "if", (size_t)(p - t))) node->t = NODE_IF;
   else if (!strncmp(t, "print", (size_t)(p - t))) node->t = NODE_PRINT;
   else if (!strncmp(t, "quote", (size_t)(p - t))) node->t = NODE_QUOTE;
   else if (!strncmp(t, "setq", (size_t)(p - t))) node->t = NODE_SETQ;
+  else if (!strncmp(t, "progn", (size_t)(p - t))) node->t = NODE_PROGN;
+  else if (!strncmp(t, "cond", (size_t)(p - t))) node->t = NODE_COND;
   else if (!strncmp(t, "defun", (size_t)(p - t))) node->t = NODE_DEFUN;
   else {
     p = parse_ident(node, t);
@@ -176,10 +187,13 @@ parse_paren(NODE *node, const char *p) {
   case NODE_LT: if (node->n != 2) return raise(p); break;
   case NODE_LE: if (node->n != 2) return raise(p); break;
   case NODE_NOT: if (node->n != 1) return raise(p); break;
+  case NODE_MOD: if (node->n != 2) return raise(p); break;
   case NODE_IF: if (node->n != 3) return raise(p); break;
   case NODE_PRINT: if (node->n != 1) return raise(p); break;
   case NODE_QUOTE: if (node->n != 1) return raise(p); break;
   case NODE_SETQ: if (node->n != 2) return raise(p); break;
+  case NODE_PROGN: if (node->n < 1) return raise(p); break;
+  case NODE_COND: if (node->n < 1) return raise(p); break;
   case NODE_DEFUN: if (node->n < 3) return raise(p); break;
   }
   node->r++;
@@ -308,6 +322,7 @@ print_node(NODE *node) {
   case NODE_PLUS1: printf("(1+"); print_args(node); printf(")"); break;
   case NODE_MINUS1: printf("(1-"); print_args(node); printf(")"); break;
   case NODE_NOT: printf("(not"); print_args(node); printf(")"); break;
+  case NODE_MOD: printf("(mod"); print_args(node); printf(")"); break;
   case NODE_IF: printf("(if"); print_args(node); printf(")"); break;
   case NODE_GT: printf("(>"); print_args(node); printf(")"); break;
   case NODE_GE: printf("(>="); print_args(node); printf(")"); break;
@@ -318,7 +333,8 @@ print_node(NODE *node) {
   case NODE_LIST: printf("("); print_list(node); printf(")"); break;
   case NODE_SETQ: printf("(setq"); print_args(node); printf(")"); break;
   case NODE_DEFUN: printf("(defun"); print_args(node); printf(")"); break;
-  case NODE_PROGN: print_list(node); break;
+  case NODE_PROGN: printf("(progn"); print_list(node); printf(")"); break;
+  case NODE_COND: printf("(cond"); print_list(node); printf(")"); break;
   case NODE_CALL: printf("(%s", node->u.s); print_args(node); printf(")"); break;
   }
 }
@@ -540,6 +556,11 @@ eval_node(ENV *env, NODE *node) {
     c->t = NODE_INT;
     c->u.i = !int_value(env, node->c[0]);
     return c;
+  case NODE_MOD:
+    c = new_node();
+    c->t = NODE_INT;
+    c->u.i = int_value(env, node->c[0]) % int_value(env, node->c[1]);
+    return c;
   case NODE_IF:
     c = eval_node(env, node->c[0]);
     switch (c->t) {
@@ -667,6 +688,20 @@ eval_node(ENV *env, NODE *node) {
     c = NULL;
     for (i = 0; i < node->n; i++) {
       c = eval_node(env, node->c[i]);
+    }
+    if (c) {
+      c->r++;
+      return c;
+    }
+    return new_node();
+  case NODE_COND:
+    c = NULL;
+    for (i = 0; i < node->n; i++) {
+      if (node->c[i]->t != NODE_LIST && node->c[i]->n != 2)
+        return new_error("cond should have condition list");
+      if (int_value(env, eval_node(env, node->c[i]->c[0])) != 0) {
+        return eval_node(env, node->c[i]->c[1]);
+      }
     }
     if (c) {
       c->r++;
