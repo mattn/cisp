@@ -13,10 +13,11 @@ enum T {
   NODE_LT, NODE_LE,
   NODE_GT, NODE_GE,
   NODE_NOT, NODE_MOD,
-  NODE_IF, NODE_DEFUN, NODE_CALL,
-  NODE_PRINT, NODE_SETQ,
+  NODE_IF, NODE_DEFUN, NODE_CALL, NODE_DOTIMES,
+  NODE_PRINT, NODE_PRINTLN, NODE_PRINC, NODE_SETQ,
   NODE_PROGN,
   NODE_COND,
+  NODE_FORMAT,
   NODE_ERROR,
 };
 
@@ -121,7 +122,8 @@ parse_args(NODE *node, const char *p) {
   while (p && *p && *p != ')') {
     NODE *child = NULL;
     child = new_node();
-    if (node->t == NODE_DEFUN && node->n == 1) {
+    /* TODO: ugly */
+    if ((node->t == NODE_DEFUN && node->n == 1) || (node->t == NODE_DOTIMES && node->n == 0)) {
       p = parse_any(child, p, 1);
     } else {
       p = parse_any(child, p, 0);
@@ -162,10 +164,13 @@ parse_paren(NODE *node, const char *p) {
   else if (!strncmp(t, "mod", (size_t)(p - t))) node->t = NODE_MOD;
   else if (!strncmp(t, "if", (size_t)(p - t))) node->t = NODE_IF;
   else if (!strncmp(t, "print", (size_t)(p - t))) node->t = NODE_PRINT;
+  else if (!strncmp(t, "println", (size_t)(p - t))) node->t = NODE_PRINTLN;
+  else if (!strncmp(t, "princ", (size_t)(p - t))) node->t = NODE_PRINC;
   else if (!strncmp(t, "quote", (size_t)(p - t))) node->t = NODE_QUOTE;
   else if (!strncmp(t, "setq", (size_t)(p - t))) node->t = NODE_SETQ;
   else if (!strncmp(t, "progn", (size_t)(p - t))) node->t = NODE_PROGN;
   else if (!strncmp(t, "cond", (size_t)(p - t))) node->t = NODE_COND;
+  else if (!strncmp(t, "dotimes", (size_t)(p - t))) node->t = NODE_DOTIMES;
   else if (!strncmp(t, "defun", (size_t)(p - t))) node->t = NODE_DEFUN;
   else {
     p = parse_ident(node, t);
@@ -190,10 +195,13 @@ parse_paren(NODE *node, const char *p) {
   case NODE_MOD: if (node->n != 2) return raise(p); break;
   case NODE_IF: if (node->n != 3) return raise(p); break;
   case NODE_PRINT: if (node->n != 1) return raise(p); break;
+  case NODE_PRINTLN: if (node->n != 1) return raise(p); break;
+  case NODE_PRINC: if (node->n != 1) return raise(p); break;
   case NODE_QUOTE: if (node->n != 1) return raise(p); break;
   case NODE_SETQ: if (node->n != 2) return raise(p); break;
   case NODE_PROGN: if (node->n < 1) return raise(p); break;
   case NODE_COND: if (node->n < 1) return raise(p); break;
+  case NODE_DOTIMES: if (node->n != 2) return raise(p); break;
   case NODE_DEFUN: if (node->n < 3) return raise(p); break;
   }
   node->r++;
@@ -340,12 +348,15 @@ print_node(NODE *node) {
   case NODE_LT: printf("(<"); print_args(node); printf(")"); break;
   case NODE_LE: printf("(<="); print_args(node); printf(")"); break;
   case NODE_PRINT: printf("(print"); print_args(node); printf(")"); break;
+  case NODE_PRINTLN: printf("(println"); print_args(node); printf(")"); break;
+  case NODE_PRINC: printf("(princ"); print_args(node); printf(")"); break;
   case NODE_QUOTE: printf("'"); print_node(node->c[0]); break;
   case NODE_LIST: printf("("); print_list(node); printf(")"); break;
   case NODE_SETQ: printf("(setq"); print_args(node); printf(")"); break;
   case NODE_DEFUN: printf("(defun"); print_args(node); printf(")"); break;
   case NODE_PROGN: printf("(progn"); print_list(node); printf(")"); break;
   case NODE_COND: printf("(cond"); print_list(node); printf(")"); break;
+  case NODE_DOTIMES: printf("(dotimes"); print_list(node); printf(")"); break;
   case NODE_CALL: printf("(%s", node->u.s); print_args(node); printf(")"); break;
   }
 }
@@ -400,7 +411,6 @@ double_value(ENV *env, NODE *node) {
 
 static NODE*
 look_ident(ENV *env, const char *k) {
-  static ENV *global;
   int i;
 
   for (i = 0; i < env->nv; i++) {
@@ -409,6 +419,10 @@ look_ident(ENV *env, const char *k) {
     }
   }
 
+  if (env->p) return look_ident(env->p, k);
+/* TODO: bottle neck */
+/*
+  static ENV *global;
   if (global == NULL) {
     while (env->p) env = env->p;
     global = env;
@@ -421,6 +435,7 @@ look_ident(ENV *env, const char *k) {
       return env->lv[i]->v;
     }
   }
+*/
   return new_error("unknown variable");
 }
 
@@ -623,6 +638,17 @@ eval_node(ENV *env, NODE *node) {
   case NODE_PRINT:
     c = eval_node(env, node->c[0]);
     print_node(c);
+    c->r++;
+    return c;
+  case NODE_PRINTLN:
+    c = eval_node(env, node->c[0]);
+    print_node(c);
+    puts("");
+    c->r++;
+    return c;
+  case NODE_PRINC:
+    c = eval_node(env, node->c[0]);
+    print_node(c);
     puts("");
     c->r++;
     return c;
@@ -632,7 +658,7 @@ eval_node(ENV *env, NODE *node) {
   case NODE_SETQ:
     x = node->c[0];
     if (x->t != NODE_IDENT) {
-      return new_error("invalid token");
+      return new_error("invalid identifier");
     }
     ni = (ITEM*) malloc(sizeof(ITEM));
     memset(ni, 0, sizeof(ITEM));
@@ -727,6 +753,32 @@ eval_node(ENV *env, NODE *node) {
       return c;
     }
     return new_node();
+  case NODE_DOTIMES:
+    x = node->c[0]->c[0];
+    if (x->t != NODE_LIST || x->n != 2) {
+      return new_error("invalid token");
+    }
+    if (x->c[0]->t != NODE_IDENT) {
+      return new_error("invalid token");
+    }
+    r = int_value(env, eval_node(env, x->c[1]));
+    newenv = new_env(env);
+    ni = (ITEM*) malloc(sizeof(ITEM));
+    memset(ni, 0, sizeof(ITEM));
+    ni->k = x->c[0]->u.s;
+    ni->v = new_node();
+    ni->v->t = NODE_INT;
+    ni->v->r++;
+    newenv->lv = (ITEM**) realloc(newenv->lv, sizeof(ITEM) * (newenv->nv + 1));
+    newenv->lv[newenv->nv] = ni;
+    newenv->nv++;
+    c = NULL;
+    for (i = 0; i < r; i++) {
+      ni->v->u.i = i;
+      c = eval_node(newenv, node->c[1]);
+    }
+    free_env(newenv);
+    return c;
   }
   return new_error("unknown node");
 }
