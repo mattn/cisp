@@ -13,6 +13,7 @@ enum T {
   NODE_PRINT, NODE_SETQ,
   NODE_LT, NODE_LE,
   NODE_GT, NODE_GE,
+  NODE_ERROR,
 };
 
 typedef struct _NODE {
@@ -66,6 +67,15 @@ new_node() {
   NODE* node = (NODE*) malloc(sizeof(NODE));
   memset(node, 0, sizeof(NODE));
   node->t = NODE_INT;
+  return node;
+}
+
+static NODE*
+new_error(const char* msg) {
+  NODE* node = (NODE*) malloc(sizeof(NODE));
+  memset(node, 0, sizeof(NODE));
+  node->t = NODE_ERROR;
+  node->u.s = strdup(msg);
   return node;
 }
 
@@ -315,6 +325,14 @@ free_node(NODE *node) {
   if (node->r <= 0) {
     for (i = 0; i < node->n; i++)
       free_node(node->c[i]);
+    switch (node->t) {
+    case NODE_STRING:
+    case NODE_IDENT:
+    case NODE_CALL:
+    case NODE_ERROR:
+      free(node->u.s);
+      break;
+    }
     free(node);
   }
 }
@@ -348,37 +366,46 @@ double_value(ENV *env, NODE *node) {
 
 static NODE*
 look_ident(ENV *env, const char *k) {
+  static ENV *global;
   int i;
+
   for (i = 0; i < env->nv; i++) {
     if (!strcmp(env->lv[i]->k, k)) {
-      NODE *c = env->lv[i]->v;
-      c->r++;
-      return c;
+      return env->lv[i]->v;
     }
   }
-  //if (env->p) look_ident(env->p, k);
-  /* TODO: error */
-  puts("error");
-  return new_node();
-}
 
-static NODE*
-look_func(ENV *env, const char *k) {
-  static ENV *global;
   if (global == NULL) {
     while (env->p) env = env->p;
     global = env;
   } else {
     env = global;
   }
+
+  for (i = 0; i < env->nv; i++) {
+    if (!strcmp(env->lv[i]->k, k)) {
+      return env->lv[i]->v;
+    }
+  }
+  return new_error("unknown variable");
+}
+
+static NODE*
+look_func(ENV *env, const char *k) {
+  static ENV *global;
   int i;
+
+  if (global == NULL) {
+    while (env->p) env = env->p;
+    global = env;
+  } else {
+    env = global;
+  }
   for (i = 0; i < env->nf; i++) {
     if (!strcmp(env->lf[i]->k, k)) {
       return env->lf[i]->v;
     }
   }
-  /* TODO: error */
-  puts("error");
   return NULL;
 }
 
@@ -558,8 +585,7 @@ eval_node(ENV *env, NODE *node) {
   case NODE_SETQ:
     x = node->c[0];
     if (x->t != NODE_IDENT) {
-      /* TODO: error */
-      return new_node();
+      return new_error("invalid token");
     }
     ni = (ITEM*) malloc(sizeof(ITEM));
     memset(ni, 0, sizeof(ITEM));
@@ -576,9 +602,7 @@ eval_node(ENV *env, NODE *node) {
   case NODE_CALL:
     x = look_func(env, node->u.s);
     if (!x) {
-      /* TODO: error */
-      puts("error");
-      return new_node();
+      return new_error("unknown variable");
     }
     newenv = new_env(env);
     c = x->c[1]->c[0];
@@ -601,8 +625,7 @@ eval_node(ENV *env, NODE *node) {
   case NODE_DEFUN:
     x = node->c[0];
     if (x->t != NODE_IDENT) {
-      /* TODO: error */
-      return new_node();
+      return new_error("invalid token");
     }
     ni = (ITEM*) malloc(sizeof(ITEM));
     memset(ni, 0, sizeof(ITEM));
@@ -641,7 +664,7 @@ eval_node(ENV *env, NODE *node) {
     }
     return new_node();
   }
-  return new_node();
+  return new_error("unknown node");
 }
 
 int
@@ -685,11 +708,17 @@ main(int argc, char* argv[]) {
     if (isatty(fileno(stdin))) printf("> ");
     if (!fgets(buf , sizeof(buf), stdin)) break;
     top = new_node();
-    if (!parse_any(top, buf, 0)) {
+    p = (char*) parse_any(top, buf, 0);
+    if (!p) continue;
+    if (*p) {
+      raise(p);
       continue;
     }
     ret = eval_node(env, top);
-    print_node(ret);
+    if (ret->t == NODE_ERROR)
+      fprintf(stderr, "%s: %s", argv[0], ret->u.s);
+    else
+      print_node(ret);
     puts("");
     free_node(ret);
     free_node(top);

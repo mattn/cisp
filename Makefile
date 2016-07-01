@@ -29,4 +29,4 @@ test :
 prof :
 	gcc -o cisp -pg cisp.c
 	./cisp example/tak.l
-	gprof cisp.exe gmon.out -p | less
+	gprof $(TARGET) gmon.out -p | less
