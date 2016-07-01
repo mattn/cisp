@@ -9,8 +9,9 @@ enum T {
   NODE_NIL, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_IDENT, NODE_LIST, NODE_PROGN, NODE_CALL,
   NODE_PLUS, NODE_MINUS, NODE_MUL, NODE_DIV,
   NODE_PLUS1, NODE_MINUS1,
-  NODE_IF, NODE_DEFUN,
+  NODE_NOT, NODE_IF, NODE_DEFUN,
   NODE_PRINT, NODE_SETQ,
+  NODE_EQ,
   NODE_LT, NODE_LE,
   NODE_GT, NODE_GE,
   NODE_ERROR,
@@ -146,8 +147,10 @@ parse_paren(NODE *node, const char *p) {
   else if (!strncmp(t, "<=", (size_t)(p - t))) node->t = NODE_LE;
   else if (!strncmp(t, ">", (size_t)(p - t))) node->t = NODE_GT;
   else if (!strncmp(t, ">=", (size_t)(p - t))) node->t = NODE_GE;
+  else if (!strncmp(t, "=", (size_t)(p - t))) node->t = NODE_EQ;
   else if (!strncmp(t, "1+", (size_t)(p - t))) node->t = NODE_PLUS1;
   else if (!strncmp(t, "1-", (size_t)(p - t))) node->t = NODE_MINUS1;
+  else if (!strncmp(t, "not", (size_t)(p - t))) node->t = NODE_NOT;
   else if (!strncmp(t, "if", (size_t)(p - t))) node->t = NODE_IF;
   else if (!strncmp(t, "print", (size_t)(p - t))) node->t = NODE_PRINT;
   else if (!strncmp(t, "quote", (size_t)(p - t))) node->t = NODE_QUOTE;
@@ -172,6 +175,7 @@ parse_paren(NODE *node, const char *p) {
   case NODE_GE: if (node->n != 2) return raise(p); break;
   case NODE_LT: if (node->n != 2) return raise(p); break;
   case NODE_LE: if (node->n != 2) return raise(p); break;
+  case NODE_NOT: if (node->n != 1) return raise(p); break;
   case NODE_IF: if (node->n != 3) return raise(p); break;
   case NODE_PRINT: if (node->n != 1) return raise(p); break;
   case NODE_QUOTE: if (node->n != 1) return raise(p); break;
@@ -303,6 +307,7 @@ print_node(NODE *node) {
   case NODE_DIV: printf("(/"); print_args(node); printf(")"); break;
   case NODE_PLUS1: printf("(1+"); print_args(node); printf(")"); break;
   case NODE_MINUS1: printf("(1-"); print_args(node); printf(")"); break;
+  case NODE_NOT: printf("(not"); print_args(node); printf(")"); break;
   case NODE_IF: printf("(if"); print_args(node); printf(")"); break;
   case NODE_GT: printf("(>"); print_args(node); printf(")"); break;
   case NODE_GE: printf("(>="); print_args(node); printf(")"); break;
@@ -530,6 +535,11 @@ eval_node(ENV *env, NODE *node) {
     default: break;
     }
     return c;
+  case NODE_NOT:
+    c = new_node();
+    c->t = NODE_INT;
+    c->u.i = !int_value(env, node->c[0]);
+    return c;
   case NODE_IF:
     c = eval_node(env, node->c[0]);
     switch (c->t) {
@@ -672,6 +682,7 @@ main(int argc, char* argv[]) {
   ENV *env;
   NODE *top, *ret;
   char buf[BUFSIZ], *p;
+  const char *pp;
 
   if (argc > 1) {
     FILE *fp = fopen(argv[1], "rb");
@@ -708,10 +719,11 @@ main(int argc, char* argv[]) {
     if (isatty(fileno(stdin))) printf("> ");
     if (!fgets(buf , sizeof(buf), stdin)) break;
     top = new_node();
-    p = (char*) parse_any(top, buf, 0);
-    if (!p) continue;
-    if (*p) {
-      raise(p);
+    pp = parse_any(top, buf, 0);
+    if (!pp) continue;
+    pp = skip_white(pp);
+    if (*pp) {
+      raise(pp);
       continue;
     }
     ret = eval_node(env, top);
