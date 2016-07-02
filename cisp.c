@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <memory.h>
 #include <unistd.h>
@@ -14,6 +15,7 @@ enum T {
   NODE_GT, NODE_GE,
   NODE_NOT, NODE_MOD,
   NODE_IF, NODE_DEFUN, NODE_CALL, NODE_DOTIMES,
+  NODE_CAR, NODE_CDR,
   NODE_PRINT, NODE_PRINTLN, NODE_PRINC, NODE_SETQ,
   NODE_PROGN,
   NODE_COND,
@@ -86,6 +88,20 @@ new_error(const char* msg) {
   memset(node, 0, sizeof(NODE));
   node->t = NODE_ERROR;
   node->u.s = strdup(msg);
+  return node;
+}
+
+static NODE*
+new_errorf(const char* fmt, ...) {
+  char buf[BUFSIZ];
+  va_list list;
+  va_start(list, fmt);
+  vsnprintf(buf, sizeof(buf), fmt, list);
+  va_end(list);
+  NODE* node = (NODE*) malloc(sizeof(NODE));
+  memset(node, 0, sizeof(NODE));
+  node->t = NODE_ERROR;
+  node->u.s = strdup(buf);
   return node;
 }
 
@@ -179,6 +195,8 @@ parse_paren(NODE *node, const char *p) {
   else if (match(t, "setq", (size_t)(p - t))) node->t = NODE_SETQ;
   else if (match(t, "progn", (size_t)(p - t))) node->t = NODE_PROGN;
   else if (match(t, "cond", (size_t)(p - t))) node->t = NODE_COND;
+  else if (match(t, "car", (size_t)(p - t))) node->t = NODE_CAR;
+  else if (match(t, "cdr", (size_t)(p - t))) node->t = NODE_CDR;
   else if (match(t, "dotimes", (size_t)(p - t))) node->t = NODE_DOTIMES;
   else if (match(t, "defun", (size_t)(p - t))) node->t = NODE_DEFUN;
   else {
@@ -211,6 +229,8 @@ parse_paren(NODE *node, const char *p) {
   case NODE_SETQ: if (node->n != 2) return raise(p); break;
   case NODE_PROGN: if (node->n < 1) return raise(p); break;
   case NODE_COND: if (node->n < 1) return raise(p); break;
+  case NODE_CAR: if (node->n != 1) return raise(p); break;
+  case NODE_CDR: if (node->n != 1) return raise(p); break;
   case NODE_DOTIMES: if (node->n != 2) return raise(p); break;
   case NODE_DEFUN: if (node->n < 3) return raise(p); break;
   }
@@ -376,6 +396,8 @@ print_node(size_t nbuf, char* buf, NODE *node, int mode) {
   case NODE_DEFUN: strncat(buf, "(defun", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   case NODE_PROGN: strncat(buf, "(progn", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   case NODE_COND: strncat(buf, "(cond", nbuf); print_list(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_CAR: strncat(buf, "(car", nbuf); print_list(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_CDR: strncat(buf, "(cdr", nbuf); print_list(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   case NODE_DOTIMES: strncat(buf, "(dotimes", nbuf); print_list(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   case NODE_CALL: snprintf(tmp, sizeof(tmp), "(%s", node->u.s); strncat(buf, tmp, nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   }
@@ -457,7 +479,7 @@ look_ident(ENV *env, const char *k) {
     }
   }
 */
-  return new_error("unknown variable");
+  return new_errorf("unknown variable: %s", k);
 }
 
 static NODE*
@@ -692,7 +714,9 @@ eval_node(ENV *env, NODE *node) {
   case NODE_SETQ:
     x = node->c[0];
     if (x->t != NODE_IDENT) {
-      return new_error("invalid identifier");
+      buf[0] = 0;
+      print_node(sizeof(buf), buf, x, 0);
+      return new_errorf("invalid identifier: %s", buf);
     }
     ni = (ITEM*) malloc(sizeof(ITEM));
     memset(ni, 0, sizeof(ITEM));
@@ -709,7 +733,7 @@ eval_node(ENV *env, NODE *node) {
   case NODE_CALL:
     x = look_func(env, node->u.s);
     if (!x) {
-      return new_error("unknown function");
+      return new_errorf("unknown function: %s", node->u.s);
     }
     newenv = new_env(env);
     c = x->c[1]->c[0];
@@ -732,7 +756,9 @@ eval_node(ENV *env, NODE *node) {
   case NODE_DEFUN:
     x = node->c[0];
     if (x->t != NODE_IDENT) {
-      return new_error("invalid token");
+      buf[0] = 0;
+      print_node(sizeof(buf), buf, x, 0);
+      return new_errorf("invalid identifier: %s", buf);
     }
     ni = (ITEM*) malloc(sizeof(ITEM));
     memset(ni, 0, sizeof(ITEM));
@@ -787,13 +813,55 @@ eval_node(ENV *env, NODE *node) {
       return c;
     }
     return new_node();
+  case NODE_CAR:
+    x = node->c[0];
+    if (x->t != NODE_QUOTE) {
+      buf[0] = 0;
+      print_node(sizeof(buf), buf, x, 0);
+      return new_errorf("not quote: %s", buf);
+    }
+    x = x->c[0];
+    if (x->t != NODE_LIST) {
+      buf[0] = 0;
+      print_node(sizeof(buf), buf, x, 0);
+      return new_errorf("not list: %s", buf);
+    }
+    if (x->n > 0) {
+	  c = x->c[0];
+      c->r++;
+      return c;
+    }
+    return new_node();
+  case NODE_CDR:
+    x = node->c[0];
+    if (x->t != NODE_QUOTE) {
+      buf[0] = 0;
+      print_node(sizeof(buf), buf, x, 0);
+      return new_errorf("not quote: %s", buf);
+    }
+    x = x->c[0];
+    if (x->t != NODE_LIST) {
+      buf[0] = 0;
+      print_node(sizeof(buf), buf, x, 0);
+      return new_errorf("not list: %s", buf);
+    }
+    if (x->n > 0) {
+	  c = x->c[x->n-1];
+      c->r++;
+      return c;
+    }
+    return new_node();
   case NODE_DOTIMES:
     x = node->c[0]->c[0];
     if (x->t != NODE_LIST || x->n != 2) {
-      return new_error("invalid token");
+      buf[0] = 0;
+      print_node(sizeof(buf), buf, x, 0);
+      return new_errorf("invalid defintion: %s", buf);
     }
     if (x->c[0]->t != NODE_IDENT) {
-      return new_error("invalid token");
+      buf[0] = 0;
+      print_node(sizeof(buf), buf, x->c[0], 0);
+      return new_errorf("invalid identifier: %s", buf);
     }
     r = int_value(env, eval_node(env, x->c[1]));
     newenv = new_env(env);
