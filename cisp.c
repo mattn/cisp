@@ -848,6 +848,8 @@ main(int argc, char* argv[]) {
     free(p);
     env = new_env(NULL);
     ret = eval_node(env, top);
+    if (ret->t == NODE_ERROR)
+      fprintf(stderr, "%s: %s\n", argv[0], ret->u.s);
     free_node(ret);
     free_node(top);
     free_env(env);
@@ -868,7 +870,7 @@ main(int argc, char* argv[]) {
     }
     ret = eval_node(env, top);
     if (ret->t == NODE_ERROR)
-      fprintf(stderr, "%s: %s", argv[0], ret->u.s);
+      fprintf(stderr, "%s: %s\n", argv[0], ret->u.s);
     else {
       buf[0] = 0;
       print_node(sizeof(buf), buf, ret, 0);
