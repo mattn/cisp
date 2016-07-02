@@ -243,7 +243,6 @@ parse_ident(NODE *node, const char *p) {
   const char *t = p;
   while (*p && isalpha(*p)) p++;
   if (match(t, "nil", (size_t)(p - t))) {
-	  puts(t);
     node->t = NODE_NIL;
     node->r++;
     return p;
@@ -827,7 +826,7 @@ eval_node(ENV *env, NODE *node) {
       return new_errorf("not list: %s", buf);
     }
     if (x->n > 0) {
-	  c = x->c[0];
+      c = x->c[0];
       c->r++;
       return c;
     }
@@ -846,7 +845,7 @@ eval_node(ENV *env, NODE *node) {
       return new_errorf("not list: %s", buf);
     }
     if (x->n > 0) {
-	  c = x->c[x->n-1];
+      c = x->c[x->n-1];
       c->r++;
       return c;
     }
