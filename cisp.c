@@ -58,7 +58,7 @@ static const char* parse_any(NODE *node, const char *p, int q);
 static const char* parse_paren(NODE *node, const char *p);
 static const char* parse_ident(NODE *node, const char *p);
 static NODE* eval_node(ENV *env, NODE *node);
-static void print_node(NODE *node);
+static void print_node(size_t nbuf, char *buf, NODE *node, int mode);
 static void free_node(NODE *node);
 
 static const char*
@@ -95,6 +95,15 @@ new_env(ENV *p) {
   memset(env, 0, sizeof(ENV));
   env->p = p;
   return env;
+}
+
+static int
+match(const char *lhs, const char *rhs, size_t n) {
+  const char *p = lhs, *e = lhs + n;
+  while (p < e)
+    if (*p++ != *rhs++) return 0;
+  if (*rhs) return 0;
+  return 1;
 }
 
 static const char*
@@ -149,29 +158,29 @@ parse_paren(NODE *node, const char *p) {
   if (!p) return NULL;
   const char *t = p;
   while (!isspace(*p) && *p != ')') p++;
-  if (!strncmp(t, "+", (size_t)(p - t))) node->t = NODE_PLUS;
-  else if (!strncmp(t, "-", (size_t)(p - t))) node->t = NODE_MINUS;
-  else if (!strncmp(t, "*", (size_t)(p - t))) node->t = NODE_MUL;
-  else if (!strncmp(t, "/", (size_t)(p - t))) node->t = NODE_DIV;
-  else if (!strncmp(t, "<", (size_t)(p - t))) node->t = NODE_LT;
-  else if (!strncmp(t, "<=", (size_t)(p - t))) node->t = NODE_LE;
-  else if (!strncmp(t, ">", (size_t)(p - t))) node->t = NODE_GT;
-  else if (!strncmp(t, ">=", (size_t)(p - t))) node->t = NODE_GE;
-  else if (!strncmp(t, "=", (size_t)(p - t))) node->t = NODE_EQ;
-  else if (!strncmp(t, "1+", (size_t)(p - t))) node->t = NODE_PLUS1;
-  else if (!strncmp(t, "1-", (size_t)(p - t))) node->t = NODE_MINUS1;
-  else if (!strncmp(t, "not", (size_t)(p - t))) node->t = NODE_NOT;
-  else if (!strncmp(t, "mod", (size_t)(p - t))) node->t = NODE_MOD;
-  else if (!strncmp(t, "if", (size_t)(p - t))) node->t = NODE_IF;
-  else if (!strncmp(t, "print", (size_t)(p - t))) node->t = NODE_PRINT;
-  else if (!strncmp(t, "println", (size_t)(p - t))) node->t = NODE_PRINTLN;
-  else if (!strncmp(t, "princ", (size_t)(p - t))) node->t = NODE_PRINC;
-  else if (!strncmp(t, "quote", (size_t)(p - t))) node->t = NODE_QUOTE;
-  else if (!strncmp(t, "setq", (size_t)(p - t))) node->t = NODE_SETQ;
-  else if (!strncmp(t, "progn", (size_t)(p - t))) node->t = NODE_PROGN;
-  else if (!strncmp(t, "cond", (size_t)(p - t))) node->t = NODE_COND;
-  else if (!strncmp(t, "dotimes", (size_t)(p - t))) node->t = NODE_DOTIMES;
-  else if (!strncmp(t, "defun", (size_t)(p - t))) node->t = NODE_DEFUN;
+  if (match(t, "+", (size_t)(p - t))) node->t = NODE_PLUS;
+  else if (match(t, "-", (size_t)(p - t))) node->t = NODE_MINUS;
+  else if (match(t, "*", (size_t)(p - t))) node->t = NODE_MUL;
+  else if (match(t, "/", (size_t)(p - t))) node->t = NODE_DIV;
+  else if (match(t, "<", (size_t)(p - t))) node->t = NODE_LT;
+  else if (match(t, "<=", (size_t)(p - t))) node->t = NODE_LE;
+  else if (match(t, ">", (size_t)(p - t))) node->t = NODE_GT;
+  else if (match(t, ">=", (size_t)(p - t))) node->t = NODE_GE;
+  else if (match(t, "=", (size_t)(p - t))) node->t = NODE_EQ;
+  else if (match(t, "1+", (size_t)(p - t))) node->t = NODE_PLUS1;
+  else if (match(t, "1-", (size_t)(p - t))) node->t = NODE_MINUS1;
+  else if (match(t, "not", (size_t)(p - t))) node->t = NODE_NOT;
+  else if (match(t, "mod", (size_t)(p - t))) node->t = NODE_MOD;
+  else if (match(t, "if", (size_t)(p - t))) node->t = NODE_IF;
+  else if (match(t, "print", (size_t)(p - t))) node->t = NODE_PRINT;
+  else if (match(t, "println", (size_t)(p - t))) node->t = NODE_PRINTLN;
+  else if (match(t, "princ", (size_t)(p - t))) node->t = NODE_PRINC;
+  else if (match(t, "quote", (size_t)(p - t))) node->t = NODE_QUOTE;
+  else if (match(t, "setq", (size_t)(p - t))) node->t = NODE_SETQ;
+  else if (match(t, "progn", (size_t)(p - t))) node->t = NODE_PROGN;
+  else if (match(t, "cond", (size_t)(p - t))) node->t = NODE_COND;
+  else if (match(t, "dotimes", (size_t)(p - t))) node->t = NODE_DOTIMES;
+  else if (match(t, "defun", (size_t)(p - t))) node->t = NODE_DEFUN;
   else {
     p = parse_ident(node, t);
     node->t = NODE_CALL;
@@ -213,12 +222,13 @@ static const char*
 parse_ident(NODE *node, const char *p) {
   const char *t = p;
   while (*p && isalpha(*p)) p++;
-  if (!strncmp(t, "nil", (size_t)(p - t))) {
+  if (match(t, "nil", (size_t)(p - t))) {
+	  puts(t);
     node->t = NODE_NIL;
     node->r++;
     return p;
   }
-  if (!strncmp(t, "t", (size_t)(p - t))) {
+  if (match(t, "t", (size_t)(p - t))) {
     node->t = NODE_T;
     node->r++;
     return p;
@@ -297,69 +307,77 @@ parse_any(NODE *node, const char *p, int q) {
 }
 
 static void
-print_args(NODE *node) {
+print_args(size_t nbuf, char *buf, NODE *node, int mode) {
   int i;
   for (i = 0; i < node->n; i++) {
-    printf(" ");
-    print_node(node->c[i]);
+    strncat(buf, " ", nbuf);
+    print_node(nbuf, buf, node->c[i], mode);
   }
 }
 
 static void
-print_list(NODE *node) {
+print_list(size_t nbuf, char *buf, NODE *node, int mode) {
   int i;
   for (i = 0; i < node->n; i++) {
-    if (i > 0) printf(" ");
-    print_node(node->c[i]);
+    if (i > 0) strncat(buf, " ", nbuf);
+    print_node(nbuf, buf, node->c[i], mode);
   }
 }
 
 static void
-print_str(NODE *node) {
+print_str(size_t nbuf, char *buf, NODE *node, int mode) {
+  if (mode) {
+    strncat(buf, node->u.s, nbuf);
+    return;
+  }
   const char* p = node->u.s;
-  putchar('"');
+  char tmp[2];
+  tmp[1] = 0;
+  strncat(buf, "\"", nbuf);
   while (*p) {
-    if (*p == '\\') putchar(*p);
-    putchar(*p);
+    if (*p == '\\') strncat(buf, "\\", nbuf);
+    tmp[0] = *p;
+    strncat(buf, tmp, nbuf);
     p++;
   }
-  putchar('"');
+  strncat(buf, "\"", nbuf);
 }
 
 static void
-print_node(NODE *node) {
+print_node(size_t nbuf, char* buf, NODE *node, int mode) {
+  char tmp[BUFSIZ];
   switch (node->t) {
-  case NODE_INT: printf("%ld", node->u.i); break;
-  case NODE_DOUBLE: printf("%f", node->u.d); break;
-  case NODE_STRING: print_str(node); break;
-  case NODE_IDENT: printf("%s", node->u.s); break;
-  case NODE_NIL: printf("nil"); break;
-  case NODE_T: printf("t"); break;
-  case NODE_PLUS: printf("(+"); print_args(node); printf(")"); break;
-  case NODE_MINUS: printf("(-"); print_args(node); printf(")"); break;
-  case NODE_MUL: printf("(*"); print_args(node); printf(")"); break;
-  case NODE_DIV: printf("(/"); print_args(node); printf(")"); break;
-  case NODE_PLUS1: printf("(1+"); print_args(node); printf(")"); break;
-  case NODE_MINUS1: printf("(1-"); print_args(node); printf(")"); break;
-  case NODE_EQ: printf("(="); print_args(node); printf(")"); break;
-  case NODE_NOT: printf("(not"); print_args(node); printf(")"); break;
-  case NODE_MOD: printf("(mod"); print_args(node); printf(")"); break;
-  case NODE_IF: printf("(if"); print_args(node); printf(")"); break;
-  case NODE_GT: printf("(>"); print_args(node); printf(")"); break;
-  case NODE_GE: printf("(>="); print_args(node); printf(")"); break;
-  case NODE_LT: printf("(<"); print_args(node); printf(")"); break;
-  case NODE_LE: printf("(<="); print_args(node); printf(")"); break;
-  case NODE_PRINT: printf("(print"); print_args(node); printf(")"); break;
-  case NODE_PRINTLN: printf("(println"); print_args(node); printf(")"); break;
-  case NODE_PRINC: printf("(princ"); print_args(node); printf(")"); break;
-  case NODE_QUOTE: printf("'"); print_node(node->c[0]); break;
-  case NODE_LIST: printf("("); print_list(node); printf(")"); break;
-  case NODE_SETQ: printf("(setq"); print_args(node); printf(")"); break;
-  case NODE_DEFUN: printf("(defun"); print_args(node); printf(")"); break;
-  case NODE_PROGN: printf("(progn"); print_list(node); printf(")"); break;
-  case NODE_COND: printf("(cond"); print_list(node); printf(")"); break;
-  case NODE_DOTIMES: printf("(dotimes"); print_list(node); printf(")"); break;
-  case NODE_CALL: printf("(%s", node->u.s); print_args(node); printf(")"); break;
+  case NODE_INT: snprintf(tmp, sizeof(tmp), "%ld", node->u.i); strncat(buf, tmp, nbuf); break;
+  case NODE_DOUBLE: snprintf(tmp, sizeof(tmp), "%f", node->u.d); strncat(buf, tmp, nbuf); break;
+  case NODE_STRING: print_str(nbuf, buf, node, mode); break;
+  case NODE_IDENT: snprintf(tmp, sizeof(tmp), "%s", node->u.s); strncat(buf, tmp, nbuf); break;
+  case NODE_NIL: strncat(buf, "nil", nbuf); break;
+  case NODE_T: strncat(buf, "t", nbuf); break;
+  case NODE_PLUS: strncat(buf, "(+", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_MINUS: strncat(buf, "(-", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_MUL: strncat(buf, "(*", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_DIV: strncat(buf, "(/", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_PLUS1: strncat(buf, "(1+", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_MINUS1: strncat(buf, "(1-", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_EQ: strncat(buf, "(=", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_NOT: strncat(buf, "(not", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_MOD: strncat(buf, "(mod", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_IF: strncat(buf, "(if", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_GT: strncat(buf, "(>", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_GE: strncat(buf, "(>=", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_LT: strncat(buf, "(<", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_LE: strncat(buf, "(<=", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_PRINT: strncat(buf, "(print", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_PRINTLN: strncat(buf, "(println", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_PRINC: strncat(buf, "(princ", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_QUOTE: strncat(buf, "'", nbuf); print_node(nbuf, buf, node->c[0], mode); break;
+  case NODE_LIST: strncat(buf, "(", nbuf); print_list(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_SETQ: strncat(buf, "(setq", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_DEFUN: strncat(buf, "(defun", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_PROGN: strncat(buf, "(progn", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_COND: strncat(buf, "(cond", nbuf); print_list(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_DOTIMES: strncat(buf, "(dotimes", nbuf); print_list(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_CALL: snprintf(tmp, sizeof(tmp), "(%s", node->u.s); strncat(buf, tmp, nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   }
 }
 
@@ -467,6 +485,8 @@ eval_node(ENV *env, NODE *node) {
   NODE *nn, *c, *x;
   ITEM *ni;
   int i, r;
+  char buf[BUFSIZ];
+
   switch (node->t) {
   case NODE_PLUS:
     nn = new_node();
@@ -647,20 +667,23 @@ eval_node(ENV *env, NODE *node) {
     return nn;
   case NODE_PRINT:
     c = eval_node(env, node->c[0]);
-    print_node(c);
-    puts("");
+    buf[0] = 0;
+    print_node(sizeof(buf), buf, c, 0);
+    puts(buf);
     c->r++;
     return c;
   case NODE_PRINTLN:
     c = eval_node(env, node->c[0]);
-    print_node(c);
-    puts("");
+    buf[0] = 0;
+    print_node(sizeof(buf), buf, c, 0);
+    puts(buf);
     c->r++;
     return c;
   case NODE_PRINC:
     c = eval_node(env, node->c[0]);
-    print_node(c);
-    puts("");
+    buf[0] = 0;
+    print_node(sizeof(buf), buf, c, 1);
+    puts(buf);
     c->r++;
     return c;
   case NODE_QUOTE:
@@ -686,7 +709,7 @@ eval_node(ENV *env, NODE *node) {
   case NODE_CALL:
     x = look_func(env, node->u.s);
     if (!x) {
-      return new_error("unknown variable");
+      return new_error("unknown function");
     }
     newenv = new_env(env);
     c = x->c[1]->c[0];
@@ -846,9 +869,11 @@ main(int argc, char* argv[]) {
     ret = eval_node(env, top);
     if (ret->t == NODE_ERROR)
       fprintf(stderr, "%s: %s", argv[0], ret->u.s);
-    else
-      print_node(ret);
-    puts("");
+    else {
+      buf[0] = 0;
+      print_node(sizeof(buf), buf, ret, 0);
+      puts(buf);
+    }
     free_node(ret);
     free_node(top);
   }
