@@ -6,7 +6,7 @@ Lisp Interpreter
 License:
 --------
 
-MIT
+Public Domain
 
 Author:
 -------
