@@ -890,13 +890,13 @@ main(int argc, char* argv[]) {
   NODE *top, *ret;
   char buf[BUFSIZ], *p;
   const char *pp;
+  long fsize;
 
   if (argc > 1) {
     FILE *fp = fopen(argv[1], "rb");
-    long fsize;
 
     if (!fp) {
-      perror("error");
+      fprintf(stderr, "%s: %s\n", argv[0], strerror(errno));
       exit(1);
     }
     fseek(fp, 0, SEEK_END);
@@ -905,7 +905,7 @@ main(int argc, char* argv[]) {
     p = (char*) malloc(fsize + 1);
     memset(p, 0, fsize+1);
     if (!fread(p, fsize, 1, fp)) {
-      perror("error");
+      fprintf(stderr, "%s: %s\n", argv[0], strerror(errno));
       exit(1);
     }
     fclose(fp);
@@ -928,20 +928,28 @@ main(int argc, char* argv[]) {
 
   env = new_env(NULL);
   while (1) {
-    if (isatty(fileno(stdin))) printf("> ");
-    if (!fgets(buf , sizeof(buf), stdin)) break;
+    if (isatty(fileno(stdin))) {
+      printf("> ");
+      if (!fgets(buf , sizeof(buf), stdin)) break;
+    } else {
+      fsize = fread(buf, 1, sizeof(buf), stdin);
+      if (fsize <= 0) break;
+      buf[fsize] = 0;
+    }
     top = new_node();
     pp = parse_any(top, buf, 0);
-    if (!pp) continue;
+    if (!pp) {
+      continue;
+    }
     pp = skip_white(pp);
     if (*pp) {
       raise(pp);
       continue;
     }
     ret = eval_node(env, top);
-    if (ret->t == NODE_ERROR)
+    if (ret->t == NODE_ERROR) {
       fprintf(stderr, "%s: %s\n", argv[0], ret->u.s);
-    else {
+	} else if (isatty(fileno(stdin))) {
       buf[0] = 0;
       print_node(sizeof(buf), buf, ret, 0);
       puts(buf);
