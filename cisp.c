@@ -149,7 +149,10 @@ parse_args(NODE *node, const char *p) {
     NODE *child = NULL;
     child = new_node();
     /* TODO: ugly */
-    if ((node->t == NODE_DEFUN && node->n == 1) || (node->t == NODE_DOTIMES && node->n == 0)) {
+    if ((node->t == NODE_DEFUN && node->n == 1) ||
+        (node->t == NODE_DOTIMES && node->n == 0) ||
+        (node->t == NODE_COND)
+    ) {
       p = parse_any(child, p, 1);
     } else {
       p = parse_any(child, p, 0);
@@ -802,8 +805,13 @@ eval_node(ENV *env, NODE *node) {
   case NODE_COND:
     c = NULL;
     for (i = 0; i < node->n; i++) {
-      if (node->c[i]->t != NODE_LIST && node->c[i]->n != 2)
+      x = node->c[i];
+      if (x->t == NODE_QUOTE)
+        x = x->c[0];
+      if (x->t != NODE_LIST)
         return new_error("cond should have condition list");
+      if (x->n != 2)
+        return new_error("cond should have pair of condition/value");
       if (int_value(env, eval_node(env, node->c[i]->c[0])) != 0) {
         return eval_node(env, node->c[i]->c[1]);
       }
