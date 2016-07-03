@@ -67,10 +67,12 @@ static void free_node(NODE *node);
 static const char*
 skip_white(const char *p) {
   if (!p) return NULL;
-  while (*p && isspace((int)*p)) p++;
-  if (*p == ';') {
-    p++;
-    while (*p && *p != '\n') p++;
+  while (*p) {
+    if (*p == ';') {
+      p++;
+      while (*p && *p != '\n') p++;
+    } else if (isspace((int)*p)) p++;
+    else break;
   }
   return p;
 }
