@@ -24,7 +24,7 @@ clean :
 	rm -f *.o $(TARGET)
 
 test :
-	ls t/*.t | xargs ./cisp
+	@./t/run-test.sh
 
 debug :
 	gcc -g -o cisp -pg cisp.c
