@@ -5,7 +5,7 @@ cd `dirname $0`
 /bin/ls *.t | while read file; do
   echo -n "$file: "
   EXPECT=$(cat `basename $file .t`.out)
-  ACTUAL=$(../cisp $file)
+  ACTUAL=$(../cisp $file | tr -d "\r")
   if [ "$ACTUAL" != "$EXPECT" ]; then
     echo "NG"
     echo "EXPECT: $EXPECT"
