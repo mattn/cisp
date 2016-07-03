@@ -812,8 +812,8 @@ eval_node(ENV *env, NODE *node) {
         return new_error("cond should have condition list");
       if (x->n != 2)
         return new_error("cond should have pair of condition/value");
-      if (int_value(env, eval_node(env, node->c[i]->c[0])) != 0) {
-        return eval_node(env, node->c[i]->c[1]);
+      if (int_value(env, eval_node(env, x->c[0])) != 0) {
+        return eval_node(env, x->c[1]);
       }
     }
     if (c) {
