@@ -10,6 +10,7 @@ cd `dirname $0`
     echo "NG"
     echo "EXPECT: $EXPECT"
     echo "ACTUAL: $ACTUAL"
+    exit 1
   else
     echo "OK"
   fi
