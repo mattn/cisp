@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
+#include <errno.h>
 #include <memory.h>
 #include <unistd.h>
 #include <ctype.h>
