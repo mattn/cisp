@@ -23,7 +23,7 @@ $(TARGET) : $(OBJS)
 clean :
 	rm -f *.o $(TARGET)
 
-test :
+test : $(TARGET)
 	@./t/run-test.sh
 
 debug :
