@@ -1,0 +1,2 @@
+language: c
+script: ./t/run-test.sh
