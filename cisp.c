@@ -904,7 +904,10 @@ main(int argc, char* argv[]) {
     fseek(fp, 0, SEEK_SET);
     p = (char*) malloc(fsize + 1);
     memset(p, 0, fsize+1);
-    (void ) fread(p, fsize, 1, fp);
+    if (!fread(p, fsize, 1, fp)) {
+      perror("error");
+      exit(1);
+    }
     fclose(fp);
 
     top = new_node();
