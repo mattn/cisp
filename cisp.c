@@ -148,8 +148,7 @@ parse_args(NODE *node, const char *p) {
   if (!p) return NULL;
   p = skip_white(p);
   while (p && *p && *p != ')') {
-    NODE *child = NULL;
-    child = new_node();
+    NODE *child = new_node();
     /* TODO: ugly */
     if ((node->t == NODE_DEFUN && node->n == 1) ||
         (node->t == NODE_DOTIMES && node->n == 0) ||
@@ -265,8 +264,7 @@ parse_ident(NODE *node, const char *p) {
 
 static const char*
 parse_quote(NODE *node, const char *p) {
-  NODE *child = NULL;
-  child = new_node();
+  NODE *child = new_node();
   if (*p == '(') {
     child->t = NODE_LIST;
     p = parse_args(child, p+1);
@@ -750,7 +748,6 @@ eval_node(ENV *env, NODE *node) {
       memset(ni, 0, sizeof(ITEM));
       ni->k = c->c[i]->u.s;
       ni->v = eval_node(env, node->c[i]);
-      ni->v->r++;
       newenv->lv = (ITEM**) realloc(newenv->lv, sizeof(ITEM*) * (newenv->nv + 1));
       newenv->lv[newenv->nv] = ni;
       newenv->nv++;
@@ -761,6 +758,7 @@ eval_node(ENV *env, NODE *node) {
       c = eval_node(newenv, x->c[i]);
     }
     free_env(newenv);
+    free_node(x);
     return c;
   case NODE_DEFUN:
     x = node->c[0];
