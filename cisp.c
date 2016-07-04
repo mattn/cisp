@@ -856,7 +856,13 @@ eval_node(ENV *env, NODE *node) {
       return new_errorf("not list: %s", buf);
     }
     if (x->n > 0) {
-      c = x->c[x->n-1];
+      c = new_node();
+      c->t = NODE_LIST;
+      c->c = (NODE**) malloc(sizeof(NODE) * (x->n - 1));
+      for (i = 1; i < x->n; i++) {
+        c->c[i - 1] = x->c[i];
+        c->n++;
+      }
       c->r++;
       return c;
     }
