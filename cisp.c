@@ -423,7 +423,12 @@ free_node(NODE *node) {
 
 static void
 free_env(ENV *env) {
+  int i;
+  for (i = 0; i < env->nv; i++)
+    free(env->lv[i]);
   free(env->lv);
+  for (i = 0; i < env->nf; i++)
+    free(env->lf[i]);
   free(env->lf);
   free(env);
 }
@@ -809,6 +814,7 @@ eval_node(ENV *env, NODE *node) {
       c = eval_node(env, x->c[0]);
       r = int_value(env, c);
       if (r != 0) {
+        free_node(c);
         return eval_node(env, x->c[1]);
       }
     }
