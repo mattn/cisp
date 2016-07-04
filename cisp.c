@@ -407,7 +407,7 @@ free_node(NODE *node) {
   if (node->r <= 0) {
     for (i = 0; i < node->n; i++)
       free_node(node->c[i]);
-    if (node->c) free(node->c);
+    free(node->c);
     switch (node->t) {
     case NODE_STRING:
     case NODE_IDENT:
