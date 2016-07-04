@@ -163,6 +163,7 @@ parse_args(NODE *node, const char *p) {
       free_node(child);
       return NULL;
     }
+    child->r++;
     node->c = (NODE**) realloc(node->c, sizeof(NODE*) * (node->n + 1));
     node->c[node->n] = child;
     node->n++;
@@ -409,7 +410,7 @@ free_node(NODE *node) {
   if (node->r <= 0) {
     for (i = 0; i < node->n; i++)
       free_node(node->c[i]);
-    free(node->c);
+    if (node->c) free(node->c);
     switch (node->t) {
     case NODE_STRING:
     case NODE_IDENT:
