@@ -163,7 +163,6 @@ parse_args(NODE *node, const char *p) {
       free_node(child);
       return NULL;
     }
-    child->r++;
     node->c = (NODE**) realloc(node->c, sizeof(NODE*) * (node->n + 1));
     node->c[node->n] = child;
     node->n++;
@@ -503,6 +502,7 @@ look_ident(ENV *env, const char *k) {
 
 static NODE*
 look_func(ENV *env, const char *k) {
+  NODE *x;
   static ENV *global;
   int i;
 
@@ -514,7 +514,9 @@ look_func(ENV *env, const char *k) {
   }
   for (i = 0; i < env->nf; i++) {
     if (!strcmp(env->lf[i]->k, k)) {
-      return env->lf[i]->v;
+      x = env->lf[i]->v;
+      x->r++;
+      return x;
     }
   }
   return NULL;
@@ -776,6 +778,7 @@ eval_node(ENV *env, NODE *node) {
     env->lf[env->nf] = ni;
     env->nf++;
     node->c[1]->r++;
+    node->r++;
     return node;
   case NODE_INT:
     node->r++;
