@@ -82,6 +82,7 @@ new_node() {
   NODE* node = (NODE*) malloc(sizeof(NODE));
   memset(node, 0, sizeof(NODE));
   node->t = NODE_NIL;
+  node->r++;
   return node;
 }
 
@@ -139,7 +140,6 @@ parse_number(NODE *node, const char* p) {
     node->t = NODE_DOUBLE;
     node->u.d = atof(t);
   }
-  node->r++;
   return p;
 }
 
@@ -240,7 +240,6 @@ parse_paren(NODE *node, const char *p) {
   case NODE_DOTIMES: if (node->n != 2) return raise(p); break;
   case NODE_DEFUN: if (node->n < 3) return raise(p); break;
   }
-  node->r++;
   return p;
 }
 
@@ -250,12 +249,10 @@ parse_ident(NODE *node, const char *p) {
   while (*p && isalpha(*p)) p++;
   if (match(t, "nil", (size_t)(p - t))) {
     node->t = NODE_NIL;
-    node->r++;
     return p;
   }
   if (match(t, "t", (size_t)(p - t))) {
     node->t = NODE_T;
-    node->r++;
     return p;
   }
   while (*p && isdigit(*p)) p++;
@@ -263,7 +260,6 @@ parse_ident(NODE *node, const char *p) {
   node->u.s = (char*) malloc((size_t)(p - t) + 1);
   memset(node->u.s, 0, (size_t)(p - t) + 1);
   memcpy(node->u.s, t, (size_t)(p - t));
-  node->r++;
   return p;
 }
 
@@ -281,12 +277,10 @@ parse_quote(NODE *node, const char *p) {
     free_node(child);
     return NULL;
   }
-  child->r++;
   node->t = NODE_QUOTE;
   node->c = (NODE**) realloc(node->c, sizeof(NODE*) * (node->n + 1));
   node->c[node->n] = child;
   node->n++;
-  node->r++;
   return p;
 }
 
@@ -312,7 +306,6 @@ parse_string(NODE *node, const char *p) {
 
   p++;
   node->t = NODE_STRING;
-  node->r++;
   return p;
 }
 
@@ -438,33 +431,40 @@ free_env(ENV *env) {
 static long
 int_value(ENV *env, NODE *node) {
   node = eval_node(env, node);
+  int r = 0;
   switch (node->t) {
-  case NODE_NIL: return 0; break;
-  case NODE_T: return 1; break;
-  case NODE_INT: return node->u.i; break;
-  case NODE_DOUBLE: return (long)node->u.d; break;
-  case NODE_QUOTE: return int_value(env, node->c[0]); break;
+  case NODE_NIL: r = 0; break;
+  case NODE_T: r = 1; break;
+  case NODE_INT: r = node->u.i; break;
+  case NODE_DOUBLE: r = (long)node->u.d; break;
+  case NODE_QUOTE: r = int_value(env, eval_node(env, node->c[0])); break;
   }
-  return 0;
+  free_node(node);
+  return r;
 }
 
 static double
 double_value(ENV *env, NODE *node) {
   node = eval_node(env, node);
+  double r = 0;
   switch (node->t) {
-  case NODE_INT: return (double)node->u.i; break;
-  case NODE_DOUBLE: return node->u.d; break;
+  case NODE_INT: r = (double)node->u.i; break;
+  case NODE_DOUBLE: r = node->u.d; break;
   }
-  return 0.0;
+  free_node(node);
+  return r;
 }
 
 static NODE*
 look_ident(ENV *env, const char *k) {
+  NODE *x;
   int i;
 
   for (i = 0; i < env->nv; i++) {
     if (!strcmp(env->lv[i]->k, k)) {
-      return env->lv[i]->v;
+      x = env->lv[i]->v;
+      x->r++;
+      return x;
     }
   }
 
@@ -481,7 +481,9 @@ look_ident(ENV *env, const char *k) {
 
   for (i = 0; i < env->nv; i++) {
     if (!strcmp(env->lv[i]->k, k)) {
-      return env->lv[i]->v;
+      x = env->lv[i]->v;
+      x->r++;
+      return x;
     }
   }
 */
@@ -537,7 +539,6 @@ eval_node(ENV *env, NODE *node) {
       default: break;
       }
     }
-    nn->r++;
     return nn;
   case NODE_MINUS:
     nn = new_node();
@@ -560,7 +561,6 @@ eval_node(ENV *env, NODE *node) {
       default: break;
       }
     }
-    nn->r++;
     return nn;
   case NODE_MUL:
     nn = new_node();
@@ -583,7 +583,6 @@ eval_node(ENV *env, NODE *node) {
       default: break;
       }
     }
-    nn->r++;
     return nn;
   case NODE_DIV:
     nn = new_node();
@@ -606,12 +605,10 @@ eval_node(ENV *env, NODE *node) {
       default: break;
       }
     }
-    nn->r++;
     return nn;
   case NODE_PLUS1:
     c = new_node();
     x = eval_node(env, node->c[0]);
-    c->t = x->t;
     c->t = x->t;
     switch (c->t) {
     case NODE_INT: c->u.i = x->u.i + 1; break;
@@ -622,7 +619,6 @@ eval_node(ENV *env, NODE *node) {
   case NODE_MINUS1:
     c = new_node();
     x = eval_node(env, node->c[0]);
-    c->t = x->t;
     c->t = x->t;
     switch (c->t) {
     case NODE_INT: c->u.i = x->u.i - 1; break;
@@ -659,60 +655,52 @@ eval_node(ENV *env, NODE *node) {
       r = 1;
       break;
     }
-    c =  eval_node(env, node->c[r > 0 ? 1 : 2]);
-    c->r++;
-    return c;
+    x = eval_node(env, node->c[r > 0 ? 1 : 2]);
+    free_node(c);
+    return x;
   case NODE_GT:
     nn = new_node();
     nn->t = NODE_INT;
     nn->u.i = double_value(env, node->c[0]) > double_value(env, node->c[1]);
-    nn->r++;
     return nn;
   case NODE_GE:
     nn = new_node();
     nn->t = NODE_INT;
     nn->u.i = double_value(env, node->c[0]) >= double_value(env, node->c[1]);
-    nn->r++;
     return nn;
   case NODE_LT:
     nn = new_node();
     nn->t = NODE_INT;
     nn->u.i = double_value(env, node->c[0]) < double_value(env, node->c[1]);
-    nn->r++;
     return nn;
   case NODE_LE:
     nn = new_node();
     nn->t = NODE_INT;
     nn->u.i = double_value(env, node->c[0]) <= double_value(env, node->c[1]);
-    nn->r++;
     return nn;
   case NODE_EQ:
     nn = new_node();
     nn->t = NODE_INT;
     /* TODO: string comparison */
     nn->u.i = int_value(env, node->c[0]) == int_value(env, node->c[1]);
-    nn->r++;
     return nn;
   case NODE_PRINT:
     c = eval_node(env, node->c[0]);
     buf[0] = 0;
     print_node(sizeof(buf), buf, c, 0);
     puts(buf);
-    c->r++;
     return c;
   case NODE_PRINTLN:
     c = eval_node(env, node->c[0]);
     buf[0] = 0;
     print_node(sizeof(buf), buf, c, 0);
     puts(buf);
-    c->r++;
     return c;
   case NODE_PRINC:
     c = eval_node(env, node->c[0]);
     buf[0] = 0;
     print_node(sizeof(buf), buf, c, 1);
     puts(buf);
-    c->r++;
     return c;
   case NODE_QUOTE:
     c = node->c[0];
@@ -756,6 +744,7 @@ eval_node(ENV *env, NODE *node) {
     }
     c = NULL;
     for (i = 2; i < x->n; i++) {
+      if (c) free_node(c);
       c = eval_node(newenv, x->c[i]);
     }
     free_env(newenv);
@@ -776,7 +765,6 @@ eval_node(ENV *env, NODE *node) {
     env->lf[env->nf] = ni;
     env->nf++;
     node->c[1]->r++;
-    node->r++;
     return node;
   case NODE_INT:
     node->r++;
@@ -799,6 +787,7 @@ eval_node(ENV *env, NODE *node) {
   case NODE_PROGN:
     c = NULL;
     for (i = 0; i < node->n; i++) {
+      if (c) free_node(c);
       c = eval_node(env, node->c[i]);
     }
     if (c) {
@@ -816,12 +805,14 @@ eval_node(ENV *env, NODE *node) {
         return new_error("cond should have condition list");
       if (x->n != 2)
         return new_error("cond should have pair of condition/value");
-      if (int_value(env, eval_node(env, x->c[0])) != 0) {
+      if (c) free_node(c);
+      c = eval_node(env, x->c[0]);
+      r = int_value(env, c);
+      if (r != 0) {
         return eval_node(env, x->c[1]);
       }
     }
     if (c) {
-      c->r++;
       return c;
     }
     return new_node();
@@ -865,7 +856,6 @@ eval_node(ENV *env, NODE *node) {
         c->c[i - 1] = x->c[i];
         c->n++;
       }
-      c->r++;
       return c;
     }
     return new_node();
@@ -895,6 +885,7 @@ eval_node(ENV *env, NODE *node) {
     c = NULL;
     for (i = 0; i < r; i++) {
       ni->v->u.i = i;
+      if (c) free_node(c);
       c = eval_node(newenv, node->c[1]);
     }
     free_env(newenv);
