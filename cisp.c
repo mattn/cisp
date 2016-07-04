@@ -281,6 +281,7 @@ parse_quote(NODE *node, const char *p) {
     free_node(child);
     return NULL;
   }
+  child->r++;
   node->t = NODE_QUOTE;
   node->c = (NODE**) realloc(node->c, sizeof(NODE) * (node->n + 1));
   node->c[node->n] = child;
