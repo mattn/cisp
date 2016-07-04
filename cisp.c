@@ -789,7 +789,6 @@ eval_node(ENV *env, NODE *node) {
     env->lf = (ITEM**) realloc(env->lf, sizeof(ITEM*) * (env->nf + 1));
     env->lf[env->nf] = ni;
     env->nf++;
-    node->c[1]->r++;
     node->r++;
     return node;
   case NODE_INT:
