@@ -876,6 +876,7 @@ eval_node(ENV *env, NODE *node) {
       c->c = (NODE**) malloc(sizeof(NODE*) * (x->n - 1));
       for (i = 1; i < x->n; i++) {
         c->c[i - 1] = x->c[i];
+        x->c[i]->r++;
         c->n++;
       }
       return c;
