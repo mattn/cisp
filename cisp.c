@@ -424,11 +424,15 @@ free_node(NODE *node) {
 static void
 free_env(ENV *env) {
   int i;
-  for (i = 0; i < env->nv; i++)
+  for (i = 0; i < env->nv; i++) {
+    free_node(env->lv[i]->v);
     free(env->lv[i]);
+  }
   free(env->lv);
-  for (i = 0; i < env->nf; i++)
+  for (i = 0; i < env->nf; i++) {
+    free_node(env->lf[i]->v);
     free(env->lf[i]);
+  }
   free(env->lf);
   free(env);
 }
@@ -884,7 +888,6 @@ eval_node(ENV *env, NODE *node) {
     ni->k = x->c[0]->u.s;
     ni->v = new_node();
     ni->v->t = NODE_INT;
-    ni->v->r++;
     newenv->lv = (ITEM**) realloc(newenv->lv, sizeof(ITEM*) * (newenv->nv + 1));
     newenv->lv[newenv->nv] = ni;
     newenv->nv++;
