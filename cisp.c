@@ -526,7 +526,7 @@ eval_node(ENV *env, NODE *node) {
   ENV *newenv;
   NODE *nn, *c, *x;
   ITEM *ni;
-  int i, r;
+  int i, j, r;
   char buf[BUFSIZ];
 
   switch (node->t) {
@@ -755,6 +755,13 @@ eval_node(ENV *env, NODE *node) {
     newenv = new_env(env);
     c = x->c[1]->c[0];
     for (i = 0; i < node->n && i < c->n; i++) {
+      for (j = 0; j < newenv->nv; j++) {
+        if (!strcmp(c->c[i]->u.s, newenv->lv[j]->k)) {
+          free_env(newenv);
+          free_node(x);
+          return new_errorf("duplicated argument identifier %s", node->u.s);
+        }
+      }
       ni = (ITEM*) malloc(sizeof(ITEM));
       memset(ni, 0, sizeof(ITEM));
       ni->k = c->c[i]->u.s;
