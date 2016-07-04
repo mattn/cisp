@@ -986,7 +986,7 @@ main(int argc, char* argv[]) {
     ret = eval_node(env, top);
     if (ret->t == NODE_ERROR) {
       fprintf(stderr, "%s: %s\n", argv[0], ret->u.s);
-	} else if (isatty(fileno(stdin))) {
+    } else if (isatty(fileno(stdin))) {
       buf[0] = 0;
       print_node(sizeof(buf), buf, ret, 0);
       puts(buf);
