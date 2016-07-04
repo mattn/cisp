@@ -445,7 +445,7 @@ int_value(ENV *env, NODE *node) {
   case NODE_T: r = 1; break;
   case NODE_INT: r = node->u.i; break;
   case NODE_DOUBLE: r = (long)node->u.d; break;
-  case NODE_QUOTE: r = int_value(env, eval_node(env, node->c[0])); break;
+  case NODE_QUOTE: r = int_value(env, node->c[0]); break;
   }
   free_node(node);
   return r;
@@ -458,6 +458,7 @@ double_value(ENV *env, NODE *node) {
   switch (node->t) {
   case NODE_INT: r = (double)node->u.i; break;
   case NODE_DOUBLE: r = node->u.d; break;
+  case NODE_QUOTE: r = double_value(env, node->c[0]); break;
   }
   free_node(node);
   return r;
@@ -645,7 +646,7 @@ eval_node(ENV *env, NODE *node) {
     case NODE_DOUBLE: c->u.d = x->u.i - 1.0; break;
     default: break;
     }
-    free_node(c);
+    free_node(x);
     return c;
   case NODE_NOT:
     c = new_node();
@@ -676,8 +677,8 @@ eval_node(ENV *env, NODE *node) {
       r = 1;
       break;
     }
-    x = eval_node(env, node->c[r > 0 ? 1 : 2]);
     free_node(c);
+    x = eval_node(env, node->c[r > 0 ? 1 : 2]);
     return x;
   case NODE_GT:
     nn = new_node();
@@ -769,7 +770,10 @@ eval_node(ENV *env, NODE *node) {
     }
     free_env(newenv);
     free_node(x);
-    return c;
+    if (c) {
+      return c;
+    }
+    return new_node();
   case NODE_DEFUN:
     x = node->c[0];
     if (x->t != NODE_IDENT) {
