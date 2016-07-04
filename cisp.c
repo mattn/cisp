@@ -714,8 +714,9 @@ eval_node(ENV *env, NODE *node) {
     c->r++;
     return c;
   case NODE_QUOTE:
-    node->r++;
-    return node;
+    c = node->c[0];
+    c->r++;
+    return c;
   case NODE_SETQ:
     x = node->c[0];
     if (x->t != NODE_IDENT) {
