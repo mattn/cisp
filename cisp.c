@@ -536,6 +536,7 @@ eval_node(ENV *env, NODE *node) {
       if (i == 0) {
         nn->t = c->t;
         nn->u = c->u;
+        free_node(c);
         continue;
       }
       switch (nn->t) {
@@ -549,6 +550,7 @@ eval_node(ENV *env, NODE *node) {
       case NODE_DOUBLE: nn->u.d += double_value(env, c); break;
       default: break;
       }
+      free_node(c);
     }
     return nn;
   case NODE_MINUS:
@@ -558,6 +560,7 @@ eval_node(ENV *env, NODE *node) {
       if (i == 0) {
         nn->t = c->t;
         nn->u = c->u;
+        free_node(c);
         continue;
       }
       switch (nn->t) {
@@ -571,6 +574,7 @@ eval_node(ENV *env, NODE *node) {
       case NODE_DOUBLE: nn->u.d -= double_value(env, c); break;
       default: break;
       }
+      free_node(c);
     }
     return nn;
   case NODE_MUL:
@@ -580,6 +584,7 @@ eval_node(ENV *env, NODE *node) {
       if (i == 0) {
         nn->u = c->u;
         nn->t = c->t;
+        free_node(c);
         continue;
       }
       switch (nn->t) {
@@ -593,6 +598,7 @@ eval_node(ENV *env, NODE *node) {
       case NODE_DOUBLE: nn->u.d *= double_value(env, c); break;
       default: break;
       }
+      free_node(c);
     }
     return nn;
   case NODE_DIV:
@@ -602,6 +608,7 @@ eval_node(ENV *env, NODE *node) {
       if (i == 0) {
         nn->t = c->t;
         nn->u = c->u;
+        free_node(c);
         continue;
       }
       switch (nn->t) {
@@ -615,6 +622,7 @@ eval_node(ENV *env, NODE *node) {
       case NODE_DOUBLE: nn->u.d /= double_value(env, c); break;
       default: break;
       }
+      free_node(c);
     }
     return nn;
   case NODE_PLUS1:
@@ -626,6 +634,7 @@ eval_node(ENV *env, NODE *node) {
     case NODE_DOUBLE: c->u.d = x->u.i + 1.0; break;
     default: break;
     }
+    free_node(x);
     return c;
   case NODE_MINUS1:
     c = new_node();
@@ -636,6 +645,7 @@ eval_node(ENV *env, NODE *node) {
     case NODE_DOUBLE: c->u.d = x->u.i - 1.0; break;
     default: break;
     }
+    free_node(c);
     return c;
   case NODE_NOT:
     c = new_node();
@@ -803,7 +813,6 @@ eval_node(ENV *env, NODE *node) {
       c = eval_node(env, node->c[i]);
     }
     if (c) {
-      c->r++;
       return c;
     }
     return new_node();
@@ -884,7 +893,9 @@ eval_node(ENV *env, NODE *node) {
       print_node(sizeof(buf), buf, x->c[0], 0);
       return new_errorf("invalid identifier: %s", buf);
     }
-    r = int_value(env, eval_node(env, x->c[1]));
+    c = eval_node(env, x->c[1]);
+    r = int_value(env, c);
+    free_node(c);
     newenv = new_env(env);
     ni = (ITEM*) malloc(sizeof(ITEM));
     memset(ni, 0, sizeof(ITEM));
@@ -901,7 +912,10 @@ eval_node(ENV *env, NODE *node) {
       c = eval_node(newenv, node->c[1]);
     }
     free_env(newenv);
-    return c;
+    if (c) {
+      return c;
+    }
+    return new_node();
   }
   return new_error("unknown node");
 }
