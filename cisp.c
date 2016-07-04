@@ -943,6 +943,7 @@ main(int argc, char* argv[]) {
     fsize = ftell(fp);
     fseek(fp, 0, SEEK_SET);
     p = (char*) malloc(fsize + 1);
+    pp = p;
     memset(p, 0, fsize+1);
     if (!fread(p, fsize, 1, fp)) {
       fprintf(stderr, "%s: %s\n", argv[0], strerror(errno));
@@ -952,10 +953,16 @@ main(int argc, char* argv[]) {
 
     top = new_node();
     top->t = NODE_PROGN;
-    if (!parse_args(top, p)) {
+    p = (char*) parse_args(top, p);
+    if (!p) {
       exit(1);
     }
-    free(p);
+    p = (char*) skip_white((char*)p);
+    if (*p) {
+      raise(p);
+      exit(1);
+    }
+    free((char*)pp);
     env = new_env(NULL);
     ret = eval_node(env, top);
     if (ret->t == NODE_ERROR)
