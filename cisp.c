@@ -424,16 +424,60 @@ static void
 free_env(ENV *env) {
   int i;
   for (i = 0; i < env->nv; i++) {
+    free((void*)env->lv[i]->k);
     free_node(env->lv[i]->v);
     free(env->lv[i]);
   }
   free(env->lv);
   for (i = 0; i < env->nf; i++) {
+    free((void*)env->lf[i]->k);
     free_node(env->lf[i]->v);
     free(env->lf[i]);
   }
   free(env->lf);
   free(env);
+}
+
+static void
+add_variable(ENV *env, const char *k, NODE *node) {
+  int i;
+  ITEM *ni;
+  node->r++;
+  for (i = 0; i < env->nv; i++) {
+    if (!strcmp(env->lv[i]->k, k)) {
+      free_node(env->lv[i]->v);
+      env->lv[i]->v = node;
+      return;
+    }
+  }
+  ni = (ITEM*) malloc(sizeof(ITEM));
+  memset(ni, 0, sizeof(ITEM));
+  ni->k = strdup(k);
+  ni->v = node;
+  env->lv = (ITEM**) realloc(env->lv, sizeof(ITEM*) * (env->nv + 1));
+  env->lv[env->nv] = ni;
+  env->nv++;
+}
+
+static void
+add_function(ENV *env, const char *k, NODE *node) {
+  int i;
+  ITEM *ni;
+  node->r++;
+  for (i = 0; i < env->nf; i++) {
+    if (!strcmp(env->lf[i]->k, k)) {
+      free_node(env->lf[i]->v);
+      env->lf[i]->v = node;
+      return;
+    }
+  }
+  ni = (ITEM*) malloc(sizeof(ITEM));
+  memset(ni, 0, sizeof(ITEM));
+  ni->k = strdup(k);
+  ni->v = node;
+  env->lf = (ITEM**) realloc(env->lf, sizeof(ITEM*) * (env->nf + 1));
+  env->lf[env->nf] = ni;
+  env->nf++;
 }
 
 static long
@@ -525,7 +569,6 @@ static NODE*
 eval_node(ENV *env, NODE *node) {
   ENV *newenv;
   NODE *nn, *c, *x;
-  ITEM *ni;
   int i, j, r;
   char buf[BUFSIZ];
 
@@ -735,14 +778,7 @@ eval_node(ENV *env, NODE *node) {
       print_node(sizeof(buf), buf, x, 0);
       return new_errorf("invalid identifier: %s", buf);
     }
-    ni = (ITEM*) malloc(sizeof(ITEM));
-    memset(ni, 0, sizeof(ITEM));
-    ni->k = x->u.s;
-    ni->v = node->c[1];
-    ni->v->r++;
-    env->lv = (ITEM**) realloc(env->lv, sizeof(ITEM*) * (env->nv + 1));
-    env->lv[env->nv] = ni;
-    env->nv++;
+    add_variable(env, x->u.s, node->c[1]);
     node->c[1]->r++;
     return node->c[1];
   case NODE_IDENT:
@@ -762,13 +798,9 @@ eval_node(ENV *env, NODE *node) {
           return new_errorf("duplicated argument identifier %s", node->u.s);
         }
       }
-      ni = (ITEM*) malloc(sizeof(ITEM));
-      memset(ni, 0, sizeof(ITEM));
-      ni->k = c->c[i]->u.s;
-      ni->v = eval_node(env, node->c[i]);
-      newenv->lv = (ITEM**) realloc(newenv->lv, sizeof(ITEM*) * (newenv->nv + 1));
-      newenv->lv[newenv->nv] = ni;
-      newenv->nv++;
+      nn = eval_node(env, node->c[i]);
+      add_variable(newenv, c->c[i]->u.s, nn);
+      free_node(nn);
     }
     c = NULL;
     for (i = 2; i < x->n; i++) {
@@ -788,14 +820,7 @@ eval_node(ENV *env, NODE *node) {
       print_node(sizeof(buf), buf, x, 0);
       return new_errorf("invalid identifier: %s", buf);
     }
-    ni = (ITEM*) malloc(sizeof(ITEM));
-    memset(ni, 0, sizeof(ITEM));
-    ni->k = x->u.s;
-    ni->v = node;
-    ni->v->r++;
-    env->lf = (ITEM**) realloc(env->lf, sizeof(ITEM*) * (env->nf + 1));
-    env->lf[env->nf] = ni;
-    env->nf++;
+    add_function(env, x->u.s, node);
     node->r++;
     return node;
   case NODE_INT:
@@ -908,20 +933,16 @@ eval_node(ENV *env, NODE *node) {
     r = int_value(env, c);
     free_node(c);
     newenv = new_env(env);
-    ni = (ITEM*) malloc(sizeof(ITEM));
-    memset(ni, 0, sizeof(ITEM));
-    ni->k = x->c[0]->u.s;
-    ni->v = new_node();
-    ni->v->t = NODE_INT;
-    newenv->lv = (ITEM**) realloc(newenv->lv, sizeof(ITEM*) * (newenv->nv + 1));
-    newenv->lv[newenv->nv] = ni;
-    newenv->nv++;
+    nn = new_node();
+    nn->t = NODE_INT;
+    add_variable(newenv, x->c[0]->u.s, nn);
     c = NULL;
     for (i = 0; i < r; i++) {
-      ni->v->u.i = i;
+      nn->u.i = i;
       if (c) free_node(c);
       c = eval_node(newenv, node->c[1]);
     }
+    free_node(nn);
     free_env(newenv);
     if (c) {
       return c;
