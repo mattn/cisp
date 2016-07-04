@@ -163,7 +163,7 @@ parse_args(NODE *node, const char *p) {
       free_node(child);
       return NULL;
     }
-    node->c = (NODE**) realloc(node->c, sizeof(NODE) * (node->n + 1));
+    node->c = (NODE**) realloc(node->c, sizeof(NODE*) * (node->n + 1));
     node->c[node->n] = child;
     node->n++;
     p = skip_white(p);
@@ -283,7 +283,7 @@ parse_quote(NODE *node, const char *p) {
   }
   child->r++;
   node->t = NODE_QUOTE;
-  node->c = (NODE**) realloc(node->c, sizeof(NODE) * (node->n + 1));
+  node->c = (NODE**) realloc(node->c, sizeof(NODE*) * (node->n + 1));
   node->c[node->n] = child;
   node->n++;
   node->r++;
@@ -730,7 +730,7 @@ eval_node(ENV *env, NODE *node) {
     ni->k = x->u.s;
     ni->v = node->c[1];
     ni->v->r++;
-    env->lv = (ITEM**) realloc(env->lv, sizeof(ITEM) * (env->nv + 1));
+    env->lv = (ITEM**) realloc(env->lv, sizeof(ITEM*) * (env->nv + 1));
     env->lv[env->nv] = ni;
     env->nv++;
     node->c[1]->r++;
@@ -750,7 +750,7 @@ eval_node(ENV *env, NODE *node) {
       ni->k = c->c[i]->u.s;
       ni->v = eval_node(env, node->c[i]);
       ni->v->r++;
-      newenv->lv = (ITEM**) realloc(newenv->lv, sizeof(ITEM) * (newenv->nv + 1));
+      newenv->lv = (ITEM**) realloc(newenv->lv, sizeof(ITEM*) * (newenv->nv + 1));
       newenv->lv[newenv->nv] = ni;
       newenv->nv++;
     }
@@ -772,7 +772,7 @@ eval_node(ENV *env, NODE *node) {
     ni->k = x->u.s;
     ni->v = node;
     ni->v->r++;
-    env->lf = (ITEM**) realloc(env->lf, sizeof(ITEM) * (env->nf + 1));
+    env->lf = (ITEM**) realloc(env->lf, sizeof(ITEM*) * (env->nf + 1));
     env->lf[env->nf] = ni;
     env->nf++;
     node->c[1]->r++;
@@ -860,7 +860,7 @@ eval_node(ENV *env, NODE *node) {
     if (x->n > 0) {
       c = new_node();
       c->t = NODE_LIST;
-      c->c = (NODE**) malloc(sizeof(NODE) * (x->n - 1));
+      c->c = (NODE**) malloc(sizeof(NODE*) * (x->n - 1));
       for (i = 1; i < x->n; i++) {
         c->c[i - 1] = x->c[i];
         c->n++;
@@ -889,7 +889,7 @@ eval_node(ENV *env, NODE *node) {
     ni->v = new_node();
     ni->v->t = NODE_INT;
     ni->v->r++;
-    newenv->lv = (ITEM**) realloc(newenv->lv, sizeof(ITEM) * (newenv->nv + 1));
+    newenv->lv = (ITEM**) realloc(newenv->lv, sizeof(ITEM*) * (newenv->nv + 1));
     newenv->lv[newenv->nv] = ni;
     newenv->nv++;
     c = NULL;
