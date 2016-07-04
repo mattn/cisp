@@ -754,7 +754,7 @@ eval_node(ENV *env, NODE *node) {
     }
     newenv = new_env(env);
     c = x->c[1]->c[0];
-    for (i = 0; i < node->n; i++) {
+    for (i = 0; i < node->n && i < c->n; i++) {
       ni = (ITEM*) malloc(sizeof(ITEM));
       memset(ni, 0, sizeof(ITEM));
       ni->k = c->c[i]->u.s;
