@@ -345,6 +345,7 @@ free_env(ENV *env) {
     free(env->lf[i]);
   }
   free(env->lv);
+  free(env->lf);
   free(env);
 }
 
@@ -870,7 +871,6 @@ static NODE*
 do_dotimes(ENV *env, NODE *node) {
   ENV *newenv;
   NODE *x, *c, *nn;
-  ITEM *ni;
   int i, r;
 
   if (node->n != 2) return new_errorf("malformed dotimes");
@@ -879,8 +879,6 @@ do_dotimes(ENV *env, NODE *node) {
   r = int_value(env, c);
   free_node(c);
   newenv = new_env(env);
-  ni = (ITEM*) malloc(sizeof(ITEM));
-  memset(ni, 0, sizeof(ITEM));
   nn = new_node();
   nn->t = NODE_INT;
   add_variable(newenv, x->u.s, nn);
