@@ -437,19 +437,359 @@ double_value(ENV *env, NODE *node) {
 }
 
 static NODE*
-look_ident(ENV *env, const char *k) {
+do_plus(ENV *env, NODE *node) {
+  NODE *nn, *c;
+  int i;
+
+  if (node->n < 2) return new_errorf("malformed +");
+  nn = new_node();
+  for (i = 0; i < node->n; i++) {
+	c = eval_node(env, node->c[i]);
+	if (i == 0) {
+	  nn->t = c->t;
+	  nn->u = c->u;
+	  free_node(c);
+	  continue;
+	}
+	switch (nn->t) {
+	  case NODE_INT:
+		if (c->t == NODE_DOUBLE) {
+		  nn->u.d = double_value(env, nn) + double_value(env, c);
+		  nn->t = c->t;
+		} else
+		  nn->u.i += int_value(env, c);
+		break;
+	  case NODE_DOUBLE: nn->u.d += double_value(env, c); break;
+	  default: break;
+	}
+	free_node(c);
+  }
+  return nn;
+}
+
+static NODE*
+do_minus(ENV *env, NODE *node) {
+  NODE *nn, *c;
+  int i;
+
+  if (node->n < 2) return new_errorf("malformed -");
+  nn = new_node();
+  for (i = 0; i < node->n; i++) {
+	c = eval_node(env, node->c[i]);
+	if (i == 0) {
+	  nn->t = c->t;
+	  nn->u = c->u;
+	  free_node(c);
+	  continue;
+	}
+	switch (nn->t) {
+	  case NODE_INT:
+		if (c->t == NODE_DOUBLE) {
+		  nn->u.d = double_value(env, nn) - double_value(env, c);
+		  nn->t = c->t;
+		} else
+		  nn->u.i -= int_value(env, c);
+		break;
+	  case NODE_DOUBLE: nn->u.d -= double_value(env, c); break;
+	  default: break;
+	}
+	free_node(c);
+  }
+  return nn;
+}
+
+static NODE*
+do_mul(ENV *env, NODE *node) {
+  NODE *nn, *c;
+  int i;
+
+  if (node->n < 2) return new_errorf("malformed *");
+  nn = new_node();
+  for (i = 0; i < node->n; i++) {
+	c = eval_node(env, node->c[i]);
+	if (i == 0) {
+	  nn->u = c->u;
+	  nn->t = c->t;
+	  free_node(c);
+	  continue;
+	}
+	switch (nn->t) {
+	  case NODE_INT:
+		if (c->t == NODE_DOUBLE) {
+		  nn->u.d = double_value(env, nn) * double_value(env, c);
+		  nn->t = c->t;
+		} else
+		  nn->u.i *= int_value(env, c);
+		break;
+	  case NODE_DOUBLE: nn->u.d *= double_value(env, c); break;
+	  default: break;
+	}
+	free_node(c);
+  }
+  return nn;
+}
+
+static NODE*
+do_div(ENV *env, NODE *node) {
+  NODE *nn, *c;
+  int i;
+
+  if (node->n < 2) return new_errorf("malformed /");
+  nn = new_node();
+  for (i = 0; i < node->n; i++) {
+	c = eval_node(env, node->c[i]);
+	if (i == 0) {
+	  nn->t = c->t;
+	  nn->u = c->u;
+	  free_node(c);
+	  continue;
+	}
+	switch (nn->t) {
+	  case NODE_INT:
+		if (c->t == NODE_DOUBLE) {
+		  nn->u.d = double_value(env, nn) / double_value(env, c);
+		  nn->t = c->t;
+		} else
+		  nn->u.i /= int_value(env, c);
+		break;
+	  case NODE_DOUBLE: nn->u.d /= double_value(env, c); break;
+	  default: break;
+	}
+	free_node(c);
+  }
+  return nn;
+}
+
+static NODE*
+do_plus1(ENV *env, NODE *node) {
+  NODE *x, *c;
+
+  if (node->n != 1) return new_errorf("malformed 1+");
+  c = new_node();
+  x = eval_node(env, node->c[0]);
+  c->t = x->t;
+  switch (c->t) {
+	case NODE_INT: c->u.i = x->u.i + 1; break;
+	case NODE_DOUBLE: c->u.d = x->u.i + 1.0; break;
+	default: break;
+  }
+  free_node(x);
+  return c;
+}
+
+static NODE*
+do_minus1(ENV *env, NODE *node) {
+  NODE *x, *c;
+
+  if (node->n != 1) return new_errorf("malformed 1-");
+  c = new_node();
+  x = eval_node(env, node->c[0]);
+  c->t = x->t;
+  switch (c->t) {
+	case NODE_INT: c->u.i = x->u.i - 1; break;
+	case NODE_DOUBLE: c->u.d = x->u.i - 1.0; break;
+	default: break;
+  }
+  free_node(x);
+  return c;
+}
+
+static NODE*
+do_not(ENV *env, NODE *node) {
+  NODE *c;
+
+  if (node->n != 1) return new_errorf("malformed not");
+  c = new_node();
+  c->t = NODE_INT;
+  c->u.i = !int_value(env, node->c[0]);
+  return c;
+}
+
+static NODE*
+do_mod(ENV *env, NODE *node) {
+  NODE *c;
+
+  if (node->n != 2) return new_errorf("malformed not");
+  c = new_node();
+  c->t = NODE_INT;
+  c->u.i = int_value(env, node->c[0]) % int_value(env, node->c[1]);
+  return c;
+}
+
+static NODE*
+do_if(ENV *env, NODE *node) {
+  NODE *x, *c;
+  int r = 0;
+
+  if (node->n != 3) return new_errorf("malformed if");
+  c = eval_node(env, node->c[0]);
+  switch (c->t) {
+	case NODE_NIL:
+	  r = 0;
+	  break;
+	case NODE_T:
+	  r = 1;
+	  break;
+	case NODE_INT:
+	  r = c->u.i;
+	  break;
+	case NODE_DOUBLE:
+	  r = (long) c->u.d;
+	  break;
+	default:
+	  r = 1;
+	  break;
+  }
+  free_node(c);
+  x = eval_node(env, node->c[r > 0 ? 1 : 2]);
+  return x;
+}
+
+static NODE*
+do_gt(ENV *env, NODE *node) {
+  NODE *nn;
+
+  if (node->n != 2) return new_errorf("malformed >");
+  nn = new_node();
+  nn->t = NODE_INT;
+  nn->u.i = double_value(env, node->c[0]) > double_value(env, node->c[1]);
+  return nn;
+}
+
+static NODE*
+do_ge(ENV *env, NODE *node) {
+  NODE *nn;
+
+  if (node->n != 2) return new_errorf("malformed >=");
+  nn = new_node();
+  nn->t = NODE_INT;
+  nn->u.i = double_value(env, node->c[0]) >= double_value(env, node->c[1]);
+  return nn;
+}
+
+static NODE*
+do_lt(ENV *env, NODE *node) {
+  NODE *nn;
+
+  if (node->n != 2) return new_errorf("malformed <");
+  nn = new_node();
+  nn->t = NODE_INT;
+  nn->u.i = double_value(env, node->c[0]) < double_value(env, node->c[1]);
+  return nn;
+}
+
+static NODE*
+do_le(ENV *env, NODE *node) {
+  NODE *nn;
+
+  if (node->n != 2) return new_errorf("malformed <=");
+  nn = new_node();
+  nn->t = NODE_INT;
+  nn->u.i = double_value(env, node->c[0]) <= double_value(env, node->c[1]);
+  return nn;
+}
+
+static NODE*
+do_eq(ENV *env, NODE *node) {
+  NODE *nn;
+
+  if (node->n != 2) return new_errorf("malformed =");
+  nn = new_node();
+  nn->t = NODE_INT;
+  /* TODO: string comparison */
+  nn->u.i = int_value(env, node->c[0]) == int_value(env, node->c[1]);
+  return nn;
+}
+
+static NODE*
+do_print(ENV *env, NODE *node) {
+  NODE *c;
+  char buf[BUFSIZ];
+
+  if (node->n != 1) return new_errorf("malformed print");
+  c = eval_node(env, node->c[0]);
+  buf[0] = 0;
+  print_node(sizeof(buf), buf, c, 0);
+  puts(buf);
+  return c;
+}
+
+static NODE*
+do_println(ENV *env, NODE *node) {
+  NODE *c;
+  char buf[BUFSIZ];
+
+  if (node->n != 1) return new_errorf("malformed println");
+  c = eval_node(env, node->c[0]);
+  buf[0] = 0;
+  print_node(sizeof(buf), buf, c, 0);
+  puts(buf);
+  return c;
+}
+
+static NODE*
+do_princ(ENV *env, NODE *node) {
+  NODE *c;
+  char buf[BUFSIZ];
+
+  if (node->n != 1) return new_errorf("malformed printc");
+  c = eval_node(env, node->c[0]);
+  buf[0] = 0;
+  print_node(sizeof(buf), buf, c, 1);
+  puts(buf);
+  return c;
+}
+
+static NODE*
+do_quote(ENV *env, NODE *node) {
+  NODE *c;
+
+  if (node->n != 1) return new_errorf("malformed quote");
+  c = node->c[0];
+  c->r++;
+  return c;
+}
+
+static NODE*
+do_setq(ENV *env, NODE *node) {
+  NODE *x;
+  ITEM *ni;
+  char buf[BUFSIZ];
+
+  if (node->n != 2) return new_errorf("malformed setq");
+  x = node->c[0];
+  if (x->t != NODE_IDENT) {
+	buf[0] = 0;
+	print_node(sizeof(buf), buf, x, 0);
+	return new_errorf("invalid identifier: %s", buf);
+  }
+  ni = (ITEM*) malloc(sizeof(ITEM));
+  memset(ni, 0, sizeof(ITEM));
+  ni->k = x->u.s;
+  ni->v = node->c[1];
+  ni->v->r++;
+  env->lv = (ITEM**) realloc(env->lv, sizeof(ITEM*) * (env->nv + 1));
+  env->lv[env->nv] = ni;
+  env->nv++;
+  node->c[1]->r++;
+  return node->c[1];
+}
+
+static NODE*
+do_ident(ENV *env, NODE *node) {
   NODE *x;
   int i;
 
+  if (node->n != 0) return new_errorf("malformed ident");
   for (i = 0; i < env->nv; i++) {
-    if (!strcmp(env->lv[i]->k, k)) {
+    if (!strcmp(env->lv[i]->k, node->u.s)) {
       x = env->lv[i]->v;
       x->r++;
       return x;
     }
   }
 
-  if (env->p) return look_ident(env->p, k);
+  if (env->p) return do_ident(env->p, node);
 /* TODO: bottle neck */
 /*
   static ENV *global;
@@ -468,7 +808,7 @@ look_ident(ENV *env, const char *k) {
     }
   }
 */
-  return new_errorf("unknown variable: %s", k);
+  return new_errorf("unknown variable: %s", node->u.s);
 }
 
 static NODE*
@@ -494,419 +834,279 @@ look_func(ENV *env, const char *k) {
 }
 
 static NODE*
-eval_node(ENV *env, NODE *node) {
+do_call(ENV *env, NODE *node) {
   ENV *newenv;
-  NODE *nn, *c, *x;
+  NODE *x, *c;
   ITEM *ni;
-  int i, j, r;
+  int i, j;
+
+  x = look_func(env, node->u.s);
+  if (!x) {
+	return new_errorf("unknown function: %s", node->u.s);
+  }
+  newenv = new_env(env);
+  c = x->c[1]->c[0];
+  for (i = 0; i < node->n && i < c->n; i++) {
+	for (j = 0; j < newenv->nv; j++) {
+	  if (!strcmp(c->c[i]->u.s, newenv->lv[j]->k)) {
+		free_env(newenv);
+		free_node(x);
+		return new_errorf("duplicated argument identifier %s", node->u.s);
+	  }
+	}
+	ni = (ITEM*) malloc(sizeof(ITEM));
+	memset(ni, 0, sizeof(ITEM));
+	ni->k = c->c[i]->u.s;
+	ni->v = eval_node(env, node->c[i]);
+	newenv->lv = (ITEM**) realloc(newenv->lv, sizeof(ITEM*) * (newenv->nv + 1));
+	newenv->lv[newenv->nv] = ni;
+	newenv->nv++;
+  }
+  c = NULL;
+  for (i = 2; i < x->n; i++) {
+	if (c) free_node(c);
+	c = eval_node(newenv, x->c[i]);
+  }
+  free_env(newenv);
+  free_node(x);
+  if (c) {
+	return c;
+  }
+  return new_node();
+}
+
+static NODE*
+do_defun(ENV *env, NODE *node) {
+  NODE *x;
+  ITEM *ni;
   char buf[BUFSIZ];
 
+  if (node->n < 3) return new_errorf("malformed defun");
+  x = node->c[0];
+  if (x->t != NODE_IDENT) {
+	buf[0] = 0;
+	print_node(sizeof(buf), buf, x, 0);
+	return new_errorf("invalid identifier: %s", buf);
+  }
+  ni = (ITEM*) malloc(sizeof(ITEM));
+  memset(ni, 0, sizeof(ITEM));
+  ni->k = x->u.s;
+  ni->v = node;
+  ni->v->r++;
+  env->lf = (ITEM**) realloc(env->lf, sizeof(ITEM*) * (env->nf + 1));
+  env->lf[env->nf] = ni;
+  env->nf++;
+  node->r++;
+  return node;
+}
+
+static NODE*
+do_progn(ENV *env, NODE *node) {
+  NODE *c;
+  int i;
+
+  if (node->n < 1) return new_errorf("malformed progn");
+  c = NULL;
+  for (i = 0; i < node->n; i++) {
+	if (c) free_node(c);
+	c = eval_node(env, node->c[i]);
+  }
+  if (c) {
+	return c;
+  }
+  return new_node();
+}
+
+static NODE*
+do_dotimes(ENV *env, NODE *node) {
+  ENV *newenv;
+  NODE *x, *c;
+  ITEM *ni;
+  int i, r;
+  char buf[BUFSIZ];
+
+  if (node->n != 2) return new_errorf("malformed dotimes");
+  x = node->c[0]->c[0];
+  if (x->t != NODE_LIST || x->n != 2) {
+	buf[0] = 0;
+	print_node(sizeof(buf), buf, x, 0);
+	return new_errorf("invalid defintion: %s", buf);
+  }
+  if (x->c[0]->t != NODE_IDENT) {
+	buf[0] = 0;
+	print_node(sizeof(buf), buf, x->c[0], 0);
+	return new_errorf("invalid identifier: %s", buf);
+  }
+  c = eval_node(env, x->c[1]);
+  r = int_value(env, c);
+  free_node(c);
+  newenv = new_env(env);
+  ni = (ITEM*) malloc(sizeof(ITEM));
+  memset(ni, 0, sizeof(ITEM));
+  ni->k = x->c[0]->u.s;
+  ni->v = new_node();
+  ni->v->t = NODE_INT;
+  newenv->lv = (ITEM**) realloc(newenv->lv, sizeof(ITEM*) * (newenv->nv + 1));
+  newenv->lv[newenv->nv] = ni;
+  newenv->nv++;
+  c = NULL;
+  for (i = 0; i < r; i++) {
+	ni->v->u.i = i;
+	if (c) free_node(c);
+	c = eval_node(newenv, node->c[1]);
+  }
+  free_env(newenv);
+  if (c) {
+	return c;
+  }
+  return new_node();
+}
+
+static NODE*
+do_cond(ENV *env, NODE *node) {
+  NODE *x, *c;
+  int i, r;
+
+  if (node->n < 1) return new_errorf("malformed cond");
+  c = NULL;
+  for (i = 0; i < node->n; i++) {
+	x = node->c[i];
+	if (x->t == NODE_QUOTE)
+	  x = x->c[0];
+	if (x->t != NODE_LIST)
+	  return new_error("cond should have condition list");
+	if (x->n != 2)
+	  return new_error("cond should have pair of condition/value");
+	if (c) free_node(c);
+	c = eval_node(env, x->c[0]);
+	r = int_value(env, c);
+	if (r != 0) {
+	  free_node(c);
+	  return eval_node(env, x->c[1]);
+	}
+  }
+  if (c) {
+	return c;
+  }
+  return new_node();
+}
+
+static NODE*
+do_car(ENV *env, NODE *node) {
+  NODE *x, *c;
+  char buf[BUFSIZ];
+
+  if (node->n != 1) return new_errorf("malformed car");
+  x = node->c[0];
+  if (x->t != NODE_QUOTE) {
+	buf[0] = 0;
+	print_node(sizeof(buf), buf, x, 0);
+	return new_errorf("not quote: %s", buf);
+  }
+  x = x->c[0];
+  if (x->t != NODE_LIST) {
+	buf[0] = 0;
+	print_node(sizeof(buf), buf, x, 0);
+	return new_errorf("not list: %s", buf);
+  }
+  if (x->n > 0) {
+	c = x->c[0];
+	c->r++;
+	return c;
+  }
+  return new_node();
+}
+
+static NODE*
+do_cdr(ENV *env, NODE *node) {
+  NODE *x, *c;
+  int i;
+  char buf[BUFSIZ];
+
+  if (node->n != 1) return new_errorf("malformed cdr");
+  x = node->c[0];
+  if (x->t != NODE_QUOTE) {
+	buf[0] = 0;
+	print_node(sizeof(buf), buf, x, 0);
+	return new_errorf("not quote: %s", buf);
+  }
+  x = x->c[0];
+  if (x->t != NODE_LIST) {
+	buf[0] = 0;
+	print_node(sizeof(buf), buf, x, 0);
+	return new_errorf("not list: %s", buf);
+  }
+  if (x->n > 0) {
+	c = new_node();
+	c->t = NODE_LIST;
+	c->c = (NODE**) malloc(sizeof(NODE*) * (x->n - 1));
+	for (i = 1; i < x->n; i++) {
+	  c->c[i - 1] = x->c[i];
+	  x->c[i]->r++;
+	  c->n++;
+	}
+	return c;
+  }
+  return new_node();
+}
+
+static NODE*
+eval_node(ENV *env, NODE *node) {
   switch (node->t) {
   case NODE_PLUS:
-    if (node->n < 2) return new_errorf("malformed +");
-    nn = new_node();
-    for (i = 0; i < node->n; i++) {
-      c = eval_node(env, node->c[i]);
-      if (i == 0) {
-        nn->t = c->t;
-        nn->u = c->u;
-        free_node(c);
-        continue;
-      }
-      switch (nn->t) {
-      case NODE_INT:
-        if (c->t == NODE_DOUBLE) {
-          nn->u.d = double_value(env, nn) + double_value(env, c);
-          nn->t = c->t;
-        } else
-          nn->u.i += int_value(env, c);
-        break;
-      case NODE_DOUBLE: nn->u.d += double_value(env, c); break;
-      default: break;
-      }
-      free_node(c);
-    }
-    return nn;
+    return do_plus(env, node);
   case NODE_MINUS:
-    if (node->n < 2) return new_errorf("malformed -");
-    nn = new_node();
-    for (i = 0; i < node->n; i++) {
-      c = eval_node(env, node->c[i]);
-      if (i == 0) {
-        nn->t = c->t;
-        nn->u = c->u;
-        free_node(c);
-        continue;
-      }
-      switch (nn->t) {
-      case NODE_INT:
-        if (c->t == NODE_DOUBLE) {
-          nn->u.d = double_value(env, nn) - double_value(env, c);
-          nn->t = c->t;
-        } else
-          nn->u.i -= int_value(env, c);
-        break;
-      case NODE_DOUBLE: nn->u.d -= double_value(env, c); break;
-      default: break;
-      }
-      free_node(c);
-    }
-    return nn;
+    return do_minus(env, node);
   case NODE_MUL:
-    if (node->n < 2) return new_errorf("malformed *");
-    nn = new_node();
-    for (i = 0; i < node->n; i++) {
-      c = eval_node(env, node->c[i]);
-      if (i == 0) {
-        nn->u = c->u;
-        nn->t = c->t;
-        free_node(c);
-        continue;
-      }
-      switch (nn->t) {
-      case NODE_INT:
-        if (c->t == NODE_DOUBLE) {
-          nn->u.d = double_value(env, nn) * double_value(env, c);
-          nn->t = c->t;
-        } else
-          nn->u.i *= int_value(env, c);
-        break;
-      case NODE_DOUBLE: nn->u.d *= double_value(env, c); break;
-      default: break;
-      }
-      free_node(c);
-    }
-    return nn;
+    return do_mul(env, node);
   case NODE_DIV:
-    if (node->n < 2) return new_errorf("malformed /");
-    nn = new_node();
-    for (i = 0; i < node->n; i++) {
-      c = eval_node(env, node->c[i]);
-      if (i == 0) {
-        nn->t = c->t;
-        nn->u = c->u;
-        free_node(c);
-        continue;
-      }
-      switch (nn->t) {
-      case NODE_INT:
-        if (c->t == NODE_DOUBLE) {
-          nn->u.d = double_value(env, nn) / double_value(env, c);
-          nn->t = c->t;
-        } else
-          nn->u.i /= int_value(env, c);
-        break;
-      case NODE_DOUBLE: nn->u.d /= double_value(env, c); break;
-      default: break;
-      }
-      free_node(c);
-    }
-    return nn;
+    return do_div(env, node);
   case NODE_PLUS1:
-    if (node->n != 1) return new_errorf("malformed 1+");
-    c = new_node();
-    x = eval_node(env, node->c[0]);
-    c->t = x->t;
-    switch (c->t) {
-    case NODE_INT: c->u.i = x->u.i + 1; break;
-    case NODE_DOUBLE: c->u.d = x->u.i + 1.0; break;
-    default: break;
-    }
-    free_node(x);
-    return c;
+    return do_plus1(env, node);
   case NODE_MINUS1:
-    if (node->n != 1) return new_errorf("malformed 1-");
-    c = new_node();
-    x = eval_node(env, node->c[0]);
-    c->t = x->t;
-    switch (c->t) {
-    case NODE_INT: c->u.i = x->u.i - 1; break;
-    case NODE_DOUBLE: c->u.d = x->u.i - 1.0; break;
-    default: break;
-    }
-    free_node(x);
-    return c;
+    return do_minus1(env, node);
   case NODE_NOT:
-    if (node->n != 1) return new_errorf("malformed not");
-    c = new_node();
-    c->t = NODE_INT;
-    c->u.i = !int_value(env, node->c[0]);
-    return c;
+    return do_not(env, node);
   case NODE_MOD:
-    if (node->n != 2) return new_errorf("malformed not");
-    c = new_node();
-    c->t = NODE_INT;
-    c->u.i = int_value(env, node->c[0]) % int_value(env, node->c[1]);
-    return c;
+    return do_mod(env, node);
   case NODE_IF:
-    if (node->n != 3) return new_errorf("malformed if");
-    c = eval_node(env, node->c[0]);
-    switch (c->t) {
-    case NODE_NIL:
-      r = 0;
-      break;
-    case NODE_T:
-      r = 1;
-      break;
-    case NODE_INT:
-      r = c->u.i;
-      break;
-    case NODE_DOUBLE:
-      r = (long) c->u.d;
-      break;
-    default:
-      r = 1;
-      break;
-    }
-    free_node(c);
-    x = eval_node(env, node->c[r > 0 ? 1 : 2]);
-    return x;
+    return do_if(env, node);
   case NODE_GT:
-    if (node->n != 2) return new_errorf("malformed >");
-    nn = new_node();
-    nn->t = NODE_INT;
-    nn->u.i = double_value(env, node->c[0]) > double_value(env, node->c[1]);
-    return nn;
+    return do_gt(env, node);
   case NODE_GE:
-    if (node->n != 2) return new_errorf("malformed >=");
-    nn = new_node();
-    nn->t = NODE_INT;
-    nn->u.i = double_value(env, node->c[0]) >= double_value(env, node->c[1]);
-    return nn;
+    return do_ge(env, node);
   case NODE_LT:
-    if (node->n != 2) return new_errorf("malformed <");
-    nn = new_node();
-    nn->t = NODE_INT;
-    nn->u.i = double_value(env, node->c[0]) < double_value(env, node->c[1]);
-    return nn;
+    return do_lt(env, node);
   case NODE_LE:
-    if (node->n != 2) return new_errorf("malformed <=");
-    nn = new_node();
-    nn->t = NODE_INT;
-    nn->u.i = double_value(env, node->c[0]) <= double_value(env, node->c[1]);
-    return nn;
+    return do_le(env, node);
   case NODE_EQ:
-    if (node->n != 2) return new_errorf("malformed =");
-    nn = new_node();
-    nn->t = NODE_INT;
-    /* TODO: string comparison */
-    nn->u.i = int_value(env, node->c[0]) == int_value(env, node->c[1]);
-    return nn;
+    return do_eq(env, node);
   case NODE_PRINT:
-    if (node->n != 1) return new_errorf("malformed print");
-    c = eval_node(env, node->c[0]);
-    buf[0] = 0;
-    print_node(sizeof(buf), buf, c, 0);
-    puts(buf);
-    return c;
+    return do_print(env, node);
   case NODE_PRINTLN:
-    if (node->n != 1) return new_errorf("malformed println");
-    c = eval_node(env, node->c[0]);
-    buf[0] = 0;
-    print_node(sizeof(buf), buf, c, 0);
-    puts(buf);
-    return c;
+    return do_println(env, node);
   case NODE_PRINC:
-    if (node->n != 1) return new_errorf("malformed printc");
-    c = eval_node(env, node->c[0]);
-    buf[0] = 0;
-    print_node(sizeof(buf), buf, c, 1);
-    puts(buf);
-    return c;
+    return do_princ(env, node);
   case NODE_QUOTE:
-    if (node->n != 1) return new_errorf("malformed quote");
-    c = node->c[0];
-    c->r++;
-    return c;
+    return do_quote(env, node);
   case NODE_SETQ:
-    if (node->n != 2) return new_errorf("malformed setq");
-    x = node->c[0];
-    if (x->t != NODE_IDENT) {
-      buf[0] = 0;
-      print_node(sizeof(buf), buf, x, 0);
-      return new_errorf("invalid identifier: %s", buf);
-    }
-    ni = (ITEM*) malloc(sizeof(ITEM));
-    memset(ni, 0, sizeof(ITEM));
-    ni->k = x->u.s;
-    ni->v = node->c[1];
-    ni->v->r++;
-    env->lv = (ITEM**) realloc(env->lv, sizeof(ITEM*) * (env->nv + 1));
-    env->lv[env->nv] = ni;
-    env->nv++;
-    node->c[1]->r++;
-    return node->c[1];
+    return do_setq(env, node);
   case NODE_IDENT:
-    if (node->n != 0) return new_errorf("malformed ident");
-    return look_ident(env, node->u.s);
+    return do_ident(env, node);
   case NODE_CALL:
-    x = look_func(env, node->u.s);
-    if (!x) {
-      return new_errorf("unknown function: %s", node->u.s);
-    }
-    newenv = new_env(env);
-    c = x->c[1]->c[0];
-    for (i = 0; i < node->n && i < c->n; i++) {
-      for (j = 0; j < newenv->nv; j++) {
-        if (!strcmp(c->c[i]->u.s, newenv->lv[j]->k)) {
-          free_env(newenv);
-          free_node(x);
-          return new_errorf("duplicated argument identifier %s", node->u.s);
-        }
-      }
-      ni = (ITEM*) malloc(sizeof(ITEM));
-      memset(ni, 0, sizeof(ITEM));
-      ni->k = c->c[i]->u.s;
-      ni->v = eval_node(env, node->c[i]);
-      newenv->lv = (ITEM**) realloc(newenv->lv, sizeof(ITEM*) * (newenv->nv + 1));
-      newenv->lv[newenv->nv] = ni;
-      newenv->nv++;
-    }
-    c = NULL;
-    for (i = 2; i < x->n; i++) {
-      if (c) free_node(c);
-      c = eval_node(newenv, x->c[i]);
-    }
-    free_env(newenv);
-    free_node(x);
-    if (c) {
-      return c;
-    }
-    return new_node();
+    return do_call(env, node);
   case NODE_DEFUN:
-    if (node->n < 3) return new_errorf("malformed defun");
-    x = node->c[0];
-    if (x->t != NODE_IDENT) {
-      buf[0] = 0;
-      print_node(sizeof(buf), buf, x, 0);
-      return new_errorf("invalid identifier: %s", buf);
-    }
-    ni = (ITEM*) malloc(sizeof(ITEM));
-    memset(ni, 0, sizeof(ITEM));
-    ni->k = x->u.s;
-    ni->v = node;
-    ni->v->r++;
-    env->lf = (ITEM**) realloc(env->lf, sizeof(ITEM*) * (env->nf + 1));
-    env->lf[env->nf] = ni;
-    env->nf++;
-    node->r++;
-    return node;
+    return do_defun(env, node);
   case NODE_PROGN:
-    if (node->n < 1) return new_errorf("malformed progn");
-    c = NULL;
-    for (i = 0; i < node->n; i++) {
-      if (c) free_node(c);
-      c = eval_node(env, node->c[i]);
-    }
-    if (c) {
-      return c;
-    }
-    return new_node();
+    return do_progn(env, node);
   case NODE_COND:
-    if (node->n < 1) return new_errorf("malformed cond");
-    c = NULL;
-    for (i = 0; i < node->n; i++) {
-      x = node->c[i];
-      if (x->t == NODE_QUOTE)
-        x = x->c[0];
-      if (x->t != NODE_LIST)
-        return new_error("cond should have condition list");
-      if (x->n != 2)
-        return new_error("cond should have pair of condition/value");
-      if (c) free_node(c);
-      c = eval_node(env, x->c[0]);
-      r = int_value(env, c);
-      if (r != 0) {
-        free_node(c);
-        return eval_node(env, x->c[1]);
-      }
-    }
-    if (c) {
-      return c;
-    }
-    return new_node();
+    return do_cond(env, node);
   case NODE_CAR:
-    if (node->n != 1) return new_errorf("malformed car");
-    x = node->c[0];
-    if (x->t != NODE_QUOTE) {
-      buf[0] = 0;
-      print_node(sizeof(buf), buf, x, 0);
-      return new_errorf("not quote: %s", buf);
-    }
-    x = x->c[0];
-    if (x->t != NODE_LIST) {
-      buf[0] = 0;
-      print_node(sizeof(buf), buf, x, 0);
-      return new_errorf("not list: %s", buf);
-    }
-    if (x->n > 0) {
-      c = x->c[0];
-      c->r++;
-      return c;
-    }
-    return new_node();
+    return do_car(env, node);
   case NODE_CDR:
-    if (node->n != 1) return new_errorf("malformed cdr");
-    x = node->c[0];
-    if (x->t != NODE_QUOTE) {
-      buf[0] = 0;
-      print_node(sizeof(buf), buf, x, 0);
-      return new_errorf("not quote: %s", buf);
-    }
-    x = x->c[0];
-    if (x->t != NODE_LIST) {
-      buf[0] = 0;
-      print_node(sizeof(buf), buf, x, 0);
-      return new_errorf("not list: %s", buf);
-    }
-    if (x->n > 0) {
-      c = new_node();
-      c->t = NODE_LIST;
-      c->c = (NODE**) malloc(sizeof(NODE*) * (x->n - 1));
-      for (i = 1; i < x->n; i++) {
-        c->c[i - 1] = x->c[i];
-        x->c[i]->r++;
-        c->n++;
-      }
-      return c;
-    }
-    return new_node();
+    return do_cdr(env, node);
   case NODE_DOTIMES:
-    if (node->n != 2) return new_errorf("malformed dotimes");
-    x = node->c[0]->c[0];
-    if (x->t != NODE_LIST || x->n != 2) {
-      buf[0] = 0;
-      print_node(sizeof(buf), buf, x, 0);
-      return new_errorf("invalid defintion: %s", buf);
-    }
-    if (x->c[0]->t != NODE_IDENT) {
-      buf[0] = 0;
-      print_node(sizeof(buf), buf, x->c[0], 0);
-      return new_errorf("invalid identifier: %s", buf);
-    }
-    c = eval_node(env, x->c[1]);
-    r = int_value(env, c);
-    free_node(c);
-    newenv = new_env(env);
-    ni = (ITEM*) malloc(sizeof(ITEM));
-    memset(ni, 0, sizeof(ITEM));
-    ni->k = x->c[0]->u.s;
-    ni->v = new_node();
-    ni->v->t = NODE_INT;
-    newenv->lv = (ITEM**) realloc(newenv->lv, sizeof(ITEM*) * (newenv->nv + 1));
-    newenv->lv[newenv->nv] = ni;
-    newenv->nv++;
-    c = NULL;
-    for (i = 0; i < r; i++) {
-      ni->v->u.i = i;
-      if (c) free_node(c);
-      c = eval_node(newenv, node->c[1]);
-    }
-    free_env(newenv);
-    if (c) {
-      return c;
-    }
-    return new_node();
+    return do_dotimes(env, node);
   case NODE_INT:
     node->r++;
     return node;
