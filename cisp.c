@@ -179,6 +179,7 @@ parse_paren(ENV *env, NODE *node, const char *p) {
   if (!p) return NULL;
   const char *t = p;
   while (!isspace(*p) && *p != ')') p++;
+#if 0
   if (match(t, "+", (size_t)(p - t))) node->t = NODE_PLUS;
   else if (match(t, "-", (size_t)(p - t))) node->t = NODE_MINUS;
   else if (match(t, "*", (size_t)(p - t))) node->t = NODE_MUL;
@@ -204,7 +205,9 @@ parse_paren(ENV *env, NODE *node, const char *p) {
   else if (match(t, "cdr", (size_t)(p - t))) node->t = NODE_CDR;
   else if (match(t, "dotimes", (size_t)(p - t))) node->t = NODE_DOTIMES;
   else if (match(t, "defun", (size_t)(p - t))) node->t = NODE_DEFUN;
-  else {
+  else
+#endif
+  {
     p = parse_ident(env, node, t);
     node->t = NODE_CALL;
   }
@@ -217,7 +220,7 @@ parse_paren(ENV *env, NODE *node, const char *p) {
 static const char*
 parse_ident(ENV *env, NODE *node, const char *p) {
   const char *t = p;
-  while (*p && isalpha(*p)) p++;
+  while (*p && (isalpha(*p) || strchr("+-*/<>=", *p))) p++;
   if (match(t, "nil", (size_t)(p - t))) {
     node->t = NODE_NIL;
     return p;
@@ -290,7 +293,7 @@ parse_any(ENV *env, NODE *node, const char *p, int q) {
   if (*p == '-' || isdigit(*p)) return parse_number(env, node, p);
   if (*p == '\'') return parse_quote(env, node, p + 1);
   if (*p == '"') return parse_string(env, node, p + 1);
-  if (isalpha(*p)) return parse_ident(env, node, p);
+  if (isalpha(*p) || strchr("+-*/<>=", *p)) return parse_ident(env, node, p);
   if (*p) return raise(p);
   return p;
 }
