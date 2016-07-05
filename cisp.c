@@ -193,7 +193,6 @@ parse_ident(ENV *env, NODE *node, const char *p) {
   node->u.s = (char*) malloc((size_t)(p - t) + 1);
   memset(node->u.s, 0, (size_t)(p - t) + 1);
   memcpy(node->u.s, t, (size_t)(p - t));
-  puts(node->u.s);
   return p;
 }
 
@@ -1013,19 +1012,12 @@ add_defaults(ENV *env) {
 static NODE*
 eval_node(ENV *env, NODE *node) {
   static ENV *global;
+  int i;
   if (global == NULL) {
     while (env->p) env = env->p;
     global = env;
   }
-  int i;
 
-  for (i = 0; i < global->nv; i++) {
-    if (node->t == NODE_CALL && match(node->u.s, global->lv[i]->k, strlen(global->lv[i]->k))) {
-      if (global->lv[i]->v->f) {
-        return ((f_do)(global->lv[i]->v->f))(env, node);
-      }
-    }
-  }
   switch (node->t) {
   case NODE_QUOTE:
     return eval_node(env, node->c[0]);
@@ -1034,6 +1026,13 @@ eval_node(ENV *env, NODE *node) {
   case NODE_IDENT:
     return do_ident(env, node);
   case NODE_CALL:
+    for (i = 0; i < global->nv; i++) {
+      if (node->t == NODE_CALL && match(node->u.s, global->lv[i]->k, strlen(global->lv[i]->k))) {
+        if (global->lv[i]->v->f) {
+          return ((f_do)(global->lv[i]->v->f))(env, node);
+        }
+      }
+    }
     return do_call(env, node);
   case NODE_INT:
     node->r++;
