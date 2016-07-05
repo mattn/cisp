@@ -9,9 +9,7 @@
 
 enum T {
   NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_IDENT, NODE_LIST,
-  NODE_IF, NODE_DEFUN, NODE_CALL,
-  NODE_PROGN,
-  NODE_ERROR,
+  NODE_CALL, NODE_PROGN, NODE_ERROR,
 };
 
 typedef struct _NODE {
@@ -305,7 +303,6 @@ print_node(size_t nbuf, char* buf, NODE *node, int mode) {
   case NODE_T: strncat(buf, "t", nbuf); break;
   case NODE_QUOTE: strncat(buf, "'", nbuf); print_node(nbuf, buf, node->c[0], mode); break;
   case NODE_LIST: strncat(buf, "(", nbuf); print_list(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
-  case NODE_DEFUN: strncat(buf, "(defun", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   case NODE_PROGN: strncat(buf, "(progn", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   case NODE_CALL: snprintf(tmp, sizeof(tmp), "(%s", node->u.s); strncat(buf, tmp, nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   }
