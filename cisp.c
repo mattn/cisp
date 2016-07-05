@@ -929,23 +929,20 @@ do_car(ENV *env, NODE *node) {
   char buf[BUFSIZ];
 
   if (node->n != 1) return new_errorf("malformed car");
-  x = node->c[0];
-  if (x->t != NODE_QUOTE) {
-    buf[0] = 0;
-    print_node(sizeof(buf), buf, x, 0);
-    return new_errorf("not quote: %s", buf);
-  }
-  x = x->c[0];
+  x = eval_node(env, node->c[0]);
   if (x->t != NODE_LIST) {
     buf[0] = 0;
     print_node(sizeof(buf), buf, x, 0);
+    free_node(x);
     return new_errorf("not list: %s", buf);
   }
   if (x->n > 0) {
     c = x->c[0];
     c->r++;
+    free_node(x);
     return c;
   }
+  free_node(x);
   return new_node();
 }
 
@@ -956,16 +953,11 @@ do_cdr(ENV *env, NODE *node) {
   char buf[BUFSIZ];
 
   if (node->n != 1) return new_errorf("malformed cdr");
-  x = node->c[0];
-  if (x->t != NODE_QUOTE) {
-    buf[0] = 0;
-    print_node(sizeof(buf), buf, x, 0);
-    return new_errorf("not quote: %s", buf);
-  }
-  x = x->c[0];
+  x = eval_node(env, node->c[0]);
   if (x->t != NODE_LIST) {
     buf[0] = 0;
     print_node(sizeof(buf), buf, x, 0);
+    free_node(x);
     return new_errorf("not list: %s", buf);
   }
   if (x->n > 0) {
@@ -977,8 +969,10 @@ do_cdr(ENV *env, NODE *node) {
       x->c[i]->r++;
       c->n++;
     }
+    free_node(x);
     return c;
   }
+  free_node(x);
   return new_node();
 }
 
@@ -988,22 +982,17 @@ do_length(ENV *env, NODE *node) {
   char buf[BUFSIZ];
 
   if (node->n != 1) return new_errorf("malformed length");
-  x = node->c[0];
-  if (x->t != NODE_QUOTE) {
-    buf[0] = 0;
-    print_node(sizeof(buf), buf, x, 0);
-    return new_errorf("not quote: %s", buf);
-  }
-  x = x->c[0];
+  x = eval_node(env, node->c[0]);
   if (x->t != NODE_LIST) {
     buf[0] = 0;
     print_node(sizeof(buf), buf, x, 0);
+    free_node(x);
     return new_errorf("not list: %s", buf);
   }
   c = new_node();
   c->t = NODE_INT;
   c->u.i = x->n;
-  c->r++;
+  free_node(x);
   return c;
 }
 
