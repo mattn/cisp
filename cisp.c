@@ -982,6 +982,31 @@ do_cdr(ENV *env, NODE *node) {
   return new_node();
 }
 
+static NODE*
+do_length(ENV *env, NODE *node) {
+  NODE *x, *c;
+  char buf[BUFSIZ];
+
+  if (node->n != 1) return new_errorf("malformed length");
+  x = node->c[0];
+  if (x->t != NODE_QUOTE) {
+    buf[0] = 0;
+    print_node(sizeof(buf), buf, x, 0);
+    return new_errorf("not quote: %s", buf);
+  }
+  x = x->c[0];
+  if (x->t != NODE_LIST) {
+    buf[0] = 0;
+    print_node(sizeof(buf), buf, x, 0);
+    return new_errorf("not list: %s", buf);
+  }
+  c = new_node();
+  c->t = NODE_INT;
+  c->u.i = x->n;
+  c->r++;
+  return c;
+}
+
 static void
 add_sym(ENV *env, enum T t, const char* n, f_do f) {
   ITEM *ni;
@@ -1026,6 +1051,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_CALL, "cond", do_cond);
   add_sym(env, NODE_CALL, "car", do_car);
   add_sym(env, NODE_CALL, "cdr", do_cdr);
+  add_sym(env, NODE_CALL, "length", do_length);
   add_sym(env, NODE_CALL, "dotimes", do_dotimes);
   add_sym(env, NODE_NIL, "nil", NULL);
   add_sym(env, NODE_T, "t", NULL);
