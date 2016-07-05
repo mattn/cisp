@@ -2,9 +2,9 @@
 
 cd `dirname $0`
 
-/bin/ls *.t | while read file; do
+/bin/ls *.lisp | /bin/sort | while read file; do
   echo -n "$file: "
-  EXPECT=$(cat `basename $file .t`.out)
+  EXPECT=$(cat `basename $file .lisp`.out)
   ACTUAL=$(../cisp $file | tr -d "\r")
   if [ "$ACTUAL" != "$EXPECT" ]; then
     echo "NG"

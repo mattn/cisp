@@ -33,6 +33,8 @@ typedef struct {
 typedef struct _ENV {
   int nv;
   ITEM **lv;
+  int nf;
+  ITEM **lf;
   struct _ENV *p;
 } ENV;
 
@@ -320,7 +322,9 @@ free_node(NODE *node) {
     case NODE_IDENT:
     case NODE_CALL:
     case NODE_ERROR:
-      //free(node->u.s);
+    case NODE_NIL:
+    case NODE_T:
+      free(node->u.s);
       break;
     }
     free(node);
@@ -331,11 +335,60 @@ static void
 free_env(ENV *env) {
   int i;
   for (i = 0; i < env->nv; i++) {
+    free((void*)env->lv[i]->k);
     free_node(env->lv[i]->v);
     free(env->lv[i]);
   }
+  for (i = 0; i < env->nf; i++) {
+    free((void*)env->lf[i]->k);
+    free_node(env->lf[i]->v);
+    free(env->lf[i]);
+  }
   free(env->lv);
+  free(env->lf);
   free(env);
+}
+
+static void
+add_variable(ENV *env, const char *k, NODE *node) {
+  int i;
+  ITEM *ni;
+  node->r++;
+  for (i = 0; i < env->nv; i++) {
+    if (!strcmp(env->lv[i]->k, k)) {
+      free_node(env->lv[i]->v);
+      env->lv[i]->v = node;
+      return;
+    }
+  }
+  ni = (ITEM*) malloc(sizeof(ITEM));
+  memset(ni, 0, sizeof(ITEM));
+  ni->k = strdup(k);
+  ni->v = node;
+  env->lv = (ITEM**) realloc(env->lv, sizeof(ITEM*) * (env->nv + 1));
+  env->lv[env->nv] = ni;
+  env->nv++;
+}
+
+static void
+add_function(ENV *env, const char *k, NODE *node) {
+  int i;
+  ITEM *ni;
+  node->r++;
+  for (i = 0; i < env->nf; i++) {
+    if (!strcmp(env->lf[i]->k, k)) {
+      free_node(env->lf[i]->v);
+      env->lf[i]->v = node;
+      return;
+    }
+  }
+  ni = (ITEM*) malloc(sizeof(ITEM));
+  memset(ni, 0, sizeof(ITEM));
+  ni->k = strdup(k);
+  ni->v = node;
+  env->lf = (ITEM**) realloc(env->lf, sizeof(ITEM*) * (env->nf + 1));
+  env->lf[env->nf] = ni;
+  env->nf++;
 }
 
 static long
@@ -688,7 +741,6 @@ do_quote(ENV *env, NODE *node) {
 static NODE*
 do_setq(ENV *env, NODE *node) {
   NODE *x;
-  ITEM *ni;
   char buf[BUFSIZ];
 
   if (node->n != 2) return new_errorf("malformed setq");
@@ -698,16 +750,9 @@ do_setq(ENV *env, NODE *node) {
     print_node(sizeof(buf), buf, x, 0);
     return new_errorf("invalid identifier: %s", buf);
   }
-  ni = (ITEM*) malloc(sizeof(ITEM));
-  memset(ni, 0, sizeof(ITEM));
-  ni->k = x->u.s;
-  ni->v = node->c[1];
-  ni->v->r++;
-  env->lv = (ITEM**) realloc(env->lv, sizeof(ITEM*) * (env->nv + 1));
-  env->lv[env->nv] = ni;
-  env->nv++;
-  node->c[1]->r++;
-  return node->c[1];
+  node = eval_node(env, node->c[1]);
+  add_variable(env, x->u.s, node);
+  return node;
 }
 
 static NODE*
@@ -741,9 +786,9 @@ look_func(ENV *env, const char *k) {
   } else {
     env = global;
   }
-  for (i = 0; i < env->nv; i++) {
-    if (!strcmp(env->lv[i]->k, k)) {
-      x = env->lv[i]->v;
+  for (i = 0; i < env->nf; i++) {
+    if (!strcmp(env->lf[i]->k, k)) {
+      x = env->lf[i]->v;
       x->r++;
       return x;
     }
@@ -759,9 +804,8 @@ byname(NODE *node, int i) {
 static NODE*
 do_call(ENV *env, NODE *node) {
   ENV *newenv;
-  NODE *x, *c;
-  ITEM *ni;
-  int i, j;
+  NODE *x, *c, *nn;
+  int i;
 
   x = look_func(env, node->u.s);
   if (!x) {
@@ -772,24 +816,9 @@ do_call(ENV *env, NODE *node) {
   c = x->c[1];
 
   for (i = 0; i < node->n; i++) {
-    ni = NULL;
-    for (j = 0; j < newenv->nv; j++) {
-      if (!strcmp(byname(c, i), newenv->lv[j]->k)) {
-        ni = newenv->lv[j];
-        break;
-      }
-    }
-    if (!ni) {
-      ni = (ITEM*) malloc(sizeof(ITEM));
-      memset(ni, 0, sizeof(ITEM));
-      ni->k = strdup(byname(c, i));
-      ni->v = eval_node(env, node->c[i]);
-      newenv->lv = (ITEM**) realloc(newenv->lv, sizeof(ITEM*) * (newenv->nv + 1));
-      newenv->lv[newenv->nv] = ni;
-      newenv->nv++;
-    } else {
-      ni->v = eval_node(env, node->c[i]);
-    }
+    nn = eval_node(env, node->c[i]);
+    add_variable(newenv, byname(c, i), nn);
+    free_node(nn);
   }
   c = NULL;
   for (i = 2; i < x->n; i++) {
@@ -807,7 +836,6 @@ do_call(ENV *env, NODE *node) {
 static NODE*
 do_defun(ENV *env, NODE *node) {
   NODE *x;
-  ITEM *ni;
   char buf[BUFSIZ];
 
   if (node->n < 3) return new_errorf("malformed defun");
@@ -817,14 +845,7 @@ do_defun(ENV *env, NODE *node) {
     print_node(sizeof(buf), buf, x, 0);
     return new_errorf("invalid identifier: %s", buf);
   }
-  ni = (ITEM*) malloc(sizeof(ITEM));
-  memset(ni, 0, sizeof(ITEM));
-  ni->k = x->u.s;
-  ni->v = node;
-  ni->v->r++;
-  env->lv = (ITEM**) realloc(env->lv, sizeof(ITEM*) * (env->nv + 1));
-  env->lv[env->nv] = ni;
-  env->nv++;
+  add_function(env, x->u.s, node);
   node->r++;
   return node;
 }
@@ -849,8 +870,7 @@ do_progn(ENV *env, NODE *node) {
 static NODE*
 do_dotimes(ENV *env, NODE *node) {
   ENV *newenv;
-  NODE *x, *c;
-  ITEM *ni;
+  NODE *x, *c, *nn;
   int i, r;
 
   if (node->n != 2) return new_errorf("malformed dotimes");
@@ -859,21 +879,17 @@ do_dotimes(ENV *env, NODE *node) {
   r = int_value(env, c);
   free_node(c);
   newenv = new_env(env);
-  ni = (ITEM*) malloc(sizeof(ITEM));
-  memset(ni, 0, sizeof(ITEM));
-  ni->k = x->u.s;
-  ni->v = new_node();
-  ni->v->t = NODE_INT;
-  newenv->lv = (ITEM**) realloc(newenv->lv, sizeof(ITEM*) * (newenv->nv + 1));
-  newenv->lv[newenv->nv] = ni;
-  newenv->nv++;
+  nn = new_node();
+  nn->t = NODE_INT;
+  add_variable(newenv, x->u.s, nn);
   c = NULL;
   for (i = 0; i < r; i++) {
-    ni->v->u.i = i;
+    nn->u.i = i;
     if (c) free_node(c);
     c = eval_node(newenv, node->c[1]);
   }
   free_env(newenv);
+  free_node(nn);
   if (c) {
     return c;
   }
@@ -911,23 +927,20 @@ do_car(ENV *env, NODE *node) {
   char buf[BUFSIZ];
 
   if (node->n != 1) return new_errorf("malformed car");
-  x = node->c[0];
-  if (x->t != NODE_QUOTE) {
-    buf[0] = 0;
-    print_node(sizeof(buf), buf, x, 0);
-    return new_errorf("not quote: %s", buf);
-  }
-  x = x->c[0];
+  x = eval_node(env, node->c[0]);
   if (x->t != NODE_LIST) {
     buf[0] = 0;
     print_node(sizeof(buf), buf, x, 0);
+    free_node(x);
     return new_errorf("not list: %s", buf);
   }
   if (x->n > 0) {
     c = x->c[0];
     c->r++;
+    free_node(x);
     return c;
   }
+  free_node(x);
   return new_node();
 }
 
@@ -938,16 +951,11 @@ do_cdr(ENV *env, NODE *node) {
   char buf[BUFSIZ];
 
   if (node->n != 1) return new_errorf("malformed cdr");
-  x = node->c[0];
-  if (x->t != NODE_QUOTE) {
-    buf[0] = 0;
-    print_node(sizeof(buf), buf, x, 0);
-    return new_errorf("not quote: %s", buf);
-  }
-  x = x->c[0];
+  x = eval_node(env, node->c[0]);
   if (x->t != NODE_LIST) {
     buf[0] = 0;
     print_node(sizeof(buf), buf, x, 0);
+    free_node(x);
     return new_errorf("not list: %s", buf);
   }
   if (x->n > 0) {
@@ -959,9 +967,72 @@ do_cdr(ENV *env, NODE *node) {
       x->c[i]->r++;
       c->n++;
     }
+    free_node(x);
     return c;
   }
+  free_node(x);
   return new_node();
+}
+
+static NODE*
+do_length(ENV *env, NODE *node) {
+  NODE *x, *c;
+  char buf[BUFSIZ];
+
+  if (node->n != 1) return new_errorf("malformed length");
+  x = eval_node(env, node->c[0]);
+  if (x->t != NODE_LIST) {
+    buf[0] = 0;
+    print_node(sizeof(buf), buf, x, 0);
+    free_node(x);
+    return new_errorf("not list: %s", buf);
+  }
+  c = new_node();
+  c->t = NODE_INT;
+  c->u.i = x->n;
+  free_node(x);
+  return c;
+}
+
+static NODE*
+do_apply(ENV *env, NODE *node) {
+  NODE *x, *c, *nn;
+  char buf[BUFSIZ];
+  int i;
+
+  if (node->n != 2) return new_errorf("malformed apply");
+  x = node->c[0];
+  if (x->t != NODE_QUOTE) {
+    buf[0] = 0;
+    print_node(sizeof(buf), buf, x, 0);
+    return new_errorf("not quote: %s", buf);
+  }
+  x = node->c[1];
+  if (x->t != NODE_QUOTE) {
+    buf[0] = 0;
+    print_node(sizeof(buf), buf, x, 0);
+    return new_errorf("not quote: %s", buf);
+  }
+  x = node->c[0]->c[0];
+  c = new_node();
+  c->t = NODE_CALL;
+  c->u.s = strdup(x->u.s);
+  c->n = 2;
+  c->c = (NODE**) malloc(sizeof(NODE*) * 2);
+  x = node->c[1]->c[0];
+  c->c[0] = x->c[0];
+  c->c[0]->r++;
+  for (i = 1; i < x->n; i++) {
+    c->c[1] = x->c[i];
+    nn = eval_node(env, c);
+    free_node(c->c[0]);
+	c->c[0] = nn;
+  }
+  c->n = 0;
+  x = c->c[0];
+  free_node(c);
+  x->r++;
+  return x;
 }
 
 static void
@@ -974,13 +1045,11 @@ add_sym(ENV *env, enum T t, const char* n, f_do f) {
   node->f = f;
   ni = (ITEM*) malloc(sizeof(ITEM));
   memset(ni, 0, sizeof(ITEM));
-  ni->k = n;
+  ni->k = strdup(n);
   ni->v = node;
-  ni->v->r++;
   env->lv = (ITEM**) realloc(env->lv, sizeof(ITEM*) * (env->nv + 1));
   env->lv[env->nv] = ni;
   env->nv++;
-  node->r++;
 }
 
 static void
@@ -1010,6 +1079,8 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_CALL, "cond", do_cond);
   add_sym(env, NODE_CALL, "car", do_car);
   add_sym(env, NODE_CALL, "cdr", do_cdr);
+  add_sym(env, NODE_CALL, "length", do_length);
+  add_sym(env, NODE_CALL, "apply", do_apply);
   add_sym(env, NODE_CALL, "dotimes", do_dotimes);
   add_sym(env, NODE_NIL, "nil", NULL);
   add_sym(env, NODE_T, "t", NULL);
