@@ -581,8 +581,9 @@ do_gt(ENV *env, NODE *node) {
 
   if (node->n != 2) return new_errorf("malformed >");
   nn = new_node();
-  nn->t = NODE_INT;
-  nn->u.i = double_value(env, node->c[0]) > double_value(env, node->c[1]);
+  if (double_value(env, node->c[0]) > double_value(env, node->c[1])) {
+    nn->t = NODE_T;
+  }
   return nn;
 }
 
@@ -592,8 +593,9 @@ do_ge(ENV *env, NODE *node) {
 
   if (node->n != 2) return new_errorf("malformed >=");
   nn = new_node();
-  nn->t = NODE_INT;
-  nn->u.i = double_value(env, node->c[0]) >= double_value(env, node->c[1]);
+  if (double_value(env, node->c[0]) >= double_value(env, node->c[1])) {
+    nn->t = NODE_T;
+  }
   return nn;
 }
 
@@ -603,8 +605,9 @@ do_lt(ENV *env, NODE *node) {
 
   if (node->n != 2) return new_errorf("malformed <");
   nn = new_node();
-  nn->t = NODE_INT;
-  nn->u.i = double_value(env, node->c[0]) < double_value(env, node->c[1]);
+  if (double_value(env, node->c[0]) < double_value(env, node->c[1])) {
+    nn->t = NODE_T;
+  }
   return nn;
 }
 
@@ -614,8 +617,9 @@ do_le(ENV *env, NODE *node) {
 
   if (node->n != 2) return new_errorf("malformed <=");
   nn = new_node();
-  nn->t = NODE_INT;
-  nn->u.i = double_value(env, node->c[0]) <= double_value(env, node->c[1]);
+  if (double_value(env, node->c[0]) <= double_value(env, node->c[1])) {
+    nn->t = NODE_T;
+  }
   return nn;
 }
 
@@ -625,9 +629,10 @@ do_eq(ENV *env, NODE *node) {
 
   if (node->n != 2) return new_errorf("malformed =");
   nn = new_node();
-  nn->t = NODE_INT;
   /* TODO: string comparison */
-  nn->u.i = int_value(env, node->c[0]) == int_value(env, node->c[1]);
+  if (int_value(env, node->c[0]) == int_value(env, node->c[1])) {
+    nn->t = NODE_T;
+  }
   return nn;
 }
 
