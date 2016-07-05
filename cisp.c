@@ -20,6 +20,7 @@ enum T {
   NODE_PRINT, NODE_PRINTLN, NODE_PRINC, NODE_SETQ,
   NODE_PROGN,
   NODE_COND,
+  NODE_CFUNC,
   NODE_FORMAT,
   NODE_ERROR,
 };
@@ -30,8 +31,8 @@ typedef struct _NODE {
     long i;
     double d;
     char* s;
-    void* p;
   } u;
+  void *f;
   int n;
   int r;
   struct _NODE **c;
@@ -49,6 +50,8 @@ typedef struct _ENV {
   ITEM **lf;
   struct _ENV *p;
 } ENV;
+
+typedef NODE* (*f_do)(ENV*, NODE*);
 
 static char*
 raise(const char *p) {
@@ -176,9 +179,17 @@ parse_args(ENV *env, NODE *node, const char *p) {
 
 static const char*
 parse_paren(ENV *env, NODE *node, const char *p) {
+  int i, found = 0;
   if (!p) return NULL;
   const char *t = p;
   while (!isspace(*p) && *p != ')') p++;
+  for (i = 0; i < env->nv; i++) {
+    if (match(t, env->lv[i]->k, (size_t)(p - t))) {
+      node->t = env->lv[i]->v->t;
+      found = 1;
+      break;
+    }
+  }
 #if 0
   if (match(t, "+", (size_t)(p - t))) node->t = NODE_PLUS;
   else if (match(t, "-", (size_t)(p - t))) node->t = NODE_MINUS;
@@ -207,7 +218,7 @@ parse_paren(ENV *env, NODE *node, const char *p) {
   else if (match(t, "defun", (size_t)(p - t))) node->t = NODE_DEFUN;
   else
 #endif
-  {
+  if (!found) {
     p = parse_ident(env, node, t);
     node->t = NODE_CALL;
   }
@@ -778,6 +789,7 @@ do_setq(ENV *env, NODE *node) {
   return node->c[1];
 }
 
+#if 0
 static NODE*
 do_ident(ENV *env, NODE *node) {
   NODE *x;
@@ -813,6 +825,7 @@ do_ident(ENV *env, NODE *node) {
 */
   return new_errorf("unknown variable: %s", node->u.s);
 }
+#endif
 
 static NODE*
 look_func(ENV *env, const char *k) {
@@ -1053,63 +1066,74 @@ do_cdr(ENV *env, NODE *node) {
   return new_node();
 }
 
+static void
+add_sym(ENV *env, enum T t, const char* n, f_do f) {
+  ITEM *ni;
+  NODE *node;
+  node = new_node();
+  node->t = t;
+  node->u.s = (char*) n;
+  node->f = f;
+  ni = (ITEM*) malloc(sizeof(ITEM));
+  memset(ni, 0, sizeof(ITEM));
+  ni->k = n;
+  ni->v = node;
+  ni->v->r++;
+  env->lv = (ITEM**) realloc(env->lv, sizeof(ITEM*) * (env->nv + 1));
+  env->lv[env->nv] = ni;
+  env->nv++;
+  node->r++;
+}
+
+static void
+add_defaults(ENV *env) {
+  add_sym(env, NODE_PLUS, "+", do_plus);
+  add_sym(env, NODE_MINUS, "-", do_minus);
+  add_sym(env, NODE_MUL, "*", do_mul);
+  add_sym(env, NODE_DIV, "/", do_div);
+  add_sym(env, NODE_PLUS1, "1+", do_plus1);
+  add_sym(env, NODE_MINUS1, "1-", do_minus1);
+  add_sym(env, NODE_NOT, "not", do_not);
+  add_sym(env, NODE_MOD, "mod", do_mod);
+  add_sym(env, NODE_IF, "if", do_if);
+  add_sym(env, NODE_GT, ">", do_gt);
+  add_sym(env, NODE_GE, ">=", do_ge);
+  add_sym(env, NODE_LT, "<", do_lt);
+  add_sym(env, NODE_LE, "<=", do_le);
+  add_sym(env, NODE_EQ, "=", do_eq);
+  add_sym(env, NODE_EQ, "eq", do_eq);
+  add_sym(env, NODE_PRINT, "print", do_print);
+  add_sym(env, NODE_PRINTLN, "println", do_println);
+  add_sym(env, NODE_PRINC, "princ", do_princ);
+  add_sym(env, NODE_QUOTE, "quote", do_quote);
+  add_sym(env, NODE_SETQ, "setq", do_setq);
+  add_sym(env, NODE_DEFUN, "defun", do_defun);
+  add_sym(env, NODE_PROGN, "progn", do_progn);
+  add_sym(env, NODE_COND, "cond", do_cond);
+  add_sym(env, NODE_CAR, "car", do_car);
+  add_sym(env, NODE_CDR, "cdr", do_cdr);
+  add_sym(env, NODE_DOTIMES, "dotimes", do_dotimes);
+  add_sym(env, NODE_NIL, "nil", NULL);
+  add_sym(env, NODE_T, "t", NULL);
+}
+
 static NODE*
 eval_node(ENV *env, NODE *node) {
+  NODE *c;
+  int i;
+  for (i = 0; i < env->nv; i++) {
+    if (node->t == env->lv[i]->v->t) {
+      if (env->lv[i]->v->f) {
+        return ((f_do)(env->lv[i]->v->f))(env, node);
+      }
+      c = env->lv[i]->v;
+      c->r++;
+      return c;
+    }
+  }
   switch (node->t) {
-  case NODE_PLUS:
-    return do_plus(env, node);
-  case NODE_MINUS:
-    return do_minus(env, node);
-  case NODE_MUL:
-    return do_mul(env, node);
-  case NODE_DIV:
-    return do_div(env, node);
-  case NODE_PLUS1:
-    return do_plus1(env, node);
-  case NODE_MINUS1:
-    return do_minus1(env, node);
-  case NODE_NOT:
-    return do_not(env, node);
-  case NODE_MOD:
-    return do_mod(env, node);
-  case NODE_IF:
-    return do_if(env, node);
-  case NODE_GT:
-    return do_gt(env, node);
-  case NODE_GE:
-    return do_ge(env, node);
-  case NODE_LT:
-    return do_lt(env, node);
-  case NODE_LE:
-    return do_le(env, node);
-  case NODE_EQ:
-    return do_eq(env, node);
-  case NODE_PRINT:
-    return do_print(env, node);
-  case NODE_PRINTLN:
-    return do_println(env, node);
-  case NODE_PRINC:
-    return do_princ(env, node);
-  case NODE_QUOTE:
-    return do_quote(env, node);
-  case NODE_SETQ:
-    return do_setq(env, node);
-  case NODE_IDENT:
-    return do_ident(env, node);
   case NODE_CALL:
     return do_call(env, node);
-  case NODE_DEFUN:
-    return do_defun(env, node);
-  case NODE_PROGN:
-    return do_progn(env, node);
-  case NODE_COND:
-    return do_cond(env, node);
-  case NODE_CAR:
-    return do_car(env, node);
-  case NODE_CDR:
-    return do_cdr(env, node);
-  case NODE_DOTIMES:
-    return do_dotimes(env, node);
   case NODE_INT:
     node->r++;
     return node;
@@ -1160,6 +1184,7 @@ main(int argc, char* argv[]) {
     fclose(fp);
 
     env = new_env(NULL);
+    add_defaults(env);
     top = new_node();
     top->t = NODE_PROGN;
     p = (char*) parse_args(env, top, p);
@@ -1186,6 +1211,7 @@ main(int argc, char* argv[]) {
   }
 
   env = new_env(NULL);
+  add_defaults(env);
   while (1) {
     if (isatty(fileno(stdin))) {
       printf("> ");
