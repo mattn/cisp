@@ -749,9 +749,9 @@ do_setq(ENV *env, NODE *node) {
     print_node(sizeof(buf), buf, x, 0);
     return new_errorf("invalid identifier: %s", buf);
   }
-  add_variable(env, x->u.s, node->c[1]);
-  node->c[1]->r++;
-  return node->c[1];
+  node = eval_node(env, node->c[1]);
+  add_variable(env, x->u.s, node);
+  return node;
 }
 
 static NODE*
