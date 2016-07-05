@@ -1007,6 +1007,47 @@ do_length(ENV *env, NODE *node) {
   return c;
 }
 
+static NODE*
+do_apply(ENV *env, NODE *node) {
+  NODE *x, *c, *nn;
+  char buf[BUFSIZ];
+  int i;
+
+  if (node->n != 2) return new_errorf("malformed apply");
+  x = node->c[0];
+  if (x->t != NODE_QUOTE) {
+    buf[0] = 0;
+    print_node(sizeof(buf), buf, x, 0);
+    return new_errorf("not quote: %s", buf);
+  }
+  x = node->c[1];
+  if (x->t != NODE_QUOTE) {
+    buf[0] = 0;
+    print_node(sizeof(buf), buf, x, 0);
+    return new_errorf("not quote: %s", buf);
+  }
+  x = node->c[0]->c[0];
+  c = new_node();
+  c->t = NODE_CALL;
+  c->u.s = strdup(x->u.s);
+  c->n = 2;
+  c->c = (NODE**) malloc(sizeof(NODE*) * 2);
+  x = node->c[1]->c[0];
+  c->c[0] = x->c[0];
+  c->c[0]->r++;
+  for (i = 1; i < x->n; i++) {
+    c->c[1] = x->c[i];
+    nn = eval_node(env, c);
+    free_node(c->c[0]);
+	c->c[0] = nn;
+  }
+  c->n = 0;
+  x = c->c[0];
+  free_node(c);
+  x->r++;
+  return x;
+}
+
 static void
 add_sym(ENV *env, enum T t, const char* n, f_do f) {
   ITEM *ni;
@@ -1052,6 +1093,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_CALL, "car", do_car);
   add_sym(env, NODE_CALL, "cdr", do_cdr);
   add_sym(env, NODE_CALL, "length", do_length);
+  add_sym(env, NODE_CALL, "apply", do_apply);
   add_sym(env, NODE_CALL, "dotimes", do_dotimes);
   add_sym(env, NODE_NIL, "nil", NULL);
   add_sym(env, NODE_T, "t", NULL);
