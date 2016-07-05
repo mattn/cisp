@@ -115,9 +115,8 @@ new_env(ENV *p) {
 static int
 match(const char *lhs, const char *rhs, size_t n) {
   const char *p = lhs, *e = lhs + n;
-  while (p < e)
-    if (*p++ != *rhs++) return 0;
-  if (*rhs) return 0;
+  while (p < e) if (*p++ != *rhs++) return 0;
+  if (*p || *rhs) return 0;
   return 1;
 }
 
@@ -767,21 +766,25 @@ do_call(ENV *env, NODE *node) {
 
   c = x->c[1];
 
-  for (i = 0; i < node->n /*&& i < c->n*/; i++) {
+  for (i = 0; i < node->n; i++) {
+    ni = NULL;
     for (j = 0; j < newenv->nv; j++) {
       if (!strcmp(byname(c, i), newenv->lv[j]->k)) {
-        free_env(newenv);
-        free_node(x);
-        return new_errorf("duplicated argument identifier %s", node->u.s);
+        ni = newenv->lv[j];
+        break;
       }
     }
-    ni = (ITEM*) malloc(sizeof(ITEM));
-    memset(ni, 0, sizeof(ITEM));
-    ni->k = byname(c, i);
-    ni->v = eval_node(env, node->c[i]);
-    newenv->lv = (ITEM**) realloc(newenv->lv, sizeof(ITEM*) * (newenv->nv + 1));
-    newenv->lv[newenv->nv] = ni;
-    newenv->nv++;
+    if (!ni) {
+      ni = (ITEM*) malloc(sizeof(ITEM));
+      memset(ni, 0, sizeof(ITEM));
+      ni->k = strdup(byname(c, i));
+      ni->v = eval_node(env, node->c[i]);
+      newenv->lv = (ITEM**) realloc(newenv->lv, sizeof(ITEM*) * (newenv->nv + 1));
+      newenv->lv[newenv->nv] = ni;
+      newenv->nv++;
+    } else {
+      ni->v = eval_node(env, node->c[i]);
+    }
   }
   c = NULL;
   for (i = 2; i < x->n; i++) {
