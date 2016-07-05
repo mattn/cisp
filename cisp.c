@@ -211,34 +211,6 @@ parse_paren(NODE *node, const char *p) {
 
   p = parse_args(node, p);
   if (p && *p && node->n == 0) return raise(p);
-
-  switch (node->t) {
-  case NODE_PLUS: if (node->n < 2) return raise(p); break;
-  case NODE_MINUS: if (node->n < 2) return raise(p); break;
-  case NODE_MUL: if (node->n < 2) return raise(p); break;
-  case NODE_DIV: if (node->n < 2) return raise(p); break;
-  case NODE_PLUS1: if (node->n != 1) return raise(p); break;
-  case NODE_MINUS1: if (node->n != 1) return raise(p); break;
-  case NODE_GT: if (node->n != 2) return raise(p); break;
-  case NODE_GE: if (node->n != 2) return raise(p); break;
-  case NODE_LT: if (node->n != 2) return raise(p); break;
-  case NODE_LE: if (node->n != 2) return raise(p); break;
-  case NODE_EQ: if (node->n != 2) return raise(p); break;
-  case NODE_NOT: if (node->n != 1) return raise(p); break;
-  case NODE_MOD: if (node->n != 2) return raise(p); break;
-  case NODE_IF: if (node->n != 3) return raise(p); break;
-  case NODE_PRINT: if (node->n != 1) return raise(p); break;
-  case NODE_PRINTLN: if (node->n != 1) return raise(p); break;
-  case NODE_PRINC: if (node->n != 1) return raise(p); break;
-  case NODE_QUOTE: if (node->n != 1) return raise(p); break;
-  case NODE_SETQ: if (node->n != 2) return raise(p); break;
-  case NODE_PROGN: if (node->n < 1) return raise(p); break;
-  case NODE_COND: if (node->n < 1) return raise(p); break;
-  case NODE_CAR: if (node->n != 1) return raise(p); break;
-  case NODE_CDR: if (node->n != 1) return raise(p); break;
-  case NODE_DOTIMES: if (node->n != 2) return raise(p); break;
-  case NODE_DEFUN: if (node->n < 3) return raise(p); break;
-  }
   return p;
 }
 
@@ -531,6 +503,7 @@ eval_node(ENV *env, NODE *node) {
 
   switch (node->t) {
   case NODE_PLUS:
+    if (node->n < 2) return new_errorf("malformed +");
     nn = new_node();
     for (i = 0; i < node->n; i++) {
       c = eval_node(env, node->c[i]);
@@ -555,6 +528,7 @@ eval_node(ENV *env, NODE *node) {
     }
     return nn;
   case NODE_MINUS:
+    if (node->n < 2) return new_errorf("malformed -");
     nn = new_node();
     for (i = 0; i < node->n; i++) {
       c = eval_node(env, node->c[i]);
@@ -579,6 +553,7 @@ eval_node(ENV *env, NODE *node) {
     }
     return nn;
   case NODE_MUL:
+    if (node->n < 2) return new_errorf("malformed *");
     nn = new_node();
     for (i = 0; i < node->n; i++) {
       c = eval_node(env, node->c[i]);
@@ -603,6 +578,7 @@ eval_node(ENV *env, NODE *node) {
     }
     return nn;
   case NODE_DIV:
+    if (node->n < 2) return new_errorf("malformed /");
     nn = new_node();
     for (i = 0; i < node->n; i++) {
       c = eval_node(env, node->c[i]);
@@ -627,6 +603,7 @@ eval_node(ENV *env, NODE *node) {
     }
     return nn;
   case NODE_PLUS1:
+    if (node->n != 1) return new_errorf("malformed 1+");
     c = new_node();
     x = eval_node(env, node->c[0]);
     c->t = x->t;
@@ -638,6 +615,7 @@ eval_node(ENV *env, NODE *node) {
     free_node(x);
     return c;
   case NODE_MINUS1:
+    if (node->n != 1) return new_errorf("malformed 1-");
     c = new_node();
     x = eval_node(env, node->c[0]);
     c->t = x->t;
@@ -649,16 +627,19 @@ eval_node(ENV *env, NODE *node) {
     free_node(x);
     return c;
   case NODE_NOT:
+    if (node->n != 1) return new_errorf("malformed not");
     c = new_node();
     c->t = NODE_INT;
     c->u.i = !int_value(env, node->c[0]);
     return c;
   case NODE_MOD:
+    if (node->n != 2) return new_errorf("malformed not");
     c = new_node();
     c->t = NODE_INT;
     c->u.i = int_value(env, node->c[0]) % int_value(env, node->c[1]);
     return c;
   case NODE_IF:
+    if (node->n != 3) return new_errorf("malformed if");
     c = eval_node(env, node->c[0]);
     switch (c->t) {
     case NODE_NIL:
@@ -681,54 +662,64 @@ eval_node(ENV *env, NODE *node) {
     x = eval_node(env, node->c[r > 0 ? 1 : 2]);
     return x;
   case NODE_GT:
+    if (node->n != 2) return new_errorf("malformed >");
     nn = new_node();
     nn->t = NODE_INT;
     nn->u.i = double_value(env, node->c[0]) > double_value(env, node->c[1]);
     return nn;
   case NODE_GE:
+    if (node->n != 2) return new_errorf("malformed >=");
     nn = new_node();
     nn->t = NODE_INT;
     nn->u.i = double_value(env, node->c[0]) >= double_value(env, node->c[1]);
     return nn;
   case NODE_LT:
+    if (node->n != 2) return new_errorf("malformed <");
     nn = new_node();
     nn->t = NODE_INT;
     nn->u.i = double_value(env, node->c[0]) < double_value(env, node->c[1]);
     return nn;
   case NODE_LE:
+    if (node->n != 2) return new_errorf("malformed <=");
     nn = new_node();
     nn->t = NODE_INT;
     nn->u.i = double_value(env, node->c[0]) <= double_value(env, node->c[1]);
     return nn;
   case NODE_EQ:
+    if (node->n != 2) return new_errorf("malformed =");
     nn = new_node();
     nn->t = NODE_INT;
     /* TODO: string comparison */
     nn->u.i = int_value(env, node->c[0]) == int_value(env, node->c[1]);
     return nn;
   case NODE_PRINT:
+    if (node->n != 1) return new_errorf("malformed print");
     c = eval_node(env, node->c[0]);
     buf[0] = 0;
     print_node(sizeof(buf), buf, c, 0);
     puts(buf);
     return c;
   case NODE_PRINTLN:
+    if (node->n != 1) return new_errorf("malformed println");
     c = eval_node(env, node->c[0]);
     buf[0] = 0;
     print_node(sizeof(buf), buf, c, 0);
     puts(buf);
     return c;
   case NODE_PRINC:
+    if (node->n != 1) return new_errorf("malformed printc");
     c = eval_node(env, node->c[0]);
     buf[0] = 0;
     print_node(sizeof(buf), buf, c, 1);
     puts(buf);
     return c;
   case NODE_QUOTE:
+    if (node->n != 1) return new_errorf("malformed quote");
     c = node->c[0];
     c->r++;
     return c;
   case NODE_SETQ:
+    if (node->n != 2) return new_errorf("malformed setq");
     x = node->c[0];
     if (x->t != NODE_IDENT) {
       buf[0] = 0;
@@ -746,6 +737,7 @@ eval_node(ENV *env, NODE *node) {
     node->c[1]->r++;
     return node->c[1];
   case NODE_IDENT:
+    if (node->n != 0) return new_errorf("malformed ident");
     return look_ident(env, node->u.s);
   case NODE_CALL:
     x = look_func(env, node->u.s);
@@ -782,6 +774,7 @@ eval_node(ENV *env, NODE *node) {
     }
     return new_node();
   case NODE_DEFUN:
+    if (node->n < 3) return new_errorf("malformed defun");
     x = node->c[0];
     if (x->t != NODE_IDENT) {
       buf[0] = 0;
@@ -798,25 +791,8 @@ eval_node(ENV *env, NODE *node) {
     env->nf++;
     node->r++;
     return node;
-  case NODE_INT:
-    node->r++;
-    return node;
-  case NODE_DOUBLE:
-    node->r++;
-    return node;
-  case NODE_NIL:
-    node->r++;
-    return node;
-  case NODE_T:
-    node->r++;
-    return node;
-  case NODE_STRING:
-    node->r++;
-    return node;
-  case NODE_LIST:
-    node->r++;
-    return node;
   case NODE_PROGN:
+    if (node->n < 1) return new_errorf("malformed progn");
     c = NULL;
     for (i = 0; i < node->n; i++) {
       if (c) free_node(c);
@@ -827,6 +803,7 @@ eval_node(ENV *env, NODE *node) {
     }
     return new_node();
   case NODE_COND:
+    if (node->n < 1) return new_errorf("malformed cond");
     c = NULL;
     for (i = 0; i < node->n; i++) {
       x = node->c[i];
@@ -849,6 +826,7 @@ eval_node(ENV *env, NODE *node) {
     }
     return new_node();
   case NODE_CAR:
+    if (node->n != 1) return new_errorf("malformed car");
     x = node->c[0];
     if (x->t != NODE_QUOTE) {
       buf[0] = 0;
@@ -868,6 +846,7 @@ eval_node(ENV *env, NODE *node) {
     }
     return new_node();
   case NODE_CDR:
+    if (node->n != 1) return new_errorf("malformed cdr");
     x = node->c[0];
     if (x->t != NODE_QUOTE) {
       buf[0] = 0;
@@ -893,6 +872,7 @@ eval_node(ENV *env, NODE *node) {
     }
     return new_node();
   case NODE_DOTIMES:
+    if (node->n != 2) return new_errorf("malformed dotimes");
     x = node->c[0]->c[0];
     if (x->t != NODE_LIST || x->n != 2) {
       buf[0] = 0;
@@ -927,6 +907,24 @@ eval_node(ENV *env, NODE *node) {
       return c;
     }
     return new_node();
+  case NODE_INT:
+    node->r++;
+    return node;
+  case NODE_DOUBLE:
+    node->r++;
+    return node;
+  case NODE_NIL:
+    node->r++;
+    return node;
+  case NODE_T:
+    node->r++;
+    return node;
+  case NODE_STRING:
+    node->r++;
+    return node;
+  case NODE_LIST:
+    node->r++;
+    return node;
   }
   return new_error("unknown node");
 }
