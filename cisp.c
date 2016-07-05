@@ -57,9 +57,9 @@ raise(const char *p) {
   return NULL;
 }
 
-static const char* parse_any(NODE *node, const char *p, int q);
-static const char* parse_paren(NODE *node, const char *p);
-static const char* parse_ident(NODE *node, const char *p);
+static const char* parse_any(ENV *env, NODE *node, const char *p, int q);
+static const char* parse_paren(ENV *env, NODE *node, const char *p);
+static const char* parse_ident(ENV *env, NODE *node, const char *p);
 static NODE* eval_node(ENV *env, NODE *node);
 static void print_node(size_t nbuf, char *buf, NODE *node, int mode);
 static void free_node(NODE *node);
@@ -127,7 +127,7 @@ match(const char *lhs, const char *rhs, size_t n) {
 }
 
 static const char*
-parse_number(NODE *node, const char* p) {
+parse_number(ENV *env, NODE *node, const char* p) {
   const char *t = p;
   if (*p == '-') p++;
   while (*p && isdigit(*p)) p++;
@@ -144,7 +144,7 @@ parse_number(NODE *node, const char* p) {
 }
 
 static const char*
-parse_args(NODE *node, const char *p) {
+parse_args(ENV *env, NODE *node, const char *p) {
   if (!p) return NULL;
   p = skip_white(p);
   while (p && *p && *p != ')') {
@@ -154,9 +154,9 @@ parse_args(NODE *node, const char *p) {
         (node->t == NODE_DOTIMES && node->n == 0) ||
         (node->t == NODE_COND)
     ) {
-      p = parse_any(child, p, 1);
+      p = parse_any(env, child, p, 1);
     } else {
-      p = parse_any(child, p, 0);
+      p = parse_any(env, child, p, 0);
     }
     if (!p) {
       free_node(child);
@@ -175,7 +175,7 @@ parse_args(NODE *node, const char *p) {
 }
 
 static const char*
-parse_paren(NODE *node, const char *p) {
+parse_paren(ENV *env, NODE *node, const char *p) {
   if (!p) return NULL;
   const char *t = p;
   while (!isspace(*p) && *p != ')') p++;
@@ -205,17 +205,17 @@ parse_paren(NODE *node, const char *p) {
   else if (match(t, "dotimes", (size_t)(p - t))) node->t = NODE_DOTIMES;
   else if (match(t, "defun", (size_t)(p - t))) node->t = NODE_DEFUN;
   else {
-    p = parse_ident(node, t);
+    p = parse_ident(env, node, t);
     node->t = NODE_CALL;
   }
 
-  p = parse_args(node, p);
+  p = parse_args(env, node, p);
   if (p && *p && node->n == 0) return raise(p);
   return p;
 }
 
 static const char*
-parse_ident(NODE *node, const char *p) {
+parse_ident(ENV *env, NODE *node, const char *p) {
   const char *t = p;
   while (*p && isalpha(*p)) p++;
   if (match(t, "nil", (size_t)(p - t))) {
@@ -235,13 +235,13 @@ parse_ident(NODE *node, const char *p) {
 }
 
 static const char*
-parse_quote(NODE *node, const char *p) {
+parse_quote(ENV *env, NODE *node, const char *p) {
   NODE *child = new_node();
   if (*p == '(') {
     child->t = NODE_LIST;
-    p = parse_args(child, p+1);
+    p = parse_args(env, child, p+1);
   } else {
-    p = parse_ident(child, p);
+    p = parse_ident(env, child, p);
   }
   if (!p) {
     free_node(child);
@@ -255,7 +255,7 @@ parse_quote(NODE *node, const char *p) {
 }
 
 static const char*
-parse_string(NODE *node, const char *p) {
+parse_string(ENV *env, NODE *node, const char *p) {
   const char *t = p;
   char *sp;
   int n = 0;
@@ -280,17 +280,17 @@ parse_string(NODE *node, const char *p) {
 }
 
 static const char*
-parse_any(NODE *node, const char *p, int q) {
+parse_any(ENV *env, NODE *node, const char *p, int q) {
   if (!p) return NULL;
   p = skip_white(p);
   if (*p == '(') {
-    if (q) return parse_quote(node, p);
-    return parse_paren(node, p + 1);
+    if (q) return parse_quote(env, node, p);
+    return parse_paren(env, node, p + 1);
   }
-  if (*p == '-' || isdigit(*p)) return parse_number(node, p);
-  if (*p == '\'') return parse_quote(node, p + 1);
-  if (*p == '"') return parse_string(node, p + 1);
-  if (isalpha(*p)) return parse_ident(node, p);
+  if (*p == '-' || isdigit(*p)) return parse_number(env, node, p);
+  if (*p == '\'') return parse_quote(env, node, p + 1);
+  if (*p == '"') return parse_string(env, node, p + 1);
+  if (isalpha(*p)) return parse_ident(env, node, p);
   if (*p) return raise(p);
   return p;
 }
@@ -1156,19 +1156,23 @@ main(int argc, char* argv[]) {
     }
     fclose(fp);
 
+    env = new_env(NULL);
     top = new_node();
     top->t = NODE_PROGN;
-    p = (char*) parse_args(top, p);
+    p = (char*) parse_args(env, top, p);
     if (!p) {
+      free_node(top);
+      free_env(env);
       exit(1);
     }
     p = (char*) skip_white((char*)p);
     if (*p) {
+      free_node(top);
+      free_env(env);
       raise(p);
       exit(1);
     }
     free((char*)pp);
-    env = new_env(NULL);
     ret = eval_node(env, top);
     if (ret->t == NODE_ERROR)
       fprintf(stderr, "%s: %s\n", argv[0], ret->u.s);
@@ -1189,7 +1193,7 @@ main(int argc, char* argv[]) {
       buf[fsize] = 0;
     }
     top = new_node();
-    pp = parse_any(top, buf, 0);
+    pp = parse_any(env, top, buf, 0);
     if (!pp) {
       continue;
     }
