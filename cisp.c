@@ -35,10 +35,6 @@ typedef struct {
 typedef struct _ENV {
   int nv;
   ITEM **lv;
-#if 0
-  int nf;
-  ITEM **lf;
-#endif
   struct _ENV *p;
 } ENV;
 
@@ -137,6 +133,9 @@ parse_number(ENV *env, NODE *node, const char* p) {
     node->u.i = atoi(t);
   } else if (*p) {
     p++;
+    if (!isdigit(*p)) {
+      return parse_ident(env, node, t);
+    }
     while (*p && isdigit(*p)) p++;
     node->t = NODE_DOUBLE;
     node->u.d = atof(t);
@@ -181,7 +180,7 @@ parse_paren(ENV *env, NODE *node, const char *p) {
 static const char*
 parse_ident(ENV *env, NODE *node, const char *p) {
   const char *t = p;
-  while (*p && (isalpha(*p) || strchr("+-*/<>=", *p))) p++;
+  while (*p && (isalpha(*p) || isdigit(*p) || strchr("+-*/<>=", *p))) p++;
   if (match(t, "nil", (size_t)(p - t))) {
     node->t = NODE_NIL;
     return p;
@@ -190,11 +189,11 @@ parse_ident(ENV *env, NODE *node, const char *p) {
     node->t = NODE_T;
     return p;
   }
-  while (*p && isdigit(*p)) p++;
   node->t = NODE_IDENT;
   node->u.s = (char*) malloc((size_t)(p - t) + 1);
   memset(node->u.s, 0, (size_t)(p - t) + 1);
   memcpy(node->u.s, t, (size_t)(p - t));
+  puts(node->u.s);
   return p;
 }
 
@@ -248,7 +247,6 @@ parse_any(ENV *env, NODE *node, const char *p) {
   if (!p) return NULL;
   p = skip_white(p);
   if (*p == '(') {
-    //if (q) return parse_quote(env, node, p);
     return parse_paren(env, node, p + 1);
   }
   if (*p == '-' || isdigit(*p)) return parse_number(env, node, p);
@@ -342,13 +340,6 @@ free_env(ENV *env) {
     free(env->lv[i]);
   }
   free(env->lv);
-#if 0
-  for (i = 0; i < env->nf; i++) {
-    free_node(env->lf[i]->v);
-    free(env->lf[i]);
-  }
-  free(env->lf);
-#endif
   free(env);
 }
 
@@ -734,24 +725,6 @@ do_ident(ENV *env, NODE *node) {
   }
 
   if (env->p) return do_ident(env->p, node);
-/* TODO: bottle neck */
-/*
-  static ENV *global;
-  if (global == NULL) {
-    while (env->p) env = env->p;
-    global = env;
-  } else {
-    env = global;
-  }
-
-  for (i = 0; i < env->nv; i++) {
-    if (!strcmp(env->lv[i]->k, k)) {
-      x = env->lv[i]->v;
-      x->r++;
-      return x;
-    }
-  }
-*/
   return new_errorf("unknown variable: %s", node->u.s);
 }
 
@@ -1053,13 +1026,6 @@ eval_node(ENV *env, NODE *node) {
       }
     }
   }
-#if 0
-  for (i = 0; i < env->nv; i++) {
-    if (node->t == env->lv[i]->v->t) {
-      return env->lv[i]->v;
-    }
-  }
-#endif
   switch (node->t) {
   case NODE_QUOTE:
     return eval_node(env, node->c[0]);
