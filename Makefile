@@ -30,6 +30,6 @@ debug :
 	gcc -g -o cisp -pg cisp.c
 
 prof :
-	gcc -o cisp -pg cisp.c
-	./cisp example/tak.l
+	gcc -o $(TARGET) -pg cisp.c
+	./$(TARGET) example/tak.lisp
 	gprof $(TARGET) gmon.out -p | less
