@@ -730,6 +730,7 @@ look_func(ENV *env, const char *k) {
   static ENV *global;
   int i;
 
+  if (!k) return NULL;
   if (global == NULL) {
     while (env->p) env = env->p;
     global = env;
@@ -1024,7 +1025,7 @@ eval_node(ENV *env, NODE *node) {
     return do_ident(env, node);
   case NODE_CALL:
     for (i = 0; i < global->nv; i++) {
-      if (node->t == NODE_CALL && match(node->u.s, global->lv[i]->k, strlen(global->lv[i]->k))) {
+      if (node->t == NODE_CALL && node->u.s && match(node->u.s, global->lv[i]->k, strlen(global->lv[i]->k))) {
         if (global->lv[i]->v->f) {
           return ((f_do)(global->lv[i]->v->f))(env, node);
         }
