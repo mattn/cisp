@@ -320,7 +320,9 @@ free_node(NODE *node) {
     case NODE_IDENT:
     case NODE_CALL:
     case NODE_ERROR:
-      //free(node->u.s);
+    case NODE_NIL:
+    case NODE_T:
+      free(node->u.s);
       break;
     }
     free(node);
@@ -788,6 +790,7 @@ do_call(ENV *env, NODE *node) {
       newenv->lv[newenv->nv] = ni;
       newenv->nv++;
     } else {
+      free_node(ni->v);
       ni->v = eval_node(env, node->c[i]);
     }
   }
@@ -976,11 +979,9 @@ add_sym(ENV *env, enum T t, const char* n, f_do f) {
   memset(ni, 0, sizeof(ITEM));
   ni->k = n;
   ni->v = node;
-  ni->v->r++;
   env->lv = (ITEM**) realloc(env->lv, sizeof(ITEM*) * (env->nv + 1));
   env->lv[env->nv] = ni;
   env->nv++;
-  node->r++;
 }
 
 static void
