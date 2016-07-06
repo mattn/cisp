@@ -947,7 +947,7 @@ do_call(ENV *env, NODE *node) {
         free_node(nn);
         free_env(newenv);
         free_node(x);
-        return new_errorf("unknown function: %s", node->u.s);
+        return new_errorn("last argument should be lambda list: %s", node);
       }
       l = new_node();
       l->t = NODE_LIST;
