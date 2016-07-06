@@ -85,10 +85,22 @@ new_node() {
 
 static NODE*
 new_error(const char* msg) {
-  NODE* node = (NODE*) malloc(sizeof(NODE));
-  memset(node, 0, sizeof(NODE));
+  NODE *node = new_node();
   node->t = NODE_ERROR;
   node->u.s = strdup(msg);
+  return node;
+}
+
+static NODE*
+new_errorn(const char* fmt, NODE *n) {
+  NODE* node;
+  char buf[BUFSIZ], tmp[BUFSIZ];
+  tmp[0] = 0;
+  print_node(sizeof(tmp), tmp, n, 0);
+  snprintf(buf, sizeof(buf), fmt, tmp);
+  node = new_node();
+  node->t = NODE_ERROR;
+  node->u.s = strdup(buf);
   return node;
 }
 
@@ -99,8 +111,7 @@ new_errorf(const char* fmt, ...) {
   va_start(list, fmt);
   vsnprintf(buf, sizeof(buf), fmt, list);
   va_end(list);
-  NODE* node = (NODE*) malloc(sizeof(NODE));
-  memset(node, 0, sizeof(NODE));
+  NODE* node = new_node();
   node->t = NODE_ERROR;
   node->u.s = strdup(buf);
   return node;
@@ -787,7 +798,7 @@ do_print(ENV *env, NODE *node) {
   NODE *c;
   char buf[BUFSIZ];
 
-  if (node->n != 1) return new_errorf("malformed print");
+  if (node->n != 1) return new_errorn("malformed print: %s", node);
   c = eval_node(env, node->c[0]);
   if (c->t == NODE_ERROR) return c;
   buf[0] = 0;
@@ -801,7 +812,7 @@ do_println(ENV *env, NODE *node) {
   NODE *c;
   char buf[BUFSIZ];
 
-  if (node->n != 1) return new_errorf("malformed println");
+  if (node->n != 1) return new_errorn("malformed println: %s", node);
   c = eval_node(env, node->c[0]);
   if (c->t == NODE_ERROR) return c;
   buf[0] = 0;
@@ -815,7 +826,7 @@ do_princ(ENV *env, NODE *node) {
   NODE *c;
   char buf[BUFSIZ];
 
-  if (node->n != 1) return new_errorf("malformed printc");
+  if (node->n != 1) return new_errorn("malformed printc: %s", node);
   c = eval_node(env, node->c[0]);
   if (c->t == NODE_ERROR) return c;
   buf[0] = 0;
@@ -828,7 +839,7 @@ static NODE*
 do_quote(ENV *env, NODE *node) {
   NODE *c;
 
-  if (node->n != 1) return new_errorf("malformed quote");
+  if (node->n != 1) return new_errorn("malformed quote: %s", node);
   c = node->c[0];
   c->r++;
   return c;
@@ -837,14 +848,11 @@ do_quote(ENV *env, NODE *node) {
 static NODE*
 do_setq(ENV *env, NODE *node) {
   NODE *x, *c;
-  char buf[BUFSIZ];
 
-  if (node->n != 2) return new_errorf("malformed setq");
+  if (node->n != 2) return new_errorn("malformed setq: %s", node);
   x = node->c[0];
   if (x->t != NODE_IDENT) {
-    buf[0] = 0;
-    print_node(sizeof(buf), buf, x, 0);
-    return new_errorf("invalid identifier: %s", buf);
+    return new_errorn("invalid identifier: %s", x);
   }
   c = eval_node(env, node->c[1]);
   if (c->t == NODE_ERROR) return c;
@@ -857,7 +865,7 @@ do_ident(ENV *env, NODE *node) {
   NODE *x;
   int i;
 
-  if (node->n != 0) return new_errorf("malformed ident");
+  if (node->n != 0) return new_errorn("malformed ident", node);
   for (i = 0; i < env->nv; i++) {
     if (!strcmp(env->lv[i]->k, node->u.s)) {
       x = env->lv[i]->v;
@@ -939,14 +947,11 @@ do_call(ENV *env, NODE *node) {
 static NODE*
 do_defun(ENV *env, NODE *node) {
   NODE *x;
-  char buf[BUFSIZ];
 
-  if (node->n < 3) return new_errorf("malformed defun");
+  if (node->n < 3) return new_errorn("malformed defun: %s", node);
   x = node->c[0];
   if (x->t != NODE_IDENT) {
-    buf[0] = 0;
-    print_node(sizeof(buf), buf, x, 0);
-    return new_errorf("invalid identifier: %s", buf);
+    return new_errorn("invalid identifier: %s", x);
   }
   add_function(env, x->u.s, node);
   node->r++;
@@ -958,7 +963,7 @@ do_progn(ENV *env, NODE *node) {
   NODE *c;
   int i;
 
-  if (node->n < 1) return new_errorf("malformed progn");
+  if (node->n < 1) return new_errorn("malformed progn: %s", node);
   c = NULL;
   for (i = 0; i < node->n; i++) {
     if (c) free_node(c);
@@ -977,7 +982,7 @@ do_dotimes(ENV *env, NODE *node) {
   NODE *x, *c, *nn, *err = NULL;
   int i, r;
 
-  if (node->n != 2) return new_errorf("malformed dotimes");
+  if (node->n != 2) return new_errorn("malformed dotimes: %s", node);
   x = node->c[0];
   c = eval_node(env, x->c[0]);
   if (c->t == NODE_ERROR) return c;
@@ -1036,7 +1041,7 @@ do_cond(ENV *env, NODE *node) {
   NODE *x, *c, *err = NULL;
   int i, r;
 
-  if (node->n < 1) return new_errorf("malformed cond");
+  if (node->n < 1) return new_errorn("malformed cond: %s", node);
   c = NULL;
   for (i = 0; i < node->n; i++) {
     x = node->c[i];
@@ -1064,15 +1069,12 @@ do_cond(ENV *env, NODE *node) {
 static NODE*
 do_car(ENV *env, NODE *node) {
   NODE *x, *c;
-  char buf[BUFSIZ];
 
-  if (node->n != 1) return new_errorf("malformed car");
+  if (node->n != 1) return new_errorn("malformed car: %s", node);
   x = eval_node(env, node->c[0]);
   if (x->t != NODE_LIST) {
-    buf[0] = 0;
-    print_node(sizeof(buf), buf, x, 0);
     free_node(x);
-    return new_errorf("not list: %s", buf);
+    return new_errorn("argument is not a list: %s", node);
   }
   if (x->n > 0) {
     c = x->c[0];
@@ -1088,15 +1090,12 @@ static NODE*
 do_cdr(ENV *env, NODE *node) {
   NODE *x, *c;
   int i;
-  char buf[BUFSIZ];
 
-  if (node->n != 1) return new_errorf("malformed cdr");
+  if (node->n != 1) return new_errorn("malformed cdr: %s", node);
   x = eval_node(env, node->c[0]);
   if (x->t != NODE_LIST) {
-    buf[0] = 0;
-    print_node(sizeof(buf), buf, x, 0);
     free_node(x);
-    return new_errorf("not list: %s", buf);
+    return new_errorn("argument is not a list: %s", node);
   }
   if (x->n > 0) {
     c = new_node();
@@ -1117,15 +1116,12 @@ do_cdr(ENV *env, NODE *node) {
 static NODE*
 do_length(ENV *env, NODE *node) {
   NODE *x, *c;
-  char buf[BUFSIZ];
 
-  if (node->n != 1) return new_errorf("malformed length");
+  if (node->n != 1) return new_errorn("malformed length: %s", node);
   x = eval_node(env, node->c[0]);
   if (x->t != NODE_LIST) {
-    buf[0] = 0;
-    print_node(sizeof(buf), buf, x, 0);
     free_node(x);
-    return new_errorf("not list: %s", buf);
+    return new_errorn("argument is not a list: %s", node);
   }
   c = new_node();
   c->t = NODE_INT;
@@ -1137,21 +1133,16 @@ do_length(ENV *env, NODE *node) {
 static NODE*
 do_apply(ENV *env, NODE *node) {
   NODE *x, *c, *nn;
-  char buf[BUFSIZ];
   int i;
 
-  if (node->n != 2) return new_errorf("malformed apply");
+  if (node->n != 2) return new_errorn("malformed apply: %s", node);
   x = node->c[0];
   if (x->t != NODE_QUOTE) {
-    buf[0] = 0;
-    print_node(sizeof(buf), buf, x, 0);
-    return new_errorf("not quote: %s", buf);
+    return new_errorn("first argument should be quote: %s", x);
   }
   x = node->c[1];
   if (x->t != NODE_QUOTE) {
-    buf[0] = 0;
-    print_node(sizeof(buf), buf, x, 0);
-    return new_errorf("not quote: %s", buf);
+    return new_errorn("second argument should be quote: %s", x);
   }
   x = node->c[0]->c[0];
   c = new_node();
