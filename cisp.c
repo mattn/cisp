@@ -1273,7 +1273,6 @@ do_apply(ENV *env, NODE *node) {
     }
     c->n = 0;
     x = c->c[1];
-    printf("%d\n", x->t);
   } else {
     c->n = 2;
     c->c = (NODE**) malloc(sizeof(NODE*) * 2);
