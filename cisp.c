@@ -937,10 +937,12 @@ do_call(ENV *env, NODE *node) {
     x = node->c[0];
     x->r++;
   }
-  newenv = new_env(env);
+  if (x->n == 0) {
+    return new_errorf("unknown function: %s", node->u.s);
+  }
 
   c = x->c[1-lo];
-
+  newenv = new_env(env);
   for (i = lo; i < node->n; i++) {
     nn = eval_node(env, node->c[i]);
     if (nn->t == NODE_ERROR) {
@@ -1243,14 +1245,14 @@ do_apply(ENV *env, NODE *node) {
 
   if (node->n != 2) return new_errorn("malformed apply: %s", node);
   x = node->c[0];
-  if (x->t != NODE_QUOTE) {
+  if (x->t != NODE_IDENT && x->t != NODE_QUOTE) {
     return new_errorn("first argument should be quote: %s", x);
   }
   x = node->c[1];
   if (x->t != NODE_QUOTE) {
     return new_errorn("second argument should be quote: %s", x);
   }
-  x = node->c[0]->c[0];
+  x = node->c[0]->t == NODE_IDENT ? node->c[0] : node->c[0]->c[0];
   c = new_node();
   c->t = NODE_CALL;
   c->u.s = strdup(x->u.s);
