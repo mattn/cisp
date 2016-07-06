@@ -1238,7 +1238,8 @@ eval_node(ENV *env, NODE *node) {
 
   switch (node->t) {
   case NODE_QUOTE:
-    return eval_node(env, node->c[0]);
+    node->c[0]->r++;
+    return node->c[0];
   case NODE_PROGN:
     return do_progn(env, node);
   case NODE_IDENT:
