@@ -9,7 +9,7 @@
 
 enum T {
   NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_IDENT, NODE_LIST,
-  NODE_CALL, NODE_PROGN, NODE_ERROR,
+  NODE_CALL, NODE_PROGN, NODE_CELL, NODE_ERROR,
 };
 
 typedef struct _NODE {
@@ -168,6 +168,17 @@ parse_args(ENV *env, NODE *node, const char *p) {
     node->c[node->n] = child;
     node->n++;
     p = skip_white(p);
+    if (*p == '.') {
+      node->t = NODE_CELL;
+      NODE *cdr = new_node();
+      p = parse_any(env, cdr, p + 1);
+      if (p) {
+        node->c = (NODE**) realloc(node->c, sizeof(NODE*) * (node->n + 1));
+        node->c[node->n] = cdr;
+        node->n++;
+      }
+      break;
+    }
   }
   if (p && *p) {
     if (*p == ')') p++;
@@ -180,7 +191,6 @@ static const char*
 parse_paren(ENV *env, NODE *node, const char *p) {
   if (!p) return NULL;
   const char *t = p;
-  while (!isspace(*p) && *p != ')') p++;
   p = parse_ident(env, node, t);
   node->t = NODE_CALL;
   p = parse_args(env, node, p);
@@ -317,7 +327,9 @@ print_node(size_t nbuf, char* buf, NODE *node, int mode) {
   case NODE_QUOTE: strncat(buf, "'", nbuf); print_node(nbuf, buf, node->c[0], mode); break;
   case NODE_LIST: strncat(buf, "(", nbuf); print_list(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   case NODE_PROGN: strncat(buf, "(progn", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_CELL: strncat(buf, "(", nbuf); print_node(nbuf, buf, node->c[0], mode); strncat(buf, " . ", nbuf); print_node(nbuf, buf, node->c[1], mode); strncat(buf, ")", nbuf); break;
   case NODE_CALL: snprintf(tmp, sizeof(tmp), "(%s", node->u.s); strncat(buf, tmp, nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  default: strncat(buf, "()", nbuf); break;
   }
 }
 
@@ -1072,7 +1084,7 @@ do_car(ENV *env, NODE *node) {
 
   if (node->n != 1) return new_errorn("malformed car: %s", node);
   x = eval_node(env, node->c[0]);
-  if (x->t != NODE_LIST) {
+  if (x->t != NODE_LIST && x->t != NODE_CELL) {
     free_node(x);
     return new_errorn("argument is not a list: %s", node);
   }
@@ -1093,21 +1105,28 @@ do_cdr(ENV *env, NODE *node) {
 
   if (node->n != 1) return new_errorn("malformed cdr: %s", node);
   x = eval_node(env, node->c[0]);
-  if (x->t != NODE_LIST) {
+  if (x->t != NODE_LIST && x->t != NODE_CELL) {
     free_node(x);
     return new_errorn("argument is not a list: %s", node);
   }
   if (x->n > 0) {
     c = new_node();
-    c->t = NODE_LIST;
-    c->c = (NODE**) malloc(sizeof(NODE*) * (x->n - 1));
-    for (i = 1; i < x->n; i++) {
-      c->c[i - 1] = x->c[i];
-      x->c[i]->r++;
-      c->n++;
+    if (x->t == NODE_CELL) {
+      c = x->c[1];
+      c->r++;
+      free_node(x);
+      return c;
+    } else {
+      c->t = NODE_LIST;
+      c->c = (NODE**) malloc(sizeof(NODE*) * (x->n - 1));
+      for (i = 1; i < x->n; i++) {
+        c->c[i - 1] = x->c[i];
+        x->c[i]->r++;
+        c->n++;
+      }
+      free_node(x);
+      return c;
     }
-    free_node(x);
-    return c;
   }
   free_node(x);
   return new_node();
@@ -1264,6 +1283,9 @@ eval_node(ENV *env, NODE *node) {
     node->r++;
     return node;
   case NODE_LIST:
+    node->r++;
+    return node;
+  case NODE_CELL:
     node->r++;
     return node;
   }
