@@ -11,7 +11,7 @@
 
 enum T {
   NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_IDENT, NODE_LIST,
-  NODE_CALL, NODE_PROGN, NODE_CELL, NODE_ERROR,
+  NODE_CALL, NODE_LAMBDA, NODE_PROGN, NODE_CELL, NODE_ERROR,
 };
 
 typedef struct _NODE {
@@ -331,6 +331,7 @@ print_node(size_t nbuf, char* buf, NODE *node, int mode) {
   case NODE_PROGN: strncat(buf, "(progn", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   case NODE_CELL: strncat(buf, "(", nbuf); print_node(nbuf, buf, node->c[0], mode); strncat(buf, " . ", nbuf); print_node(nbuf, buf, node->c[1], mode); strncat(buf, ")", nbuf); break;
   case NODE_CALL: snprintf(tmp, sizeof(tmp), "(%s", node->u.s); strncat(buf, tmp, nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_LAMBDA: strncat(buf, "(lambda", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   default: strncat(buf, "()", nbuf); break;
   }
 }
@@ -340,9 +341,11 @@ free_node(NODE *node) {
   int i;
   node->r--;
   if (node->r <= 0) {
-    for (i = 0; i < node->n; i++)
-      free_node(node->c[i]);
-    free(node->c);
+    if (node->t != NODE_LAMBDA) {
+      for (i = 0; i < node->n; i++)
+        free_node(node->c[i]);
+      free(node->c);
+    }
     switch (node->t) {
     case NODE_STRING:
     case NODE_IDENT:
@@ -924,24 +927,28 @@ static NODE*
 do_call(ENV *env, NODE *node) {
   ENV *newenv;
   NODE *x, *c, *nn;
-  int i, j;
+  int i, j, lo = 0;
 
   x = look_func(env, node->u.s);
   if (!x) {
-    return new_errorf("unknown function: %s", node->u.s);
+    if (node->n <= 1 && node->c[1]->t != NODE_LAMBDA)
+      return new_errorf("unknown function: %s", node->u.s);
+    lo = 1;
+    x = node->c[0];
+    x->r++;
   }
   newenv = new_env(env);
 
-  c = x->c[1];
+  c = x->c[1-lo];
 
-  for (i = 0; i < node->n; i++) {
+  for (i = lo; i < node->n; i++) {
     nn = eval_node(env, node->c[i]);
     if (nn->t == NODE_ERROR) {
       free_env(newenv);
       free_node(x);
       return nn;
     }
-    if (!strcmp("&rest", byname(c, i))) {
+    if (!strcmp("&rest", byname(c, i-lo))) {
       NODE *l;
       if (i != c->n - 1) {
         free_node(nn);
@@ -960,11 +967,11 @@ do_call(ENV *env, NODE *node) {
       free_node(nn);
       break;
     }
-    add_variable(newenv, byname(c, i), nn);
+    add_variable(newenv, byname(c, i-lo), nn);
     free_node(nn);
   }
   c = NULL;
-  for (i = 2; i < x->n; i++) {
+  for (i = 2-lo; i < x->n; i++) {
     if (c) free_node(c);
     c = eval_node(newenv, x->c[i]);
     if (c->t == NODE_ERROR) break;
@@ -975,6 +982,44 @@ do_call(ENV *env, NODE *node) {
     return c;
   }
   return new_node();
+}
+
+static NODE*
+do_lambda(ENV *env, NODE *node) {
+  NODE *x;
+
+  if (node->n < 2) return new_errorn("malformed lambda: %s", node);
+  x = new_node();
+  x->t = NODE_LAMBDA;
+  x->u.s = node->u.s;
+  x->n = node->n;
+  x->c = node->c;
+  x->r++;
+  return x;
+}
+
+static NODE*
+do_funcall(ENV *env, NODE *node) {
+  NODE *x, *c, *nn;
+  int i, lo;
+
+  if (node->n < 2) return new_errorn("malformed funcall: %s", node);
+  x = do_ident(env, node->c[0]);
+  lo = x->t == NODE_LAMBDA ? 1 : 0;
+  c = new_node();
+  c->t = NODE_CALL;
+  c->u.s = x->u.s;
+  c->n = node->n;
+  c->c = (NODE**) malloc(sizeof(NODE*) * (node->n));
+  if (lo) {
+    c->c[0] = x;
+  }
+  for (i = lo; i < node->n; i++) {
+    c->c[i] = node->c[i];
+  }
+  nn = do_call(env, c);
+  free_node(x);
+  return nn;
 }
 
 static NODE*
@@ -1279,6 +1324,8 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_CALL, "cons", do_cons);
   add_sym(env, NODE_CALL, "apply", do_apply);
   add_sym(env, NODE_CALL, "dotimes", do_dotimes);
+  add_sym(env, NODE_CALL, "lambda", do_lambda);
+  add_sym(env, NODE_CALL, "funcall", do_funcall);
   add_sym(env, NODE_CALL, "type-of", do_type_of);
   add_sym(env, NODE_NIL, "nil", NULL);
   add_sym(env, NODE_T, "t", NULL);
@@ -1310,6 +1357,9 @@ eval_node(ENV *env, NODE *node) {
       }
     }
     return do_call(env, node);
+  case NODE_LAMBDA:
+    node->r++;
+    return node;
   case NODE_INT:
     node->r++;
     return node;
