@@ -1,0 +1,6 @@
+(princ (type-of 1))
+(princ (type-of 1.2))
+(princ (type-of "fo"))
+(princ (type-of t))
+(princ (type-of nil))
+(princ (type-of 'a))
