@@ -398,13 +398,13 @@ int_value(ENV *env, NODE *node, NODE **err) {
   node = eval_node(env, node);
   int r = 0;
   switch (node->t) {
-  case NODE_ERROR: puts("foO"); *err = node; return 0;
+  case NODE_ERROR: *err = node; return 0;
   case NODE_NIL: r = 0; break;
   case NODE_T: r = 1; break;
   case NODE_INT: r = node->u.i; break;
   case NODE_DOUBLE: r = (long)node->u.d; break;
   case NODE_QUOTE: r = int_value(env, node->c[0], err); break;
-  default: puts("fo1"); *err = new_errorf("malformed number"); break;
+  default: *err = new_errorf("malformed number"); break;
   }
   free_node(node);
   return r;
@@ -750,27 +750,31 @@ do_le(ENV *env, NODE *node) {
 
 static NODE*
 do_eq(ENV *env, NODE *node) {
-  NODE *nn, *err = NULL;
+  NODE *lhs, *rhs, *nn, *err = NULL;
 
   if (node->n != 2) return new_errorf("malformed =");
+  lhs = eval_node(env, node->c[0]);
+  rhs = eval_node(env, node->c[1]);
   nn = new_node();
-  switch (node->c[0]->t) {
+  switch (lhs->t) {
   case NODE_INT:
-    if (int_value(env, node->c[0], &err) == int_value(env, node->c[1], &err)) {
+    if (int_value(env, lhs, &err) == int_value(env, rhs, &err)) {
       nn->t = NODE_T;
     }
     break;
   case NODE_DOUBLE:
-    if (double_value(env, node->c[0], &err) == double_value(env, node->c[1], &err)) {
+    if (double_value(env, lhs, &err) == double_value(env, rhs, &err)) {
       nn->t = NODE_T;
     }
     break;
   case NODE_STRING:
-    if (node->c[1]->t == NODE_STRING && !strcmp(node->c[0]->u.s, node->c[1]->u.s)) {
+    if (rhs->t == NODE_STRING && !strcmp(lhs->u.s, rhs->u.s)) {
       nn->t = NODE_T;
     }
     break;
   }
+  free_node(lhs);
+  free_node(rhs);
   if (err) {
     free_node(nn);
     return err;
