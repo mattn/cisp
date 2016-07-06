@@ -2,7 +2,7 @@
 
 cd `dirname $0`
 
-/bin/ls *.lisp | /bin/sort | while read file; do
+/bin/ls *.lisp | /usr/bin/sort | while read file; do
   echo -n "$file: "
   EXPECT=$(cat `basename $file .lisp`.out)
   ACTUAL=$(../cisp $file | tr -d "\r")
