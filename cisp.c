@@ -1000,6 +1000,34 @@ do_dotimes(ENV *env, NODE *node) {
 }
 
 static NODE*
+do_type_of(ENV *env, NODE *node) {
+  NODE *c;
+  const char *p = "unknown";
+  if (node->c[0]->t == NODE_QUOTE) {
+    p = "symbol";
+  } else {
+    c = eval_node(env, node->c[0]);
+    if (c->t == NODE_ERROR) return c;
+    switch (c->t) {
+    case NODE_NIL: p = "null"; break;
+    case NODE_T: p = "boolean"; break;
+    case NODE_INT: p = "int"; break;
+    case NODE_DOUBLE: p = "float"; break;
+    case NODE_STRING: p = "string"; break;
+    case NODE_QUOTE: p = "symbol"; break;
+    case NODE_LIST: p = "list"; break;
+    case NODE_PROGN: p = "progn"; break;
+    case NODE_ERROR: p = "error"; break;
+    }
+    free_node(c);
+  }
+  c = new_node();
+  c->t = NODE_STRING;
+  c->u.s = strdup(p);
+  return c;
+}
+
+static NODE*
 do_cond(ENV *env, NODE *node) {
   NODE *x, *c, *err = NULL;
   int i, r;
@@ -1194,6 +1222,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_CALL, "length", do_length);
   add_sym(env, NODE_CALL, "apply", do_apply);
   add_sym(env, NODE_CALL, "dotimes", do_dotimes);
+  add_sym(env, NODE_CALL, "type-of", do_type_of);
   add_sym(env, NODE_NIL, "nil", NULL);
   add_sym(env, NODE_T, "t", NULL);
 }
