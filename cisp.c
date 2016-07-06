@@ -1133,6 +1133,27 @@ do_cdr(ENV *env, NODE *node) {
 }
 
 static NODE*
+do_cons(ENV *env, NODE *node) {
+  NODE *c, *lhs, *rhs;
+
+  if (node->n != 2) return new_errorn("malformed cons: %s", node);
+  lhs = eval_node(env, node->c[0]);
+  if (lhs->t == NODE_ERROR) return lhs;
+  rhs = eval_node(env, node->c[1]);
+  if (rhs->t == NODE_ERROR) {
+    free_node(lhs);
+    return rhs;
+  }
+  c = new_node();
+  c->t = NODE_CELL;
+  c->n = 2;
+  c->c = (NODE**) malloc(sizeof(NODE*) * 2);
+  c->c[0] = lhs;
+  c->c[1] = rhs;
+  return c;
+}
+
+static NODE*
 do_length(ENV *env, NODE *node) {
   NODE *x, *c;
 
@@ -1234,6 +1255,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_CALL, "car", do_car);
   add_sym(env, NODE_CALL, "cdr", do_cdr);
   add_sym(env, NODE_CALL, "length", do_length);
+  add_sym(env, NODE_CALL, "cons", do_cons);
   add_sym(env, NODE_CALL, "apply", do_apply);
   add_sym(env, NODE_CALL, "dotimes", do_dotimes);
   add_sym(env, NODE_CALL, "type-of", do_type_of);
