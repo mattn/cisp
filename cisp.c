@@ -7,6 +7,8 @@
 #include <unistd.h>
 #include <ctype.h>
 
+#define SYMBOL_CHARS "+-*/<>=&"
+
 enum T {
   NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_IDENT, NODE_LIST,
   NODE_CALL, NODE_PROGN, NODE_CELL, NODE_ERROR,
@@ -200,7 +202,7 @@ parse_paren(ENV *env, NODE *node, const char *p) {
 static const char*
 parse_ident(ENV *env, NODE *node, const char *p) {
   const char *t = p;
-  while (*p && (isalpha(*p) || isdigit(*p) || strchr("+-*/<>=", *p))) p++;
+  while (*p && (isalpha(*p) || isdigit(*p) || strchr(SYMBOL_CHARS, *p))) p++;
   if (match(t, "nil", (size_t)(p - t))) {
     node->t = NODE_NIL;
     return p;
@@ -272,7 +274,7 @@ parse_any(ENV *env, NODE *node, const char *p) {
   if (*p == '-' || isdigit(*p)) return parse_number(env, node, p);
   if (*p == '\'') return parse_quote(env, node, p + 1);
   if (*p == '"') return parse_string(env, node, p + 1);
-  if (isalpha(*p) || strchr("+-*/<>=", *p)) return parse_ident(env, node, p);
+  if (isalpha(*p) || strchr(SYMBOL_CHARS, *p)) return parse_ident(env, node, p);
   if (*p) return raise(p);
   return p;
 }
@@ -922,7 +924,7 @@ static NODE*
 do_call(ENV *env, NODE *node) {
   ENV *newenv;
   NODE *x, *c, *nn;
-  int i;
+  int i, j;
 
   x = look_func(env, node->u.s);
   if (!x) {
@@ -938,6 +940,25 @@ do_call(ENV *env, NODE *node) {
       free_env(newenv);
       free_node(x);
       return nn;
+    }
+    if (!strcmp("&rest", byname(c, i))) {
+      NODE *l;
+      if (i != c->n - 1) {
+        free_node(nn);
+        free_env(newenv);
+        free_node(x);
+        return new_errorf("unknown function: %s", node->u.s);
+      }
+      l = new_node();
+      l->t = NODE_LIST;
+      for (j = i; j < node->n; j++) {
+        l->c = (NODE**) realloc(l->c, sizeof(NODE*) * (l->n + 1));
+        l->c[l->n] = node->c[j];
+        l->n++;
+      }
+      add_variable(newenv, byname(c, i+1), l);
+      free_node(nn);
+      break;
     }
     add_variable(newenv, byname(c, i), nn);
     free_node(nn);

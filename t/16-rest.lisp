@@ -1,0 +1,5 @@
+(defun x (a b &rest c )
+  (print a)
+  (print b)
+  (print c))
+(x 1 2 3 4)
