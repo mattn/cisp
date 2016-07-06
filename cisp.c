@@ -1009,6 +1009,7 @@ do_type_of(ENV *env, NODE *node) {
     c = eval_node(env, node->c[0]);
     if (c->t == NODE_ERROR) return c;
     switch (c->t) {
+    case NODE_CALL: p = "symbol"; break;
     case NODE_NIL: p = "null"; break;
     case NODE_T: p = "boolean"; break;
     case NODE_INT: p = "int"; break;
