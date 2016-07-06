@@ -931,14 +931,14 @@ do_call(ENV *env, NODE *node) {
 
   x = look_func(env, node->u.s);
   if (!x) {
-    if (node->n <= 1 && node->c[1]->t != NODE_LAMBDA)
+    if (node->n <= 1 && node->c[0]->t != NODE_LAMBDA)
       return new_errorf("unknown function: %s", node->u.s);
     lo = 1;
     x = node->c[0];
     x->r++;
   }
   if (x->n == 0) {
-    return new_errorf("unknown function: %s", node->u.s);
+    return new_errorf("malformed arguments: %s", node->u.s);
   }
 
   c = x->c[1-lo];
@@ -1240,39 +1240,58 @@ do_length(ENV *env, NODE *node) {
 
 static NODE*
 do_apply(ENV *env, NODE *node) {
-  NODE *x, *c, *nn;
+  NODE *x, *a, *c, *nn;
   int i;
 
-  if (node->n != 2) return new_errorn("malformed apply: %s", node);
-  x = node->c[0];
-  if (x->t != NODE_IDENT && x->t != NODE_QUOTE) {
-    return new_errorn("first argument should be quote: %s", x);
+  if (node->n < 2) return new_errorn("malformed apply: %s", node);
+  a = eval_node(env, node->c[0]);
+  if (a->t != NODE_LAMBDA && a->t != NODE_IDENT) {
+    return new_errorn("first argument should be function: %s", a);
   }
-  x = node->c[1];
-  if (x->t != NODE_QUOTE) {
-    return new_errorn("second argument should be quote: %s", x);
+  x = eval_node(env, node->c[1]);
+  if (x->t != NODE_LIST) {
+    return new_errorn("second argument should be list: %s", x);
   }
-  x = node->c[0]->t == NODE_IDENT ? node->c[0] : node->c[0]->c[0];
   c = new_node();
   c->t = NODE_CALL;
-  c->u.s = strdup(x->u.s);
-  c->n = 2;
-  c->c = (NODE**) malloc(sizeof(NODE*) * 2);
-  x = node->c[1]->c[0];
-  c->c[0] = x->c[0];
-  c->c[0]->r++;
-  for (i = 1; i < x->n; i++) {
-    c->c[1] = x->c[i];
-    nn = eval_node(env, c);
-    free_node(c->c[0]);
-    if (nn->t == NODE_ERROR) {
-      free_node(c);
-      return nn;
+  c->u.s = strdup(a->u.s);
+  if (a->t == NODE_LAMBDA) {
+    c->n = 3;
+    c->c = (NODE**) malloc(sizeof(NODE*) * 3);
+    c->c[0] = a;
+    c->c[1] = x->c[0];
+    c->c[1]->r++;
+    for (i = 1; i < x->n; i++) {
+      c->c[2] = x->c[i];
+      nn = do_call(env, c);
+      free_node(c->c[1]);
+      if (nn->t == NODE_ERROR) {
+        free_node(c);
+        return nn;
+      }
+      c->c[1] = nn;
     }
-    c->c[0] = nn;
+    c->n = 0;
+    x = c->c[1];
+    printf("%d\n", x->t);
+  } else {
+    c->n = 2;
+    c->c = (NODE**) malloc(sizeof(NODE*) * 2);
+    c->c[0] = x->c[0];
+    c->c[0]->r++;
+    for (i = 1; i < x->n; i++) {
+      c->c[1] = x->c[i];
+      nn = eval_node(env, c);
+      free_node(c->c[0]);
+      if (nn->t == NODE_ERROR) {
+        free_node(c);
+        return nn;
+      }
+      c->c[0] = nn;
+    }
+    c->n = 0;
+    x = c->c[0];
   }
-  c->n = 0;
-  x = c->c[0];
   free_node(c);
   x->r++;
   return x;
@@ -1352,7 +1371,7 @@ eval_node(ENV *env, NODE *node) {
     return do_ident(env, node);
   case NODE_CALL:
     for (i = 0; i < global->nv; i++) {
-      if (node->t == NODE_CALL && node->u.s && match(node->u.s, global->lv[i]->k, strlen(global->lv[i]->k))) {
+      if (node->u.s && match(node->u.s, global->lv[i]->k, strlen(global->lv[i]->k))) {
         if (global->lv[i]->v->f) {
           return ((f_do)(global->lv[i]->v->f))(env, node);
         }
