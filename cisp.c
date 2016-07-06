@@ -1016,7 +1016,6 @@ do_type_of(ENV *env, NODE *node) {
     case NODE_STRING: p = "string"; break;
     case NODE_QUOTE: p = "symbol"; break;
     case NODE_LIST: p = "list"; break;
-    case NODE_PROGN: p = "progn"; break;
     case NODE_ERROR: p = "error"; break;
     }
     free_node(c);
