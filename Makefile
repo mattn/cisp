@@ -23,13 +23,17 @@ $(TARGET) : $(OBJS)
 clean :
 	rm -f *.o $(TARGET)
 
-test : $(TARGET)
-	@./t/run-test.sh
-
 debug :
 	gcc -g -o cisp -pg cisp.c
 
-prof :
+test : $(TARGET)
+	@./t/run-test.sh
+
+prof : $(TARGET)
 	gcc -o $(TARGET) -pg cisp.c
 	./$(TARGET) example/tak.lisp
 	gprof $(TARGET) gmon.out -p | less
+
+valgrind : $(TARGET)
+	ls t/*.lisp | xargs -n 1 valgrind --leak-check=full ./$(TARGET) > valgrind.log 2>&1
+
