@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <ctype.h>
 
-#define SYMBOL_CHARS "+-*/<>=&"
+#define SYMBOL_CHARS "+-*/<>=&%"
 
 enum T {
   NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_IDENT, NODE_LIST,
@@ -1394,6 +1394,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_CALL, "1-", do_minus1);
   add_sym(env, NODE_CALL, "not", do_not);
   add_sym(env, NODE_CALL, "mod", do_mod);
+  add_sym(env, NODE_CALL, "%", do_mod);
   add_sym(env, NODE_CALL, "if", do_if);
   add_sym(env, NODE_CALL, ">", do_gt);
   add_sym(env, NODE_CALL, ">=", do_ge);
