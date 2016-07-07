@@ -234,8 +234,7 @@ parse_quote(NODE *node, const char *p) {
   NODE *child = new_node();
   if (*p == '(') {
     p = parse_args(child, p+1);
-    if (child->n)
-      child->t = NODE_LIST;
+    if (child->t != NODE_CELL && child->n) child->t = NODE_LIST;
   } else {
     p = parse_ident(child, p);
   }
@@ -301,6 +300,16 @@ print_args(size_t nbuf, char *buf, NODE *node, int mode) {
 }
 
 static void
+print_cell(size_t nbuf, char *buf, NODE *node, int mode) {
+  int i;
+  for (i = 0; i < node->n; i++) {
+    if (i == node->n - 1) strncat(buf, " . ", nbuf);
+    else if (i != 0) strncat(buf, " ", nbuf);
+    print_node(nbuf, buf, node->c[i], mode);
+  }
+}
+
+static void
 print_list(size_t nbuf, char *buf, NODE *node, int mode) {
   int i;
   for (i = 0; i < node->n; i++) {
@@ -341,7 +350,7 @@ print_node(size_t nbuf, char* buf, NODE *node, int mode) {
   case NODE_QUOTE: strncat(buf, "'", nbuf); print_node(nbuf, buf, node->c[0], mode); break;
   case NODE_LIST: strncat(buf, "(", nbuf); print_list(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   case NODE_PROGN: strncat(buf, "(progn", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
-  case NODE_CELL: strncat(buf, "(", nbuf); print_node(nbuf, buf, node->c[0], mode); strncat(buf, " . ", nbuf); print_node(nbuf, buf, node->c[1], mode); strncat(buf, ")", nbuf); break;
+  case NODE_CELL: strncat(buf, "(", nbuf); print_cell(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   case NODE_CALL: snprintf(tmp, sizeof(tmp), "(%s", node->u.s); strncat(buf, tmp, nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   case NODE_LAMBDA: strncat(buf, "(lambda", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   default: strncat(buf, "()", nbuf); break;
