@@ -338,11 +338,22 @@ print_str(size_t nbuf, char *buf, NODE *node, int mode) {
 }
 
 static void
+print_float(size_t nbuf, char *buf, NODE *node) {
+  char tmp[BUFSIZ];
+  snprintf(tmp, sizeof(tmp), "%lf", node->u.d);
+  if (node->u.d == (double)(int)(node->u.d)) {
+    char *p = tmp + strlen(tmp) - 1;
+    while (p > tmp && *(p-1) == '0') *p-- = 0;
+  }
+  strncat(buf, tmp, nbuf);
+}
+
+static void
 print_node(size_t nbuf, char* buf, NODE *node, int mode) {
   char tmp[BUFSIZ];
   switch (node->t) {
   case NODE_INT: snprintf(tmp, sizeof(tmp), "%ld", node->u.i); strncat(buf, tmp, nbuf); break;
-  case NODE_DOUBLE: snprintf(tmp, sizeof(tmp), "%f", node->u.d); strncat(buf, tmp, nbuf); break;
+  case NODE_DOUBLE: print_float(nbuf, buf, node); break;
   case NODE_STRING: print_str(nbuf, buf, node, mode); break;
   case NODE_IDENT: snprintf(tmp, sizeof(tmp), "%s", node->u.s); strncat(buf, tmp, nbuf); break;
   case NODE_NIL: strncat(buf, "nil", nbuf); break;
