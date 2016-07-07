@@ -1251,6 +1251,53 @@ do_length(ENV *env, NODE *node) {
 }
 
 static NODE*
+do_concatenate(ENV *env, NODE *node) {
+  NODE *x, *c, *l, *nn;
+  int i;
+
+  if (node->n < 2) return new_errorn("malformed concatenate: %s", node);
+  x = eval_node(env, node->c[0]);
+  if (x->t != NODE_IDENT) {
+    free_node(x);
+    return new_errorn("first argument is not a quote: %s", node);
+  }
+  l = eval_node(env, node->c[1]);
+  if (l->t != NODE_LIST && l->t != NODE_NIL && l->t != NODE_STRING) {
+    free_node(x);
+    return new_errorn("argument is not a list: %s", node);
+  }
+  c = new_node();
+  c->t = !strcmp(x->u.s, "string") ? NODE_STRING : NODE_LIST;
+  for (i = 1; i < node->n; i++) {
+    if (c->t == NODE_STRING) {
+      nn = eval_node(env, node->c[i]);
+      if (nn->t == NODE_ERROR) {
+        free_node(c);
+        c = nn;
+        break;
+      }
+      if (nn->t != NODE_STRING) {
+        free_node(nn);
+        free_node(c);
+        c = new_errorn("argument is not string: %s", nn);
+        break;
+      }
+      /* TODO: slow growing-up */
+      if (c->u.s) {
+        c->u.s = (char*) realloc(c->u.s, strlen(c->u.s) + strlen(nn->u.s) + 1);
+        strcat(c->u.s, nn->u.s);
+      } else {
+        c->u.s = (char*) malloc(strlen(nn->u.s) + 1);
+        strcpy(c->u.s, nn->u.s);
+      }
+    }
+  }
+  free_node(x);
+  free_node(l);
+  return c;
+}
+
+static NODE*
 do_apply(ENV *env, NODE *node) {
   NODE *x, *a, *c, *nn;
   int i;
@@ -1353,6 +1400,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_CALL, "car", do_car);
   add_sym(env, NODE_CALL, "cdr", do_cdr);
   add_sym(env, NODE_CALL, "length", do_length);
+  add_sym(env, NODE_CALL, "concatenate", do_concatenate);
   add_sym(env, NODE_CALL, "cons", do_cons);
   add_sym(env, NODE_CALL, "apply", do_apply);
   add_sym(env, NODE_CALL, "dotimes", do_dotimes);
