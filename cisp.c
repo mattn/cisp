@@ -1339,6 +1339,25 @@ do_concatenate(ENV *env, NODE *node) {
 }
 
 static NODE*
+do_make_string(ENV *env, NODE *node) {
+  NODE *x, *c;
+
+  if (node->n != 1) return new_errorn("malformed make-string: %s", node);
+  x = eval_node(env, node->c[0]);
+  if (x->t == NODE_ERROR) return x;
+  if (x->t != NODE_INT) {
+    free_node(x);
+    return new_errorn("malformed make-string: %s", node);
+  }
+  c = new_node();
+  c->t = NODE_STRING;
+  c->u.s = (char*) malloc(x->u.i+1);
+  memset(c->u.s, ' ', x->u.i);
+  free_node(x);
+  return c;
+}
+
+static NODE*
 do_load(ENV *env, NODE *node) {
   NODE *x, *ret, *top;
   char *p, *t;
@@ -1505,6 +1524,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_CALL, "funcall", do_funcall);
   add_sym(env, NODE_CALL, "type-of", do_type_of);
   add_sym(env, NODE_CALL, "load", do_load);
+  add_sym(env, NODE_CALL, "make-string", do_make_string);
   add_sym(env, NODE_NIL, "nil", NULL);
   add_sym(env, NODE_T, "t", NULL);
 }
