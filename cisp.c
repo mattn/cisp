@@ -376,7 +376,7 @@ free_node(NODE *node) {
     if (node->t != NODE_LAMBDA) {
       for (i = 0; i < node->n; i++)
         free_node(node->c[i]);
-      free(node->c);
+      free((void*)node->c);
     }
     switch (node->t) {
     case NODE_STRING:
@@ -385,10 +385,10 @@ free_node(NODE *node) {
     case NODE_ERROR:
     case NODE_NIL:
     case NODE_T:
-      free(node->u.s);
+      free((void*)node->u.s);
       break;
     }
-    free(node);
+    free((void*)node);
   }
 }
 
@@ -398,16 +398,16 @@ free_env(ENV *env) {
   for (i = 0; i < env->nv; i++) {
     free((void*)env->lv[i]->k);
     free_node(env->lv[i]->v);
-    free(env->lv[i]);
+    free((void*)env->lv[i]);
   }
   for (i = 0; i < env->nf; i++) {
     free((void*)env->lf[i]->k);
     free_node(env->lf[i]->v);
-    free(env->lf[i]);
+    free((void*)env->lf[i]);
   }
-  free(env->lv);
-  free(env->lf);
-  free(env);
+  free((void*)env->lv);
+  free((void*)env->lf);
+  free((void*)env);
 }
 
 static void
@@ -1339,6 +1339,61 @@ do_concatenate(ENV *env, NODE *node) {
 }
 
 static NODE*
+do_load(ENV *env, NODE *node) {
+  NODE *x, *ret, *top;
+  char *p, *t;
+  long fsize;
+
+  if (node->n != 1) return new_errorn("malformed load: %s", node);
+  x = eval_node(env, node->c[0]);
+  if (x->t == NODE_ERROR) return x;
+  if (x->t != NODE_STRING) {
+    free_node(x);
+    return new_errorn("malformed load: %s", node);
+  }
+
+  FILE *fp = fopen(node->c[0]->u.s, "rb");
+  if (!fp) {
+    fclose(fp);
+    return new_errorf("%s", strerror(errno));
+  }
+  fseek(fp, 0, SEEK_END);
+  fsize = ftell(fp);
+  fseek(fp, 0, SEEK_SET);
+  t = p = (char*) malloc(fsize + 1);
+  memset(p, 0, fsize+1);
+  if (!fread(p, fsize, 1, fp)) {
+    free((void*)t);
+    fclose(fp);
+    return new_errorf("%s", strerror(errno));
+  }
+  fclose(fp);
+
+  top = new_node();
+  top->t = NODE_PROGN;
+  p = (char*) parse_args(top, p);
+  if (!p) {
+    free_node(top);
+    free_node(x);
+    return new_errorn("failed to load: %s", node);
+  }
+  p = (char*) skip_white((char*)p);
+  if (*p) {
+    free_node(top);
+    return new_errorf("invalid token: %s", node);
+  }
+  free((char*)t);
+  ret = eval_node(env, top);
+  if (ret->t == NODE_ERROR) return ret;
+  free_node(ret);
+  free_node(top);
+  free_env(env);
+  ret = new_node();
+  ret->t = NODE_T;
+  return ret;
+}
+
+static NODE*
 do_apply(ENV *env, NODE *node) {
   NODE *x, *a, *c, *nn;
   int i;
@@ -1449,6 +1504,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_CALL, "lambda", do_lambda);
   add_sym(env, NODE_CALL, "funcall", do_funcall);
   add_sym(env, NODE_CALL, "type-of", do_type_of);
+  add_sym(env, NODE_CALL, "load", do_load);
   add_sym(env, NODE_NIL, "nil", NULL);
   add_sym(env, NODE_T, "t", NULL);
 }
