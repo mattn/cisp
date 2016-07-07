@@ -1237,6 +1237,7 @@ do_cdr(ENV *env, NODE *node) {
 
 static NODE*
 do_cons(ENV *env, NODE *node) {
+  int i;
   NODE *c, *lhs, *rhs;
 
   if (node->n != 2) return new_errorn("malformed cons: %s", node);
@@ -1248,11 +1249,28 @@ do_cons(ENV *env, NODE *node) {
     return rhs;
   }
   c = new_node();
-  c->t = NODE_CELL;
-  c->n = 2;
-  c->c = (NODE**) malloc(sizeof(NODE*) * 2);
-  c->c[0] = lhs;
-  c->c[1] = rhs;
+  switch (rhs->t) {
+  case NODE_NIL:
+  case NODE_LIST:
+  case NODE_CELL:
+    c->t = rhs->t == NODE_CELL ? NODE_CELL : NODE_LIST;
+    c->n = rhs->n + 1;
+    c->c = (NODE**) malloc(sizeof(NODE*) * c->n);
+    c->c[0] = lhs;
+    for (i = 1; i < c->n; i++) {
+      c->c[i] = rhs->c[i - 1];
+      c->c[i]->r++;
+    }
+    free_node(rhs);
+    break;
+  default:
+    c->t = NODE_CELL;
+    c->n = 2;
+    c->c = (NODE**) malloc(sizeof(NODE*) * 2);
+    c->c[0] = lhs;
+    c->c[1] = rhs;
+    break;
+  }
   return c;
 }
 
