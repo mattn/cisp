@@ -199,8 +199,12 @@ parse_args(NODE *node, const char *p) {
 static const char*
 parse_paren(NODE *node, const char *p) {
   if (!p) return NULL;
-  const char *t = p;
-  p = parse_ident(node, t);
+  p = skip_white(p);
+  if (*p == ')') {
+    ++p;
+    return p;
+  }
+  p = parse_ident(node, p);
   node->t = NODE_CALL;
   p = parse_args(node, p);
   return p;
@@ -229,8 +233,9 @@ static const char*
 parse_quote(NODE *node, const char *p) {
   NODE *child = new_node();
   if (*p == '(') {
-    child->t = NODE_LIST;
     p = parse_args(child, p+1);
+    if (child->n)
+      child->t = NODE_LIST;
   } else {
     p = parse_ident(child, p);
   }
@@ -1159,7 +1164,7 @@ do_car(ENV *env, NODE *node) {
 
   if (node->n != 1) return new_errorn("malformed car: %s", node);
   x = eval_node(env, node->c[0]);
-  if (x->t != NODE_LIST && x->t != NODE_CELL) {
+  if (x->t != NODE_LIST && x->t != NODE_CELL && x->t != NODE_NIL) {
     free_node(x);
     return new_errorn("argument is not a list: %s", node);
   }
@@ -1180,7 +1185,7 @@ do_cdr(ENV *env, NODE *node) {
 
   if (node->n != 1) return new_errorn("malformed cdr: %s", node);
   x = eval_node(env, node->c[0]);
-  if (x->t != NODE_LIST && x->t != NODE_CELL) {
+  if (x->t != NODE_LIST && x->t != NODE_CELL && x->t != NODE_NIL) {
     free_node(x);
     return new_errorn("argument is not a list: %s", node);
   }
@@ -1234,7 +1239,7 @@ do_length(ENV *env, NODE *node) {
 
   if (node->n != 1) return new_errorn("malformed length: %s", node);
   x = eval_node(env, node->c[0]);
-  if (x->t != NODE_LIST) {
+  if (x->t != NODE_LIST && x->t != NODE_NIL) {
     free_node(x);
     return new_errorn("argument is not a list: %s", node);
   }
