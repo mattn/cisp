@@ -1239,13 +1239,13 @@ do_length(ENV *env, NODE *node) {
 
   if (node->n != 1) return new_errorn("malformed length: %s", node);
   x = eval_node(env, node->c[0]);
-  if (x->t != NODE_LIST && x->t != NODE_NIL) {
+  if (x->t != NODE_LIST && x->t != NODE_NIL && x->t != NODE_STRING) {
     free_node(x);
     return new_errorn("argument is not a list: %s", node);
   }
   c = new_node();
   c->t = NODE_INT;
-  c->u.i = x->n;
+  c->u.i = x->t == NODE_STRING ? strlen(x->u.s) : x->n;
   free_node(x);
   return c;
 }

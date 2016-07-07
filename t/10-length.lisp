@@ -3,3 +3,4 @@
 (print (length (cdr x)))
 (print (length nil))
 (print (length ()))
+(print (length "Hello, World"))
