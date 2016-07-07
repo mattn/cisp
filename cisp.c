@@ -880,7 +880,7 @@ do_princ(ENV *env, NODE *node) {
   if (c->t == NODE_ERROR) return c;
   buf[0] = 0;
   print_node(sizeof(buf), buf, c, 1);
-  puts(buf);
+  printf("%s", buf);
   return c;
 }
 

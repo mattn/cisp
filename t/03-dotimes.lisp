@@ -1,1 +1,1 @@
-(dotimes (i 3) (princ i))
+(dotimes (i 3) (print i))
