@@ -40,6 +40,13 @@ typedef struct _ENV {
   struct _ENV *p;
 } ENV;
 
+typedef size_t (*f_reader)(char*, size_t, size_t, void*);
+
+typedef struct _SCANNER {
+  void *v;
+  f_reader f;
+} SCANNER;
+
 typedef NODE* (*f_do)(ENV*, NODE*);
 
 static char*
