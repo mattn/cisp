@@ -941,13 +941,13 @@ look_func(ENV *env, const char *k) {
 
 static char*
 byname(NODE *node, int i) {
-  return i == 0 ? node->u.s : node->c[i-1]->u.s;
+  return i == 0 ? node->u.s : i <= node->n ? node->c[i-1]->u.s : "";
 }
 
 static NODE*
 do_call(ENV *env, NODE *node) {
   ENV *newenv;
-  NODE *x, *c, *nn;
+  NODE *x, *c, *nn, *l;
   int i, j, lo = 0;
 
   x = look_func(env, node->u.s);
@@ -971,9 +971,9 @@ do_call(ENV *env, NODE *node) {
       free_node(x);
       return nn;
     }
-    if (!strcmp("&rest", byname(c, i-lo))) {
-      NODE *l;
-      if (i != c->n - 1) {
+    if (!strcmp("&rest", byname(c, i-lo)) ||
+        (c->t == NODE_CELL && i == c->n)) {
+      if (c->t == NODE_LIST && i != c->n - 1) {
         free_node(nn);
         free_env(newenv);
         free_node(x);
@@ -986,7 +986,10 @@ do_call(ENV *env, NODE *node) {
         l->c[l->n] = node->c[j];
         l->n++;
       }
-      add_variable(newenv, byname(c, i+1), l);
+      if (c->t == NODE_CELL)
+        add_variable(newenv, byname(c, i), l);
+      else
+        add_variable(newenv, byname(c, i+1), l);
       free_node(nn);
       break;
     }
