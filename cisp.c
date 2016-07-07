@@ -373,15 +373,15 @@ free_node(NODE *node) {
   int i;
   node->r--;
   if (node->r <= 0) {
-    if (node->t != NODE_LAMBDA) {
-      for (i = 0; i < node->n; i++)
-        free_node(node->c[i]);
-      free((void*)node->c);
-    }
+    for (i = 0; i < node->n; i++)
+      free_node(node->c[i]);
+    free((void*)node->c);
     switch (node->t) {
     case NODE_STRING:
     case NODE_IDENT:
+    case NODE_CELL:
     case NODE_CALL:
+    case NODE_LAMBDA:
     case NODE_ERROR:
     case NODE_NIL:
     case NODE_T:
@@ -976,16 +976,9 @@ do_call(ENV *env, NODE *node) {
   c = x->c[1-lo];
   newenv = new_env(env);
   for (i = lo; i < node->n; i++) {
-    nn = eval_node(env, node->c[i]);
-    if (nn->t == NODE_ERROR) {
-      free_env(newenv);
-      free_node(x);
-      return nn;
-    }
     if (!strcmp("&rest", byname(c, i-lo)) ||
         (c->t == NODE_CELL && i == c->n)) {
       if (c->t == NODE_LIST && i != c->n - 1) {
-        free_node(nn);
         free_env(newenv);
         free_node(x);
         return new_errorn("last argument should be lambda list: %s", node);
@@ -995,14 +988,21 @@ do_call(ENV *env, NODE *node) {
       for (j = i; j < node->n; j++) {
         l->c = (NODE**) realloc(l->c, sizeof(NODE*) * (l->n + 1));
         l->c[l->n] = node->c[j];
+        l->c[l->n]->r++;
         l->n++;
       }
       if (c->t == NODE_CELL)
         add_variable(newenv, byname(c, i), l);
       else
         add_variable(newenv, byname(c, i+1), l);
-      free_node(nn);
+      free_node(l);
       break;
+    }
+    nn = eval_node(env, node->c[i]);
+    if (nn->t == NODE_ERROR) {
+      free_env(newenv);
+      free_node(x);
+      return nn;
     }
     add_variable(newenv, byname(c, i-lo), nn);
     free_node(nn);
@@ -1024,14 +1024,18 @@ do_call(ENV *env, NODE *node) {
 static NODE*
 do_lambda(ENV *env, NODE *node) {
   NODE *x;
+  int i;
 
   if (node->n < 2) return new_errorn("malformed lambda: %s", node);
   x = new_node();
   x->t = NODE_LAMBDA;
-  x->u.s = node->u.s;
+  x->u.s = strdup(node->u.s ? node->u.s : "");
   x->n = node->n;
-  x->c = node->c;
-  x->r++;
+  x->c = (NODE**) malloc(sizeof(NODE*) * (node->n));
+  for (i = 0; i < node->n; i++) {
+    x->c[i] = node->c[i];
+    x->c[i]->r++;
+  }
   return x;
 }
 
@@ -1045,7 +1049,7 @@ do_funcall(ENV *env, NODE *node) {
   lo = x->t == NODE_LAMBDA ? 1 : 0;
   c = new_node();
   c->t = NODE_CALL;
-  c->u.s = x->u.s;
+  c->u.s = strdup(x->u.s);
   c->n = node->n;
   c->c = (NODE**) malloc(sizeof(NODE*) * (node->n));
   if (lo) {
@@ -1053,9 +1057,10 @@ do_funcall(ENV *env, NODE *node) {
   }
   for (i = lo; i < node->n; i++) {
     c->c[i] = node->c[i];
+    c->c[i]->r++;
   }
   nn = do_call(env, c);
-  free_node(x);
+  free_node(c);
   return nn;
 }
 
@@ -1213,13 +1218,13 @@ do_cdr(ENV *env, NODE *node) {
     return new_errorn("argument is not a list: %s", node);
   }
   if (x->n > 0) {
-    c = new_node();
     if (x->t == NODE_CELL) {
       c = x->c[1];
       c->r++;
       free_node(x);
       return c;
     } else {
+      c = new_node();
       c->t = NODE_LIST;
       c->c = (NODE**) malloc(sizeof(NODE*) * (x->n - 1));
       for (i = 1; i < x->n; i++) {
@@ -1318,9 +1323,9 @@ do_concatenate(ENV *env, NODE *node) {
         break;
       }
       if (nn->t != NODE_STRING) {
-        free_node(nn);
         free_node(c);
         c = new_errorn("argument is not string: %s", nn);
+        free_node(nn);
         break;
       }
       /* TODO: slow growing-up */
@@ -1331,6 +1336,7 @@ do_concatenate(ENV *env, NODE *node) {
         c->u.s = (char*) malloc(strlen(nn->u.s) + 1);
         strcpy(c->u.s, nn->u.s);
       }
+	  free_node(nn);
     }
   }
   free_node(x);
@@ -1345,7 +1351,7 @@ do_make_string(ENV *env, NODE *node) {
   if (node->n != 1) return new_errorn("malformed make-string: %s", node);
   x = eval_node(env, node->c[0]);
   if (x->t == NODE_ERROR) return x;
-  if (x->t != NODE_INT) {
+  if (x->t != NODE_INT || x->u.i < 0) {
     free_node(x);
     return new_errorn("malformed make-string: %s", node);
   }
@@ -1353,6 +1359,7 @@ do_make_string(ENV *env, NODE *node) {
   c->t = NODE_STRING;
   c->u.s = (char*) malloc(x->u.i+1);
   memset(c->u.s, ' ', x->u.i);
+  *(c->u.s+x->u.i) = 0;
   free_node(x);
   return c;
 }
@@ -1420,11 +1427,14 @@ do_apply(ENV *env, NODE *node) {
   if (node->n < 2) return new_errorn("malformed apply: %s", node);
   a = eval_node(env, node->c[0]);
   if (a->t != NODE_LAMBDA && a->t != NODE_IDENT) {
-    return new_errorn("first argument should be function: %s", a);
+    free_node(a);
+    return new_errorn("first argument should be function: %s", node);
   }
   x = eval_node(env, node->c[1]);
   if (x->t != NODE_LIST) {
-    return new_errorn("second argument should be list: %s", x);
+    free_node(a);
+    free_node(x);
+    return new_errorn("second argument should be list: %s", node);
   }
   c = new_node();
   c->t = NODE_CALL;
@@ -1440,13 +1450,20 @@ do_apply(ENV *env, NODE *node) {
       nn = do_call(env, c);
       free_node(c->c[1]);
       if (nn->t == NODE_ERROR) {
+        free_node(a);
+        free_node(x);
         free_node(c);
         return nn;
       }
       c->c[1] = nn;
     }
-    c->n = 0;
+    x->c[0]->r--;
+    free_node(x);
     x = c->c[1];
+
+    c->n = 0;
+    free((void*)c->c);
+    c->c = NULL;
   } else {
     c->n = 2;
     c->c = (NODE**) malloc(sizeof(NODE*) * 2);
@@ -1462,10 +1479,16 @@ do_apply(ENV *env, NODE *node) {
       }
       c->c[0] = nn;
     }
-    c->n = 0;
+
+    free_node(x);
     x = c->c[0];
+
+    c->n = 0;
+    free((void*)c->c);
+    c->c = NULL;
   }
   free_node(c);
+  free_node(a);
   x->r++;
   return x;
 }
