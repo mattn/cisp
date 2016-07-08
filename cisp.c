@@ -147,18 +147,23 @@ parse_number(NODE *node, const char* p) {
   const char *t = p;
   if (*p == '-') p++;
   while (*p && isdigit(*p)) p++;
-  if (*p != '.') {
-    node->t = NODE_INT;
-    node->u.i = atoi(t);
-  } else if (*p) {
+
+  if (t == p) {
+    return parse_ident(node, t);
+  }
+  if (*p == '.') {
     p++;
-    if (!isdigit(*p)) {
-      return parse_ident(node, t);
-    }
     while (*p && isdigit(*p)) p++;
     node->t = NODE_DOUBLE;
     node->u.d = atof(t);
+    return p;
   }
+
+  if (*(p-1) == '-' || strchr(SYMBOL_CHARS, *p)) {
+    return parse_ident(node, t);
+  }
+  node->t = NODE_INT;
+  node->u.i = atoi(t);
   return p;
 }
 
@@ -198,15 +203,32 @@ parse_args(NODE *node, const char *p) {
 
 static const char*
 parse_paren(NODE *node, const char *p) {
+  NODE *child;
+  const char *t;
+
   if (!p) return NULL;
   p = skip_white(p);
   if (*p == ')') {
     ++p;
     return p;
   }
-  p = parse_ident(node, p);
-  node->t = NODE_CALL;
-  p = parse_args(node, p);
+
+  child = new_node();
+  t = parse_number(child, p);
+
+  if (t && child->t != NODE_IDENT) {
+    p = t;
+    node->t = NODE_LIST;
+    node->c = (NODE**) realloc(node->c, sizeof(NODE*) * (node->n + 1));
+    node->c[node->n] = child;
+    node->n++;
+    p = parse_args(node, p);
+  } else {
+    free_node(child);
+    p = parse_ident(node, p);
+    node->t = NODE_CALL;
+    p = parse_args(node, p);
+  }
   return p;
 }
 
