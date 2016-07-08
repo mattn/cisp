@@ -987,14 +987,32 @@ do_call(ENV *env, NODE *node) {
   ENV *newenv;
   NODE *x, *c, *nn, *l;
   int i, j;
+  static ENV *global;
+
+  if (global == NULL) {
+    while (env->p) env = env->p;
+    global = env;
+  }
 
   if (node->n == 0) return new_errorn("malformed arguments: %s", node);
 
   if (node->c[0]->t == NODE_IDENT) {
+    for (i = 0; i < global->nv; i++) {
+      if (match(node->c[0]->u.s, global->lv[i]->k, strlen(global->lv[i]->k))) {
+        if (global->lv[i]->v->f) {
+          return ((f_do)(global->lv[i]->v->f))(env, node);
+        }
+      }
+    }
     x = look_func(env, node->c[0]->u.s);
+    if (!x) {
+      x = do_call(env, node->c[0]);
+    }
   } else if (node->c[0]->t == NODE_LAMBDA) {
     x = node->c[0];
     x->r++;
+  } else if (node->c[0]->t == NODE_LIST) {
+    x = do_call(env, node->c[0]);
   } else {
     return new_errorn("malformed arguments: %s", node);
   }
@@ -1352,7 +1370,7 @@ do_concatenate(ENV *env, NODE *node) {
         c->u.s = (char*) malloc(strlen(nn->u.s) + 1);
         strcpy(c->u.s, nn->u.s);
       }
-	  free_node(nn);
+      free_node(nn);
     }
   }
   free_node(x);
@@ -1547,13 +1565,6 @@ add_defaults(ENV *env) {
 
 static NODE*
 eval_node(ENV *env, NODE *node) {
-  static ENV *global;
-  int i;
-  if (global == NULL) {
-    while (env->p) env = env->p;
-    global = env;
-  }
-
   switch (node->t) {
   case NODE_QUOTE:
     node->c[0]->r++;
@@ -1581,28 +1592,7 @@ eval_node(ENV *env, NODE *node) {
     node->r++;
     return node;
   case NODE_LIST:
-    if (node->n > 0) {
-      if (node->c[0]->t == NODE_IDENT) {
-        for (i = 0; i < global->nv; i++) {
-          if (match(node->c[0]->u.s, global->lv[i]->k, strlen(global->lv[i]->k))) {
-            if (global->lv[i]->v->f) {
-              return ((f_do)(global->lv[i]->v->f))(env, node);
-            }
-          }
-        }
-        return do_call(env, node);
-      }
-
-      if (node->c[0]->t == NODE_LAMBDA)
-        return eval_node(env, node->c[0]);
-
-      NODE *c = NULL;
-      for (i = 0; i < node->n; i++) {
-        if (c) free_node(c);
-        c = eval_node(env, node->c[i]);
-      }
-      return c;
-    }
+    if (node->n > 0) return do_call(env, node);
     node->r++;
     return node;
   case NODE_CELL:
@@ -1611,6 +1601,22 @@ eval_node(ENV *env, NODE *node) {
   }
 
   return new_error("unknown node");
+}
+
+static NODE*
+run_node(ENV *env, NODE *node) {
+  NODE *c = NULL;
+  int i;
+
+  for (i = 0; i < node->n; i++) {
+    if (c) free_node(c);
+    c = eval_node(env, node->c[i]);
+    if (c->t == NODE_ERROR) break;
+  }
+  if (c) {
+    return c;
+  }
+  return new_node();
 }
 
 int
@@ -1643,7 +1649,6 @@ main(int argc, char* argv[]) {
     env = new_env(NULL);
     add_defaults(env);
     top = new_node();
-    top->t = NODE_PROGN;
     p = (char*) parse_args(top, p);
     if (!p) {
       free_node(top);
@@ -1658,7 +1663,7 @@ main(int argc, char* argv[]) {
       exit(1);
     }
     free((char*)pp);
-    ret = eval_node(env, top);
+    ret = run_node(env, top);
     if (ret->t == NODE_ERROR)
       fprintf(stderr, "%s: %s\n", argv[0], ret->u.s);
     free_node(ret);
@@ -1688,7 +1693,7 @@ main(int argc, char* argv[]) {
       raise(pp);
       continue;
     }
-    ret = eval_node(env, top);
+    ret = run_node(env, top);
     if (ret->t == NODE_ERROR) {
       fprintf(stderr, "%s: %s\n", argv[0], ret->u.s);
     } else if (isatty(fileno(stdin))) {
