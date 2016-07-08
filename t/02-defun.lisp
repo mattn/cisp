@@ -1,2 +1,2 @@
 (defun xxx (a b) (+ a b))
-(princ (xxx 3 4))
+(print (xxx 3 4))
