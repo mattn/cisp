@@ -1282,6 +1282,8 @@ do_rplaca(ENV *env, NODE *node) {
   if (node->n != 3) return new_errorn("malformed rplaca: %s", node);
   lhs = eval_node(env, node->c[1]);
   if (lhs->t == NODE_ERROR) return lhs;
+  if ((lhs->t != NODE_LIST && lhs->t != NODE_CELL) || lhs->n == 0) 
+    return new_errorn("malformed rplaca: %s", node);
   rhs = eval_node(env, node->c[2]);
   if (rhs->t == NODE_ERROR) {
     free_node(lhs);
@@ -1289,6 +1291,27 @@ do_rplaca(ENV *env, NODE *node) {
   }
   free_node(lhs->c[0]);
   *(lhs->c[0]) = *(rhs);
+  free_node(rhs);
+  return lhs;
+}
+
+static NODE*
+do_rplacd(ENV *env, NODE *node) {
+  NODE *lhs, *rhs;
+
+  if (node->n != 3) return new_errorn("malformed rplacd: %s", node);
+  lhs = eval_node(env, node->c[1]);
+  if (lhs->t == NODE_ERROR) return lhs;
+  if ((lhs->t != NODE_LIST && lhs->t != NODE_CELL) || lhs->n == 0) 
+    return new_errorn("malformed rplaca: %s", node);
+  rhs = eval_node(env, node->c[2]);
+  if (rhs->t == NODE_ERROR) {
+    free_node(lhs);
+    return rhs;
+  }
+  free_node(lhs->c[lhs->n-1]);
+  lhs->t = NODE_CELL;
+  *(lhs->c[lhs->n-1]) = *(rhs);
   free_node(rhs);
   return lhs;
 }
@@ -1569,6 +1592,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "car", do_car);
   add_sym(env, NODE_IDENT, "cdr", do_cdr);
   add_sym(env, NODE_IDENT, "rplaca", do_rplaca);
+  add_sym(env, NODE_IDENT, "rplacd", do_rplacd);
   add_sym(env, NODE_IDENT, "length", do_length);
   add_sym(env, NODE_IDENT, "concatenate", do_concatenate);
   add_sym(env, NODE_IDENT, "cons", do_cons);
