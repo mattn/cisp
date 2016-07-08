@@ -368,6 +368,7 @@ free_node(NODE *node) {
     case NODE_STRING:
     case NODE_IDENT:
     case NODE_CELL:
+    case NODE_LAMBDA:
     case NODE_ERROR:
     case NODE_NIL:
     case NODE_T:
@@ -1051,6 +1052,7 @@ do_call(ENV *env, NODE *node) {
     if (c->t == NODE_ERROR) break;
   }
   free_env(newenv);
+  free_node(x);
   if (c) {
     return c;
   }
@@ -1489,7 +1491,7 @@ do_apply(ENV *env, NODE *node) {
   c = new_node();
   c->t = NODE_LIST;
   c->n = 3;
-  c->c = (NODE**) malloc(sizeof(NODE*) * 2);
+  c->c = (NODE**) malloc(sizeof(NODE*) * 3);
   c->c[0] = a;
   c->c[1] = x->c[0];
   c->c[1]->r++;
