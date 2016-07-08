@@ -203,8 +203,8 @@ parse_args(NODE *node, const char *p) {
 
 static const char*
 parse_paren(NODE *node, const char *p) {
-  NODE *child;
-  const char *t;
+  NODE *child = NULL;
+  const char *t = NULL;
 
   if (!p) return NULL;
   p = skip_white(p);
@@ -224,11 +224,12 @@ parse_paren(NODE *node, const char *p) {
     node->n++;
     p = parse_args(node, p);
   } else {
-    free_node(child);
+    if (child) free_node(child);
     p = parse_ident(node, p);
     node->t = NODE_CALL;
     p = parse_args(node, p);
   }
+
   return p;
 }
 
@@ -301,9 +302,7 @@ parse_any(NODE *node, const char *p) {
   if (!p) return NULL;
   p = skip_white(p);
   if (!*p) return p;
-  if (*p == '(') {
-    return parse_paren(node, p + 1);
-  }
+  if (*p == '(') return parse_paren(node, p + 1);
   if (*p == '-' || isdigit(*p)) return parse_number(node, p);
   if (*p == '\'') return parse_quote(node, p + 1);
   if (*p == '"') return parse_string(node, p + 1);
@@ -384,7 +383,7 @@ print_node(size_t nbuf, char* buf, NODE *node, int mode) {
   case NODE_LIST: strncat(buf, "(", nbuf); print_list(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   case NODE_PROGN: strncat(buf, "(progn", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   case NODE_CELL: strncat(buf, "(", nbuf); print_cell(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
-  case NODE_CALL: snprintf(tmp, sizeof(tmp), "(%s", node->u.s); strncat(buf, tmp, nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
+  case NODE_CALL: snprintf(tmp, sizeof(tmp), "(%s", node->u.s); strncat(buf, tmp, nbuf); (*node->u.s ? print_args : print_list)(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   case NODE_LAMBDA: strncat(buf, "(lambda", nbuf); print_args(nbuf, buf, node, mode); strncat(buf, ")", nbuf); break;
   default: strncat(buf, "()", nbuf); break;
   }
@@ -917,15 +916,69 @@ do_quote(ENV *env, NODE *node) {
 }
 
 static NODE*
+do_let(ENV *env, NODE *node) {
+  ENV *newenv;
+  NODE *x, *c;
+  int i;
+
+  if (node->n != 2) return new_errorn("malformed let: %s", node);
+  if (node->c[0]->t != NODE_LIST && node->c[0]->t != NODE_CALL)
+    return new_errorn("malformed let: %s", node);
+
+  x = node->c[0];
+  newenv = new_env(env);
+  for (i = 0; i < x->n; i++) {
+    switch (x->c[i]->t) {
+    case NODE_LIST:
+      if (x->c[i]->n != 2 || x->c[i]->c[0]->t != NODE_IDENT)
+        return new_errorn("malformed let: %s", node);
+      c = eval_node(env, x->c[i]->c[1]);
+      if (x->t == NODE_ERROR) return c;
+      add_variable(newenv, x->c[i]->c[0]->u.s, c);
+      free_node(c);
+      break;
+    case NODE_CALL:
+      if (x->c[i]->n != 1)
+        return new_errorn("malformed let: %s", node);
+      c = eval_node(env, x->c[i]->c[0]);
+      if (x->t == NODE_ERROR) return c;
+      add_variable(newenv, x->c[i]->u.s, c);
+      free_node(c);
+      break;
+    default:
+      return new_errorn("malformed let: %s", node);
+    }
+  }
+  c = NULL;
+  for (i = 1; i < node->n; i++) {
+    if (c) free_node(c);
+    c = eval_node(newenv, node->c[i]);
+    if (c->t == NODE_ERROR) break;
+  }
+  free_env(newenv);
+  if (c) {
+    return c;
+  }
+  return new_node();
+}
+
+static NODE*
 do_setq(ENV *env, NODE *node) {
   NODE *x, *c;
+  static ENV *global;
 
   if (node->n != 2) return new_errorn("malformed setq: %s", node);
   x = node->c[0];
   if (x->t != NODE_IDENT) {
     return new_errorn("invalid identifier: %s", x);
   }
-  c = eval_node(env, node->c[1]);
+
+  if (global == NULL) {
+    while (env->p) env = env->p;
+    global = env;
+  }
+
+  c = eval_node(global, node->c[1]);
   if (c->t == NODE_ERROR) return c;
   add_variable(env, x->u.s, c);
   return c;
@@ -1555,6 +1608,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_CALL, "princ", do_princ);
   add_sym(env, NODE_CALL, "quote", do_quote);
   add_sym(env, NODE_CALL, "setq", do_setq);
+  add_sym(env, NODE_CALL, "let", do_let);
   add_sym(env, NODE_CALL, "defun", do_defun);
   add_sym(env, NODE_CALL, "progn", do_progn);
   add_sym(env, NODE_CALL, "cond", do_cond);
