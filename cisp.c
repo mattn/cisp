@@ -873,9 +873,8 @@ do_princ(ENV *env, NODE *node) {
 static NODE*
 do_quote(ENV *env, NODE *node) {
   NODE *c;
-
-  if (node->n != 1) return new_errorn("malformed quote: %s", node);
-  c = node->c[0];
+  if (node->n != 2) return new_errorn("malformed quote: %s", node);
+  c = node->c[1];
   c->r++;
   return c;
 }
@@ -1275,6 +1274,23 @@ do_cdr(ENV *env, NODE *node) {
 }
 
 static NODE*
+do_rplaca(ENV *env, NODE *node) {
+  NODE *lhs, *rhs;
+
+  if (node->n != 3) return new_errorn("malformed rplaca: %s", node);
+  lhs = eval_node(env, node->c[1]);
+  if (lhs->t == NODE_ERROR) return lhs;
+  rhs = eval_node(env, node->c[2]);
+  if (rhs->t == NODE_ERROR) {
+    free_node(lhs);
+    return rhs;
+  }
+  free_node(lhs->c[0]);
+  *(lhs->c[0]) = *(rhs);
+  return lhs;
+}
+
+static NODE*
 do_cons(ENV *env, NODE *node) {
   int i;
   NODE *c, *lhs, *rhs;
@@ -1549,6 +1565,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "cond", do_cond);
   add_sym(env, NODE_IDENT, "car", do_car);
   add_sym(env, NODE_IDENT, "cdr", do_cdr);
+  add_sym(env, NODE_IDENT, "rplaca", do_rplaca);
   add_sym(env, NODE_IDENT, "length", do_length);
   add_sym(env, NODE_IDENT, "concatenate", do_concatenate);
   add_sym(env, NODE_IDENT, "cons", do_cons);
@@ -1693,7 +1710,7 @@ main(int argc, char* argv[]) {
       raise(pp);
       continue;
     }
-    ret = run_node(env, top);
+    ret = eval_node(env, top);
     if (ret->t == NODE_ERROR) {
       fprintf(stderr, "%s: %s\n", argv[0], ret->u.s);
     } else if (isatty(fileno(stdin))) {
