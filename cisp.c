@@ -1289,6 +1289,7 @@ do_rplaca(ENV *env, NODE *node) {
   }
   free_node(lhs->c[0]);
   *(lhs->c[0]) = *(rhs);
+  free_node(rhs);
   return lhs;
 }
 
