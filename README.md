@@ -4,6 +4,12 @@
 
 Lisp Interpreter
 
+## Build
+
+```sh
+$ make
+```
+
 ## License
 
 Public Domain
