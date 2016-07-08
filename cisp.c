@@ -204,14 +204,9 @@ parse_paren(NODE *node, const char *p) {
     ++p;
     return p;
   }
-  if (*p == '-' || isdigit(*p)) {
-    node->t = NODE_LIST;
-    p = parse_args(node, p);
-  } else {
-    p = parse_ident(node, p);
-    node->t = NODE_CALL;
-    p = parse_args(node, p);
-  }
+  p = parse_ident(node, p);
+  node->t = NODE_CALL;
+  p = parse_args(node, p);
   return p;
 }
 
