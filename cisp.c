@@ -1627,7 +1627,10 @@ do_apply(ENV *env, NODE *node) {
   }
   f = c = new_node();
   c->t = NODE_CELL;
-  c->car = node->cdr;
+  if (node->cdr->t == NODE_QUOTE)
+    c->car = node->cdr->car;
+  else
+    c->car = node->cdr;
   c->car->r++;
   x = x->car;
   while (x) {
