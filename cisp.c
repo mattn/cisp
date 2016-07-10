@@ -1232,16 +1232,13 @@ do_defun(ENV *env, NODE *node) {
 
 static NODE*
 do_progn(ENV *env, NODE *node) {
-  NODE *c;
-  int i;
+  NODE *c = NULL;
 
-  if (node_narg(node) < 1) return new_errorn("malformed progn: %s", node);
-
-  c = NULL;
-  for (i = 1; i < node->n; i++) {
+  while (node) {
     if (c) free_node(c);
-    c = eval_node(env, node_nth(node, i));
+    c = eval_node(env, node->car);
     if (c->t == NODE_ERROR) break;
+    node = node->cdr;
   }
   if (c) {
     return c;
@@ -1778,6 +1775,7 @@ eval_node(ENV *env, NODE *node) {
   return new_error("unknown node");
 }
 
+#if 0
 static NODE*
 run_node(ENV *env, NODE *node) {
   NODE *c = NULL;
@@ -1793,6 +1791,7 @@ run_node(ENV *env, NODE *node) {
   }
   return new_node();
 }
+#endif
 
 int
 main(int argc, char* argv[]) {
@@ -1839,7 +1838,7 @@ main(int argc, char* argv[]) {
       exit(1);
     }
     free((char*)pp);
-    ret = run_node(env, top);
+    ret = do_progn(env, top);
     if (ret->t == NODE_ERROR)
       fprintf(stderr, "%s: %s\n", argv[0], ret->u.s);
     free_node(ret);
