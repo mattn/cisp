@@ -10,8 +10,10 @@
 
 #define SYMBOL_CHARS "+-*/<>=&%"
 
-#define strdup _strdup
-#define isatty(x) 1
+#ifdef _MVC_VER
+#define strdup(x, y) _strdup(x, y)
+#define isatty _isatty(x)
+#endif
 
 enum T {
   NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_IDENT,
@@ -73,6 +75,14 @@ static const char* parse_ident(NODE *node, const char *p);
 static NODE* eval_node(ENV *env, NODE *node);
 static void print_node(size_t nbuf, char *buf, NODE *node, int mode);
 static void free_node(NODE *node);
+
+static void
+dump_node(NODE *node) {
+  char buf[BUFSIZ];
+  buf[0] = 0;
+  print_node(sizeof(buf), buf, node, 0);
+  puts(buf);
+}
 
 static const char*
 skip_white(const char *p) {
@@ -137,6 +147,21 @@ new_env(ENV *p) {
   memset(env, 0, sizeof(ENV));
   env->p = p;
   return env;
+}
+
+static int
+node_length(NODE *node) {
+  int i = 0;
+  if (node->t == NODE_CELL) {
+    node = node->car;
+    i++;
+    if (!node) return i;
+  }
+  while (node->cdr) {
+    node = node->cdr;
+    i++;
+  }
+  return i;
 }
 
 static int
@@ -343,19 +368,32 @@ print_args(size_t nbuf, char *buf, NODE *node, int mode) {
 static void
 print_cell(size_t nbuf, char *buf, NODE *node, int mode) {
   strncat(buf, "(", nbuf);
-  for (;;) {
-    if (node->car) {
-      print_node(nbuf, buf, node->car, mode);
+  if (node->car) {
+    NODE *c = node->car;
+    while (c) {
+      if (c != node->car) strncat(buf, " ", nbuf);
+      print_node(nbuf, buf, c, mode);
+      c = c->cdr;
     }
-    if (!node->cdr)
-      break;
-    if (node->cdr->t != NODE_CELL) {
-      if (node->t != NODE_CELL) strncat(buf, " . ", nbuf);
-      print_node(nbuf, buf, node->cdr, mode);
-    }
-    strncat(buf, " ", nbuf);
-    node = node->cdr;
   }
+  /*
+  if (node->cdr) {
+    while (node) {
+      if (node->car) {
+        print_node(nbuf, buf, node->car, mode);
+      }
+
+      if (node->cdr) {
+        if (node->cdr->t != NODE_CELL) {
+          if (node->t != NODE_CELL) strncat(buf, " . ", nbuf);
+          print_node(nbuf, buf, node->cdr, mode);
+        }
+        strncat(buf, " ", nbuf);
+      }
+      node = node->cdr;
+    }
+  }
+  */
   strncat(buf, ")", nbuf);
 }
 
@@ -965,12 +1003,8 @@ do_princ(ENV *env, NODE *node) {
 
 static NODE*
 do_quote(ENV *env, NODE *node) {
-  NODE *c;
-
   if (!node->cdr) return new_errorf("malformed quote");
-  c = node->cdr;
-  c->r++;
-  return c;
+  return eval_node(env, node->cdr);
 }
 
 static NODE*
@@ -1473,7 +1507,7 @@ do_length(ENV *env, NODE *node) {
   }
   c = new_node();
   c->t = NODE_INT;
-  c->u.i = x->t == NODE_STRING ? strlen(x->u.s) : node_narg(x);
+  c->u.i = x->t == NODE_STRING ? (long) strlen(x->u.s) : node_length(x);
   free_node(x);
   return c;
 }
@@ -1481,25 +1515,26 @@ do_length(ENV *env, NODE *node) {
 static NODE*
 do_concatenate(ENV *env, NODE *node) {
   NODE *x, *c, *l, *nn;
-  int i;
 
   if (node_narg(node) < 3) return new_errorn("malformed concatenate: %s", node);
 
-  x = eval_node(env, node_nth(node, 1));
+  x = eval_node(env, node->cdr);
   if (x->t != NODE_IDENT) {
     free_node(x);
     return new_errorn("first argument is not a quote: %s", node);
   }
-  l = eval_node(env, node_nth(node, 2));
+  l = eval_node(env, node->cdr->cdr);
   if (l->t != NODE_CELL && l->t != NODE_NIL && l->t != NODE_STRING) {
     free_node(x);
     return new_errorn("argument is not a list: %s", node);
   }
   c = new_node();
   c->t = !strcmp(x->u.s, "string") ? NODE_STRING : NODE_CELL;
-  for (i = 2; i < node->n; i++) {
+
+  node = node->cdr->cdr;
+  while (node) {
     if (c->t == NODE_STRING) {
-      nn = eval_node(env, node_nth(node, i));
+      nn = eval_node(env, node);
       if (nn->t == NODE_ERROR) {
         free_node(c);
         c = nn;
@@ -1522,6 +1557,7 @@ do_concatenate(ENV *env, NODE *node) {
       }
       free_node(nn);
     }
+    node = node->cdr;
   }
   free_node(x);
   free_node(l);
@@ -1819,6 +1855,7 @@ main(int argc, char* argv[]) {
       exit(1);
     }
     free((char*)pp);
+    //dump_node(top);
     ret = eval_node(env, top);
     if (ret->t == NODE_ERROR)
       fprintf(stderr, "%s: %s\n", argv[0], ret->u.s);
@@ -1836,7 +1873,7 @@ main(int argc, char* argv[]) {
       if (!fgets(buf, sizeof(buf), stdin)) break;
     }
     else {
-      fsize = fread(buf, 1, sizeof(buf), stdin);
+      fsize = (long) fread(buf, 1, sizeof(buf), stdin);
       if (fsize <= 0) break;
       buf[fsize] = 0;
     }
@@ -1856,9 +1893,7 @@ main(int argc, char* argv[]) {
       fprintf(stderr, "%s: %s\n", argv[0], ret->u.s);
     }
     else if (isatty(fileno(stdin))) {
-      buf[0] = 0;
-      print_node(sizeof(buf), buf, ret, 0);
-      puts(buf);
+      dump_node(ret);
     }
     free_node(ret);
     free_node(top);
@@ -1868,3 +1903,4 @@ main(int argc, char* argv[]) {
 }
 
 /* vim:set et cino=>2,\:0: */
+
