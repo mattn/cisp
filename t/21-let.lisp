@@ -3,7 +3,7 @@
 (x)
 (print a)
 (defun y ()
-  (let ((a 2)) (print a))
+  (let ((a 3)) (print a))
   (print a)
 )
 (y)
