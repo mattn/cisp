@@ -7,3 +7,7 @@
 (print (* 2 3.0))
 (print (/ 7 3.0))
 (print (% 7 2))
+(print (1+ 1))
+(print (1+ 0.5))
+(print (1- 1))
+(print (1- 0.5))

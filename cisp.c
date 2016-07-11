@@ -738,7 +738,7 @@ do_plus1(ENV *env, NODE *node) {
   c->t = x->t;
   switch (c->t) {
   case NODE_INT: c->u.i = x->u.i + 1; break;
-  case NODE_DOUBLE: c->u.d = x->u.i + 1.0; break;
+  case NODE_DOUBLE: c->u.d = x->u.d + 1.0; break;
   default: free_node(c); c = new_errorf("malformed number"); break;
   }
   free_node(x);
@@ -758,7 +758,7 @@ do_minus1(ENV *env, NODE *node) {
   c->t = x->t;
   switch (c->t) {
   case NODE_INT: c->u.i = x->u.i - 1; break;
-  case NODE_DOUBLE: c->u.d = x->u.i - 1.0; break;
+  case NODE_DOUBLE: c->u.d = x->u.d - 1.0; break;
   default: free_node(c); c = new_errorf("malformed number"); break;
   }
   free_node(x);
