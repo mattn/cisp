@@ -34,7 +34,6 @@ typedef struct _NODE {
   struct _NODE *cdr;
   void *f;
   int r;
-  int n;
 } NODE;
 
 typedef struct {
@@ -1577,7 +1576,7 @@ do_load(ENV *env, NODE *node) {
   long fsize;
   FILE *fp;
 
-  if (node->n != 1) return new_errorn("malformed load: %s", node);
+  if (!node->cdr) return new_errorn("malformed load: %s", node);
   x = eval_node(env, node->cdr);
   if (x->t == NODE_ERROR) return x;
   if (x->t != NODE_STRING) {
