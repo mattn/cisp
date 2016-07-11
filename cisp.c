@@ -1,10 +1,12 @@
 #define _CRT_SECURE_NO_WARNINGS 1
+#define _POSIX_
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
 #include <errno.h>
 #include <memory.h>
+#include <ctype.h>
 #ifndef _MSC_VER
 # include <unistd.h>
 #endif
@@ -13,16 +15,8 @@
 #else
 # include <sys/io.h>
 #endif
-#include <ctype.h>
 
 #define SYMBOL_CHARS "+-*/<>=&%"
-
-#ifdef _MSC_VER
-#define strdup(x) _strdup(x)
-#define isatty(x) _isatty(x)
-#define fileno(x) _fileno(x)
-#define snprintf(x, n, f, ...) _snprintf(x, n, f, __VA_ARGS__)
-#endif
 
 enum T {
   NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_IDENT,
