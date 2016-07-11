@@ -410,6 +410,8 @@ free_node(NODE *node) {
   if (!node) return;
   node->r--;
   if (node->r <= 0) {
+    free_node(node->cdr);
+    free_node(node->car);
     switch (node->t) {
     case NODE_STRING:
     case NODE_IDENT:
@@ -421,8 +423,6 @@ free_node(NODE *node) {
       free((void*)node->u.s);
       break;
     }
-    free_node(node->cdr);
-    free_node(node->car);
     free((void*)node);
   }
 }
@@ -431,13 +431,13 @@ static void
 free_env(ENV *env) {
   int i;
   for (i = 0; i < env->nv; i++) {
-    free((void*)env->lv[i]->k);
     free_node(env->lv[i]->v);
+    free((void*)env->lv[i]->k);
     free((void*)env->lv[i]);
   }
   for (i = 0; i < env->nf; i++) {
-    free((void*)env->lf[i]->k);
     free_node(env->lf[i]->v);
+    free((void*)env->lf[i]->k);
     free((void*)env->lf[i]);
   }
   free((void*)env->lv);
@@ -1146,8 +1146,8 @@ do_call(ENV *env, NODE *node) {
 	if (c && c->t == NODE_CELL && !c->cdr) rest = 1;
   }
   c = eval_node(newenv, p);
-  free_env(newenv);
   free_node(x);
+  free_env(newenv);
   if (c) {
     return c;
   }
@@ -1360,7 +1360,8 @@ do_cdr(ENV *env, NODE *node) {
       free_node(x);
       return c;
     }
-    c = x->car->cdr->car;
+    c = x->car->cdr;
+	if (!c->car->cdr) c = c->car;
     c->r++;
     free_node(x);
     return c;
@@ -1743,8 +1744,10 @@ eval_node(ENV *env, NODE *node) {
           x = x->cdr;
           a = a->cdr;
         }
-        c = do_call(env, f);
+        x = do_call(env, f);
+		free_node(c);
         free_node(f);
+		c = x;
       }
       else if (node->car->t == NODE_IDENT) {
         free_node(c);
