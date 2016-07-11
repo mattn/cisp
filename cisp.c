@@ -1434,9 +1434,9 @@ do_rplacd(ENV *env, NODE *node) {
     free_node(lhs);
     return rhs;
   }
-  lhs->car->cdr->u = rhs->u;
-  lhs->car->cdr->cdr = NULL;
-  free_node(rhs);
+  free_node(lhs->car->cdr);
+  lhs->car->cdr = NULL;
+  lhs->car->car = rhs;
   return lhs;
 }
 
