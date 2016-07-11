@@ -1016,7 +1016,6 @@ do_setq(ENV *env, NODE *node) {
   c = eval_node(env, node->cdr->cdr);
   if (c->t == NODE_ERROR) return c;
   add_variable(global, x->u.s, c);
-  free_node(c);
   return c;
 }
 
@@ -1707,7 +1706,9 @@ eval_node(ENV *env, NODE *node) {
   NODE *c = NULL;
   switch (node->t) {
   case NODE_QUOTE:
-    return do_quote(env, node);
+    c = node->car;
+    c->r++;
+    return c;
   case NODE_IDENT:
     return do_ident(env, node);
   case NODE_LAMBDA:
@@ -1737,6 +1738,7 @@ eval_node(ENV *env, NODE *node) {
         f = x = new_node();
         x->t = NODE_CELL;
         x->car = c;
+        x->car->r++;
         a = node->car->cdr;
         while (a) {
           x->cdr = a;
