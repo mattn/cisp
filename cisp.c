@@ -10,13 +10,6 @@
 #ifndef _MSC_VER
 # include <unistd.h>
 #endif
-#ifdef _WIN32
-# include <io.h>
-#elif __APPLE__
-# include <sys/uio.h>
-#else
-# include <sys/io.h>
-#endif
 
 #define SYMBOL_CHARS "+-*/<>=&%"
 
