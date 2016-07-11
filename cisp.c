@@ -356,14 +356,16 @@ print_cell(size_t nbuf, char *buf, NODE *node, int mode) {
       c = c->cdr;
     }
   }
-#if 0
-  if (node->cdr) {
+#if 1
+  if (!node->car && node->cdr) {
     c = node->cdr;
     while (c) {
-      if (c->t != NODE_CELL) {
-        if (c != node->cdr) strncat(buf, " ", nbuf);
-        if (node->t != NODE_CELL) strncat(buf, " . ", nbuf);
-        print_node(nbuf, buf, c, mode);
+      if (c != node->cdr) strncat(buf, " ", nbuf);
+      print_node(nbuf, buf, c, mode);
+      if (c->car) {
+        strncat(buf, " . ", nbuf);
+        print_node(nbuf, buf, c->car, mode);
+        break;
       }
       c = c->cdr;
     }
@@ -1087,7 +1089,7 @@ static NODE*
 do_call(ENV *env, NODE *node) {
   ENV *newenv;
   NODE *x = NULL, *c = NULL, *p = NULL, *nn;
-  int i;
+  int i, rest = 0;
   static ENV *global;
 
   if (node->car->t == NODE_IDENT) {
@@ -1136,23 +1138,24 @@ do_call(ENV *env, NODE *node) {
   newenv = new_env(env);
 
   while (node) {
-    /*
-       if (!strcmp("&rest", c->u.s) || (c->t == NODE_CELL && i == c->n)) {
-       l = new_node();
-       l->t = NODE_CELL;
-       for (j = i; j < node->n; j++) {
-       node_nth(node, j)->r++;
-       node_append(l, node_nth(node, j));
-       l->n++;
-       }
-       if (c->t == NODE_CELL)
-       add_variable(newenv, node_nth(c, i-1)->u.s, l);
-       else
-       add_variable(newenv, node_nth(c, i)->u.s, l);
-       free_node(l);
-       break;
-       }
-       */
+    if ((c && !strcmp("&rest", c->u.s) && c->cdr) || rest) {
+      NODE *l, *rr;
+      rr = l = new_node();
+      l->t = NODE_CELL;
+      while (node) {
+        nn = eval_node(env, node);
+        if (nn->t == NODE_ERROR) {
+          free_env(newenv);
+          return nn;
+        }
+        l->cdr = nn;
+        l = l->cdr;
+        node = node->cdr;
+      }
+      add_variable(newenv, rest ? c->u.s : c->cdr->u.s, rr);
+      free_node(rr);
+      break;
+    }
     nn = eval_node(env, node);
     if (nn->t == NODE_ERROR) {
       free_env(newenv);
@@ -1161,7 +1164,12 @@ do_call(ENV *env, NODE *node) {
     add_variable(newenv, c->u.s, nn);
     free_node(nn);
     node = node->cdr;
-    c = c->cdr;
+	if (c->car && !c->cdr) {
+		rest = 1;
+		c = c->car;
+	} else {
+		c = c->cdr;
+	}
   }
   c = eval_node(newenv, p);
   free_env(newenv);
