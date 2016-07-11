@@ -9,7 +9,6 @@
 #ifndef _MSC_VER
 # include <unistd.h>
 #else
-//# undef _POSIX_
 # include <io.h>
 # define strdup(x) _strdup(x)
 # define isatty(f) _isatty(f)
