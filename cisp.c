@@ -274,12 +274,7 @@ parse_ident(NODE *node, const char *p) {
 static const char*
 parse_quote(NODE *node, const char *p) {
   NODE *child = new_node();
-  if (*p == '(') {
-    p = parse_paren(child, p + 1);
-  }
-  else {
-    p = parse_ident(child, p);
-  }
+  p = parse_any(child, p);
   if (!p) {
     free_node(child);
     return NULL;
