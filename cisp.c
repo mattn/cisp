@@ -1,5 +1,4 @@
 #define _CRT_SECURE_NO_WARNINGS 1
-#define _POSIX_ 1
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -10,9 +9,11 @@
 #ifndef _MSC_VER
 # include <unistd.h>
 #else
-# undef _POSIX_
+//# undef _POSIX_
 # include <io.h>
+# define strdup(x) _strdup(x)
 # define isatty(f) _isatty(f)
+# define fileno(f) _fileno(f)
 # define snprintf(b,n,f,...) _snprintf(b,n,f,__VA_ARGS__)
 #endif
 
@@ -242,8 +243,8 @@ parse_paren(NODE *node, const char *p) {
       if (p) {
         NODE *x = new_node();
         x->t = NODE_CELL;
-        x->car = child;
-        node->cdr = cdr;
+        x->car = cdr;
+        node->cdr = x;
       }
       break;
     }
@@ -346,21 +347,12 @@ print_cell(size_t nbuf, char *buf, NODE *node, int mode) {
   while (c) {
     if (c != node->car) strncat(buf, " ", nbuf);
     print_node(nbuf, buf, c, mode);
-    if (c->cdr) {
-      NODE *p;
-      if (c->car) {
-        strncat(buf, " . ", nbuf);
-        print_node(nbuf, buf, c->cdr, mode);
-        break;
-      }
-      p = c->cdr;
-      while (p) {
-        if (p != c->car) strncat(buf, " ", nbuf);
-        print_node(nbuf, buf, p, mode);
-        p = p->cdr;
-      }
+    if (c->cdr && c->cdr->car && !c->cdr->cdr) {
+      strncat(buf, " . ", nbuf);
+      print_node(nbuf, buf, c->cdr->car, mode);
+      break;
     }
-    c = c->car;
+    c = c->cdr;
   }
 
   strncat(buf, ")", nbuf);
@@ -1069,7 +1061,7 @@ look_func(ENV *env, const char *k) {
 static NODE*
 do_call(ENV *env, NODE *node) {
   ENV *newenv;
-  NODE *x = NULL, *c = NULL, *p = NULL, *nn;
+  NODE *x = NULL, *c = NULL, *p = NULL, *nn = NULL;
   int i, rest = 0;
   static ENV *global;
 
@@ -1118,7 +1110,7 @@ do_call(ENV *env, NODE *node) {
   newenv = new_env(env);
 
   while (node) {
-    if ((c && !strcmp("&rest", c->u.s) && c->cdr) || rest) {
+    if ((c && c->cdr && !strcmp("&rest", c->u.s)) || rest) {
       NODE *l, *rr;
       rr = l = new_node();
       l->t = NODE_CELL;
@@ -1129,11 +1121,16 @@ do_call(ENV *env, NODE *node) {
           free_node(x);
           return nn;
         }
-        l->cdr = nn;
-        l = l->cdr;
+        if (rr == l) {
+          l->car = nn;
+          l = l->car;
+        } else {
+          l->cdr = nn;
+          l = l->cdr;
+        }
         node = node->cdr;
       }
-      add_variable(newenv, rest ? c->u.s : c->cdr->u.s, rr);
+      add_variable(newenv, rest ? c->car->u.s : c->cdr->u.s, rr);
       free_node(rr);
       break;
     }
@@ -1146,12 +1143,8 @@ do_call(ENV *env, NODE *node) {
     add_variable(newenv, c->u.s, nn);
     free_node(nn);
     node = node->cdr;
-    if (c->car && !c->cdr) {
-      rest = 1;
-      c = c->car;
-    } else {
-      c = c->cdr;
-    }
+	c = c->cdr;
+	if (c && c->t == NODE_CELL && !c->cdr) rest = 1;
   }
   c = eval_node(newenv, p);
   free_env(newenv);
@@ -1359,11 +1352,17 @@ do_cdr(ENV *env, NODE *node) {
     return new_errorn("argument is not a list: %s", node);
   }
 
-  if (x->car && x->car->cdr) {
-    c = new_node();
-    c->t = NODE_CELL;
-    c->car = x->car->cdr;
-    c->car->r++;
+  if (x->car) {
+    if (!x->car->cdr->car) {
+      c = new_node();
+      c->t = NODE_CELL;
+      c->car = x->car->cdr;
+      c->car->r++;
+      free_node(x);
+      return c;
+    }
+    c = x->car->cdr->car;
+    c->r++;
     free_node(x);
     return c;
   }
@@ -1407,8 +1406,9 @@ do_rplacd(ENV *env, NODE *node) {
     return rhs;
   }
   free_node(lhs->car->cdr);
-  lhs->car->cdr = NULL;
-  lhs->car->car = rhs;
+  lhs->car->cdr = new_node();
+  lhs->car->cdr->t = NODE_CELL;
+  lhs->car->cdr->car = rhs;
   return lhs;
 }
 
@@ -1448,9 +1448,9 @@ do_cons(ENV *env, NODE *node) {
   default:
     c->t = NODE_CELL;
     c->car = lhs;
-    while (lhs->car)
-      lhs = lhs->car;
-    lhs->car = rhs;
+    c->car->cdr = new_node();
+    c->car->cdr->t = NODE_CELL;
+    c->car->cdr->car = rhs;
     break;
   }
   return c;
