@@ -347,9 +347,18 @@ print_cell(size_t nbuf, char *buf, NODE *node, int mode) {
     if (c != node->car) strncat(buf, " ", nbuf);
     print_node(nbuf, buf, c, mode);
     if (c->cdr) {
-      strncat(buf, " . ", nbuf);
-      print_node(nbuf, buf, c->cdr, mode);
-      break;
+      NODE *p;
+      if (c->car) {
+        strncat(buf, " . ", nbuf);
+        print_node(nbuf, buf, c->cdr, mode);
+        break;
+      }
+      p = c->cdr;
+      while (p) {
+        if (p != c->car) strncat(buf, " ", nbuf);
+        print_node(nbuf, buf, p, mode);
+        p = p->cdr;
+      }
     }
     c = c->car;
   }
@@ -1349,22 +1358,14 @@ do_cdr(ENV *env, NODE *node) {
     free_node(x);
     return new_errorn("argument is not a list: %s", node);
   }
-  if (x->cdr) {
-    c = x->cdr;
-    c->r++;
+
+  if (x->car && x->car->cdr) {
+    c = new_node();
+    c->t = NODE_CELL;
+    c->car = x->car->cdr;
+    c->car->r++;
     free_node(x);
     return c;
-  }
-  if (x->car) {
-    if (!x->car->car) {
-      NODE *nn = new_node();
-      nn->t = NODE_CELL;
-      nn->car = x->car->cdr;
-      nn->car->r++;
-      free_node(x);
-      return nn;
-    }
-    return x->car->cdr;
   }
   free_node(x);
   return new_node();
