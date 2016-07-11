@@ -1142,8 +1142,8 @@ do_call(ENV *env, NODE *node) {
     add_variable(newenv, c->u.s, nn);
     free_node(nn);
     node = node->cdr;
-	c = c->cdr;
-	if (c && c->t == NODE_CELL && !c->cdr) rest = 1;
+    c = c->cdr;
+    if (c && c->t == NODE_CELL && !c->cdr) rest = 1;
   }
   c = eval_node(newenv, p);
   free_node(x);
@@ -1325,9 +1325,12 @@ do_car(ENV *env, NODE *node) {
   if (!node->cdr) return new_errorn("malformed car: %s", node);
 
   x = eval_node(env, node->cdr);
-  if (x->t != NODE_CELL && x->t != NODE_NIL) {
+  if (x->t != NODE_CELL && x->t != NODE_NIL && x->t != NODE_QUOTE) {
     free_node(x);
     return new_errorn("argument is not a list: %s", node);
+  }
+  if (x->t == NODE_QUOTE) {
+    return x;
   }
   if (x->car) {
     c = x->car;
@@ -1361,7 +1364,7 @@ do_cdr(ENV *env, NODE *node) {
       return c;
     }
     c = x->car->cdr;
-	if (!c->car->cdr) c = c->car;
+    if (!c->car->cdr) c = c->car;
     c->r++;
     free_node(x);
     return c;
@@ -1745,9 +1748,9 @@ eval_node(ENV *env, NODE *node) {
           a = a->cdr;
         }
         x = do_call(env, f);
-		free_node(c);
+        free_node(c);
         free_node(f);
-		c = x;
+        c = x;
       }
       else if (node->car->t == NODE_IDENT) {
         free_node(c);
