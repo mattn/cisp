@@ -1171,12 +1171,12 @@ do_call(ENV *env, NODE *node) {
     add_variable(newenv, c->u.s, nn);
     free_node(nn);
     node = node->cdr;
-	if (c->car && !c->cdr) {
-		rest = 1;
-		c = c->car;
-	} else {
-		c = c->cdr;
-	}
+    if (c->car && !c->cdr) {
+      rest = 1;
+      c = c->car;
+    } else {
+      c = c->cdr;
+    }
   }
   c = eval_node(newenv, p);
   free_env(newenv);
