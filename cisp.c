@@ -344,7 +344,6 @@ print_cell(size_t nbuf, char *buf, NODE *node, int mode) {
       c = c->cdr;
     }
   }
-#if 1
   if (!node->car && node->cdr) {
     c = node->cdr;
     while (c) {
@@ -358,21 +357,8 @@ print_cell(size_t nbuf, char *buf, NODE *node, int mode) {
       c = c->cdr;
     }
   }
-#endif
   strncat(buf, ")", nbuf);
 }
-
-#if 0
-static void
-print_list(size_t nbuf, char *buf, NODE *node, int mode) {
-  NODE *p = node;
-  do {
-    if (p != node) strncat(buf, " ", nbuf);
-    print_node(nbuf, buf, p, mode);
-    p = p->car;
-  } while (p);
-}
-#endif
 
 static void
 print_str(size_t nbuf, char *buf, NODE *node, int mode) {
@@ -427,7 +413,6 @@ free_node(NODE *node) {
   if (!node) return;
   node->r--;
   if (node->r <= 0) {
-    NODE *car;
     switch (node->t) {
     case NODE_STRING:
     case NODE_IDENT:
@@ -439,9 +424,9 @@ free_node(NODE *node) {
       free((void*)node->u.s);
       break;
     }
-    car = node->car;
+    free_node(node->cdr);
+    free_node(node->car);
     free((void*)node);
-    free_node(car);
   }
 }
 
@@ -972,6 +957,7 @@ static NODE*
 do_quote(ENV *env, NODE *node) {
   if (node_narg(node) != 1) return new_errorn("malformed quote: %s", node);
 
+  node->cdr->r++;
   return node->cdr;
 }
 
@@ -1030,6 +1016,7 @@ do_setq(ENV *env, NODE *node) {
   c = eval_node(env, node->cdr->cdr);
   if (c->t == NODE_ERROR) return c;
   add_variable(global, x->u.s, c);
+  free_node(c);
   return c;
 }
 
@@ -1093,7 +1080,6 @@ do_call(ENV *env, NODE *node) {
         }
       }
     }
-    if (x) free_node(x);
     x = do_ident(env, node->car);
     if (x->t != NODE_LAMBDA || x->t == NODE_ERROR) {
       free_node(x);
@@ -1135,6 +1121,7 @@ do_call(ENV *env, NODE *node) {
         nn = eval_node(env, node);
         if (nn->t == NODE_ERROR) {
           free_env(newenv);
+          free_node(x);
           return nn;
         }
         l->cdr = nn;
@@ -1148,6 +1135,7 @@ do_call(ENV *env, NODE *node) {
     nn = eval_node(env, node);
     if (nn->t == NODE_ERROR) {
       free_env(newenv);
+      free_node(x);
       return nn;
     }
     add_variable(newenv, c->u.s, nn);
@@ -1162,6 +1150,7 @@ do_call(ENV *env, NODE *node) {
   }
   c = eval_node(newenv, p);
   free_env(newenv);
+  free_node(x);
   if (c) {
     return c;
   }
@@ -1178,8 +1167,8 @@ do_lambda(ENV *env, NODE *node) {
   x->t = NODE_LAMBDA;
   node = node->cdr;
   while (node) {
-    node->r++;
     x->cdr = node;
+    x->cdr->r++;
     x = x->cdr;
     node = node->cdr;
   }
@@ -1195,10 +1184,11 @@ do_funcall(ENV *env, NODE *node) {
   c = x = new_node();
   x->t = NODE_CELL;
   x->car = node->cdr;
+  x->car->r++;
   node = node->cdr->cdr;
   while (node) {
-    node->r++;
     x->cdr = node;
+    x->cdr->r++;
     x = x->cdr;
     node = node->cdr;
   }
@@ -1374,6 +1364,7 @@ do_cdr(ENV *env, NODE *node) {
       NODE *nn = new_node();
       nn->t = NODE_CELL;
       nn->car = x->car->cdr;
+      nn->car->r++;
       free_node(x);
       return nn;
     }
@@ -1642,10 +1633,10 @@ do_apply(ENV *env, NODE *node) {
   }
   nn = do_call(env, f);
   free_node(f);
+  free_node(x);
   if (nn->t == NODE_ERROR) {
     return nn;
   }
-  nn->r++;
   return nn;
 }
 
@@ -1716,9 +1707,7 @@ eval_node(ENV *env, NODE *node) {
   NODE *c = NULL;
   switch (node->t) {
   case NODE_QUOTE:
-    c = node->car;
-    c->r++;
-    return c;
+    return do_quote(env, node);
   case NODE_IDENT:
     return do_ident(env, node);
   case NODE_LAMBDA:
@@ -1751,24 +1740,20 @@ eval_node(ENV *env, NODE *node) {
         a = node->car->cdr;
         while (a) {
           x->cdr = a;
+          x->cdr->r++;
           x = x->cdr;
           a = a->cdr;
         }
         c = do_call(env, f);
+        free_node(f);
       }
       else if (node->car->t == NODE_IDENT) {
+        free_node(c);
         c = do_call(env, node);
       }
     }
     if (node->cdr && node->cdr->t == NODE_CELL) {
-      /*
-         node = node->cdr;
-         while (node) {
-         if (c) free_node(c);
-         c = eval_node(env, node);
-         node = node->cdr;
-         }
-         */
+      free_node(c);
       c = eval_node(env, node->cdr);
     }
     if (c) return c;
@@ -1778,24 +1763,6 @@ eval_node(ENV *env, NODE *node) {
 
   return new_error("unknown node");
 }
-
-#if 0
-static NODE*
-run_node(ENV *env, NODE *node) {
-  NODE *c = NULL;
-
-  while (node) {
-    if (c) free_node(c);
-    c = eval_node(env, node->car);
-    if (c->t == NODE_ERROR) break;
-    node = node->cdr;
-  }
-  if (c) {
-    return c;
-  }
-  return new_node();
-}
-#endif
 
 int
 main(int argc, char* argv[]) {
@@ -1888,4 +1855,4 @@ main(int argc, char* argv[]) {
   return 0;
 }
 
-/* vim:set et cino=>2,\:0: */
+/* vim:set et sw=2 cino=>2,\:0: */
