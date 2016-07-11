@@ -987,8 +987,9 @@ do_princ(ENV *env, NODE *node) {
 
 static NODE*
 do_quote(ENV *env, NODE *node) {
-  if (!node->cdr) return new_errorf("malformed quote");
-  return eval_node(env, node->cdr);
+  if (node_narg(node) != 1) return new_errorn("malformed quote: %s", node);
+
+  return node->cdr;
 }
 
 static NODE*
