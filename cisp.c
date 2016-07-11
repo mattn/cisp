@@ -14,6 +14,7 @@
 #define strdup(x) _strdup(x)
 #define isatty(x) _isatty(x)
 #define fileno(x) _fileno(x)
+#define snprintf(x, n, f, ...) _snprintf(x, n, f, __VA_ARGS__)
 #endif
 
 enum T {
@@ -132,11 +133,12 @@ new_errorn(const char* fmt, NODE *n) {
 static NODE*
 new_errorf(const char* fmt, ...) {
   char buf[BUFSIZ];
+  NODE* node;
   va_list list;
   va_start(list, fmt);
   vsnprintf(buf, sizeof(buf), fmt, list);
   va_end(list);
-  NODE* node = new_node();
+  node = new_node();
   node->t = NODE_ERROR;
   node->u.s = strdup(buf);
   return node;
@@ -175,23 +177,6 @@ node_narg(NODE *node) {
   return i;
 }
 
-static void
-node_append(NODE *node, NODE *c) {
-  while (node->cdr) node = node->cdr;
-  node->cdr = c;
-}
-
-static NODE*
-node_nth(NODE *node, int n) {
-  int i = 0;
-  while (node) {
-    node = node->cdr;
-    if (i == n) return node;
-    i++;
-  }
-  return NULL;
-}
-
 static int
 match(const char *lhs, const char *rhs, size_t n) {
   const char *p = lhs, *e = lhs + n;
@@ -227,10 +212,11 @@ parse_number(NODE *node, const char* p) {
 
 static const char*
 parse_paren(NODE *node, const char *p) {
+  NODE *head = node;
+
   if (!p) return NULL;
   p = skip_white(p);
 
-  NODE *head = node;
   while (p && *p && *p != ')') {
     NODE *child = new_node();
     p = parse_any(child, p);
@@ -251,12 +237,13 @@ parse_paren(NODE *node, const char *p) {
 
     p = skip_white(p);
     if (*p == '.') {
-      node->t = NODE_CELL;
-      NODE *cdr = new_node();
+      NODE *cdr;
+      while (node->car)
+        node = node->car;
+      cdr = new_node();
       p = parse_any(cdr, p + 1);
       if (p) {
-        node->cdr = cdr;
-        node = cdr;
+        node->car = cdr;
       }
       break;
     }
@@ -362,20 +349,27 @@ print_cell(size_t nbuf, char *buf, NODE *node, int mode) {
     while (c) {
       if (c != node->car) strncat(buf, " ", nbuf);
       print_node(nbuf, buf, c, mode);
+      if (c->car) {
+        strncat(buf, " . ", nbuf);
+        print_node(nbuf, buf, c->car, mode);
+        break;
+      }
       c = c->cdr;
     }
   }
-  if (!node->car && node->cdr) {
+#if 0
+  if (node->cdr) {
     c = node->cdr;
     while (c) {
       if (c->t != NODE_CELL) {
         if (c != node->cdr) strncat(buf, " ", nbuf);
-        //if (node->t != NODE_CELL) strncat(buf, " . ", nbuf);
+        if (node->t != NODE_CELL) strncat(buf, " . ", nbuf);
         print_node(nbuf, buf, c, mode);
       }
       c = c->cdr;
     }
   }
+#endif
   strncat(buf, ")", nbuf);
 }
 
@@ -393,12 +387,13 @@ print_list(size_t nbuf, char *buf, NODE *node, int mode) {
 
 static void
 print_str(size_t nbuf, char *buf, NODE *node, int mode) {
+  char tmp[2];
+  const char* p;
   if (mode) {
     strncat(buf, node->u.s, nbuf);
     return;
   }
-  const char* p = node->u.s;
-  char tmp[2];
+  p = node->u.s;
   tmp[1] = 0;
   strncat(buf, "\"", nbuf);
   while (*p) {
@@ -443,6 +438,7 @@ free_node(NODE *node) {
   if (!node) return;
   node->r--;
   if (node->r <= 0) {
+    NODE *car;
     switch (node->t) {
     case NODE_STRING:
     case NODE_IDENT:
@@ -451,10 +447,10 @@ free_node(NODE *node) {
     case NODE_ERROR:
     case NODE_NIL:
     case NODE_T:
-        free((void*)node->u.s);
-        break;
+      free((void*)node->u.s);
+      break;
     }
-    NODE *car = node->car;
+    car = node->car;
     free((void*)node);
     free_node(car);
   }
@@ -522,9 +518,9 @@ add_function(ENV *env, const char *k, NODE *node) {
 
 static long
 int_value(ENV *env, NODE *node, NODE **err) {
+  int r = 0;
   if (*err) return 0;
   node = eval_node(env, node);
-  int r = 0;
   switch (node->t) {
   case NODE_ERROR: *err = node; return 0;
   case NODE_NIL: r = 0; break;
@@ -540,9 +536,9 @@ int_value(ENV *env, NODE *node, NODE **err) {
 
 static double
 double_value(ENV *env, NODE *node, NODE **err) {
+  double r = 0;
   if (*err) return 0;
   node = eval_node(env, node);
-  double r = 0;
   switch (node->t) {
   case NODE_ERROR: *err = node; return 0;
   case NODE_INT: r = (double)node->u.i; break;
@@ -577,19 +573,19 @@ do_plus(ENV *env, NODE *node) {
     }
     switch (nn->t) {
     case NODE_INT:
-        if (c->t == NODE_DOUBLE) {
-          nn->u.d = double_value(env, nn, &err) + double_value(env, c, &err);
-          nn->t = c->t;
-        }
-        else
-          nn->u.i += int_value(env, c, &err);
-        break;
+      if (c->t == NODE_DOUBLE) {
+        nn->u.d = double_value(env, nn, &err) + double_value(env, c, &err);
+        nn->t = c->t;
+      }
+      else
+        nn->u.i += int_value(env, c, &err);
+      break;
     case NODE_DOUBLE:
-        nn->u.d += double_value(env, c, &err);
-        break;
+      nn->u.d += double_value(env, c, &err);
+      break;
     default:
-        err = new_errorf("malformed number");
-        break;
+      err = new_errorf("malformed number");
+      break;
     }
     free_node(c);
     if (err) {
@@ -621,19 +617,19 @@ do_minus(ENV *env, NODE *node) {
     if (c->t == NODE_ERROR) return c;
     switch (nn->t) {
     case NODE_INT:
-        if (c->t == NODE_DOUBLE) {
-          nn->u.d = double_value(env, nn, &err) - double_value(env, c, &err);
-          nn->t = c->t;
-        }
-        else
-          nn->u.i -= int_value(env, c, &err);
-        break;
+      if (c->t == NODE_DOUBLE) {
+        nn->u.d = double_value(env, nn, &err) - double_value(env, c, &err);
+        nn->t = c->t;
+      }
+      else
+        nn->u.i -= int_value(env, c, &err);
+      break;
     case NODE_DOUBLE:
-        nn->u.d -= double_value(env, c, &err);
-        break;
+      nn->u.d -= double_value(env, c, &err);
+      break;
     default:
-        err = new_errorf("malformed number");
-        break;
+      err = new_errorf("malformed number");
+      break;
     }
     free_node(c);
     if (err) {
@@ -665,19 +661,19 @@ do_mul(ENV *env, NODE *node) {
     if (c->t == NODE_ERROR) return c;
     switch (nn->t) {
     case NODE_INT:
-        if (c->t == NODE_DOUBLE) {
-          nn->u.d = double_value(env, nn, &err) * double_value(env, c, &err);
-          nn->t = c->t;
-        }
-        else
-          nn->u.i *= int_value(env, c, &err);
-        break;
+      if (c->t == NODE_DOUBLE) {
+        nn->u.d = double_value(env, nn, &err) * double_value(env, c, &err);
+        nn->t = c->t;
+      }
+      else
+        nn->u.i *= int_value(env, c, &err);
+      break;
     case NODE_DOUBLE:
-        nn->u.d *= double_value(env, c, &err);
-        break;
+      nn->u.d *= double_value(env, c, &err);
+      break;
     default:
-        err = new_errorf("malformed number");
-        break;
+      err = new_errorf("malformed number");
+      break;
     }
     free_node(c);
     if (err) {
@@ -709,19 +705,19 @@ do_div(ENV *env, NODE *node) {
     if (c->t == NODE_ERROR) return c;
     switch (nn->t) {
     case NODE_INT:
-        if (c->t == NODE_DOUBLE) {
-          nn->u.d = double_value(env, nn, &err) / double_value(env, c, &err);
-          nn->t = c->t;
-        }
-        else
-          nn->u.i /= int_value(env, c, &err);
-        break;
+      if (c->t == NODE_DOUBLE) {
+        nn->u.d = double_value(env, nn, &err) / double_value(env, c, &err);
+        nn->t = c->t;
+      }
+      else
+        nn->u.i /= int_value(env, c, &err);
+      break;
     case NODE_DOUBLE:
-        nn->u.d /= double_value(env, c, &err);
-        break;
+      nn->u.d /= double_value(env, c, &err);
+      break;
     default:
-        err = new_errorf("malformed number");
-        break;
+      err = new_errorf("malformed number");
+      break;
     }
     free_node(c);
     if (err) {
@@ -816,20 +812,20 @@ do_if(ENV *env, NODE *node) {
   if (c->t == NODE_ERROR) return c;
   switch (c->t) {
   case NODE_NIL:
-      r = 0;
-      break;
+    r = 0;
+    break;
   case NODE_T:
-      r = 1;
-      break;
+    r = 1;
+    break;
   case NODE_INT:
-      r = c->u.i;
-      break;
+    r = c->u.i;
+    break;
   case NODE_DOUBLE:
-      r = (long)c->u.d;
-      break;
+    r = (long)c->u.d;
+    break;
   default:
-      r = 1;
-      break;
+    r = 1;
+    break;
   }
   free_node(c);
   return eval_node(env, r > 0 ? node->cdr->cdr : node->cdr->cdr->cdr);
@@ -914,20 +910,20 @@ do_eq(ENV *env, NODE *node) {
   nn = new_node();
   switch (lhs->t) {
   case NODE_INT:
-      if (int_value(env, lhs, &err) == int_value(env, rhs, &err)) {
-        nn->t = NODE_T;
-      }
-      break;
+    if (int_value(env, lhs, &err) == int_value(env, rhs, &err)) {
+      nn->t = NODE_T;
+    }
+    break;
   case NODE_DOUBLE:
-      if (double_value(env, lhs, &err) == double_value(env, rhs, &err)) {
-        nn->t = NODE_T;
-      }
-      break;
+    if (double_value(env, lhs, &err) == double_value(env, rhs, &err)) {
+      nn->t = NODE_T;
+    }
+    break;
   case NODE_STRING:
-      if (rhs->t == NODE_STRING && !strcmp(lhs->u.s, rhs->u.s)) {
-        nn->t = NODE_T;
-      }
-      break;
+    if (rhs->t == NODE_STRING && !strcmp(lhs->u.s, rhs->u.s)) {
+      nn->t = NODE_T;
+    }
+    break;
   }
   free_node(lhs);
   free_node(rhs);
@@ -1311,18 +1307,16 @@ do_type_of(ENV *env, NODE *node) {
 
 static NODE*
 do_cond(ENV *env, NODE *node) {
-  NODE *x, *c, *err = NULL;
-  int i, r;
+  NODE *c, *err = NULL;
+  int r;
 
   if (node_narg(node) < 1) return new_errorn("malformed cond: %s", node);
 
   c = NULL;
-  for (i = 0; i < node->n; i++) {
-    x = node_nth(node, i);
-    if (x->t == NODE_QUOTE)
-      x = node_nth(x, 0);
+  node = node->cdr;
+  while (node) {
     if (c) free_node(c);
-    c = eval_node(env, node_nth(x, 0));
+    c = eval_node(env, node->car);
     if (c->t == NODE_ERROR) break;
     r = int_value(env, c, &err);
     if (err) {
@@ -1331,8 +1325,9 @@ do_cond(ENV *env, NODE *node) {
     }
     if (r != 0) {
       free_node(c);
-      return eval_node(env, node_nth(x, 1));
+      return eval_node(env, node->car->cdr);
     }
+    node = node->cdr;
   }
   if (c) {
     return c;
@@ -1379,11 +1374,11 @@ do_cdr(ENV *env, NODE *node) {
     return c;
   }
   if (x->car) {
-    c = x->car;
-    c->t = NODE_CELL;
-    c->r++;
+    NODE *nn = new_node();
+    nn->t = NODE_CELL;
+    nn->car = x->car->cdr;
     free_node(x);
-    return c;
+    return nn;
   }
   free_node(x);
   return new_node();
@@ -1395,17 +1390,17 @@ do_rplaca(ENV *env, NODE *node) {
 
   if (node_narg(node) != 2) return new_errorn("malformed rplaca: %s", node);
 
-  lhs = eval_node(env, node_nth(node, 1));
+  lhs = eval_node(env, node->cdr);
   if (lhs->t == NODE_ERROR) return lhs;
   if ((lhs->t != NODE_CELL) || lhs->n == 0)
     return new_errorn("malformed rplaca: %s", node);
-  rhs = eval_node(env, node_nth(node, 2));
+  rhs = eval_node(env, node->cdr->cdr);
   if (rhs->t == NODE_ERROR) {
     free_node(lhs);
     return rhs;
   }
-  free_node(node_nth(lhs, 0));
-  *(node_nth(lhs, 0)) = *(rhs);
+  free_node(lhs->cdr);
+  *(lhs->cdr) = *(rhs);
   free_node(rhs);
   return lhs;
 }
@@ -1416,26 +1411,25 @@ do_rplacd(ENV *env, NODE *node) {
 
   if (node_narg(node) != 3) return new_errorn("malformed rplacd: %s", node);
 
-  lhs = eval_node(env, node_nth(node, 1));
+  lhs = eval_node(env, node->cdr);
   if (lhs->t == NODE_ERROR) return lhs;
   if ((lhs->t != NODE_CELL) || lhs->n == 0)
     return new_errorn("malformed rplaca: %s", node);
-  rhs = eval_node(env, node_nth(node, 2));
+  rhs = eval_node(env, node->cdr->cdr);
   if (rhs->t == NODE_ERROR) {
     free_node(lhs);
     return rhs;
   }
-  free_node(node_nth(lhs, 1));
+  free_node(lhs->cdr);
   lhs->t = NODE_CELL;
-  *(node_nth(lhs, 1)) = *(rhs);
+  *(lhs->cdr) = *(rhs);
   free_node(rhs);
   return lhs;
 }
 
 static NODE*
 do_cons(ENV *env, NODE *node) {
-  int i;
-  NODE *c, *lhs, *rhs;
+  NODE *x, *c, *lhs, *rhs;
 
   if (node_narg(node) != 2) return new_errorn("malformed cons: %s", node);
 
@@ -1450,20 +1444,21 @@ do_cons(ENV *env, NODE *node) {
   switch (rhs->t) {
   case NODE_NIL:
   case NODE_CELL:
-      c->t = rhs->t;
-      c->n = rhs->n + 1;
-      c->cdr = lhs;
-      for (i = 1; i < c->n; i++) {
-        node_nth(rhs, i - 1)->r++;
-        node_append(c, node_nth(rhs, i - 1));
-      }
-      free_node(rhs);
-      break;
+    c->t = rhs->t;
+    c->car = lhs;
+    x = c->car;
+	rhs = rhs->car;
+    while (rhs) {
+      x->cdr = rhs;
+      x = x->cdr;
+      rhs = rhs->cdr;
+    }
+    break;
   default:
-      c->t = NODE_CELL;
-      c->cdr = lhs;
-      c->cdr = rhs;
-      break;
+    c->t = NODE_CELL;
+    c->car = lhs;
+    c->car->cdr = rhs;
+    break;
   }
   return c;
 }
@@ -1564,16 +1559,17 @@ do_load(ENV *env, NODE *node) {
   NODE *x, *ret, *top;
   char *p, *t;
   long fsize;
+  FILE *fp;
 
   if (node->n != 1) return new_errorn("malformed load: %s", node);
-  x = eval_node(env, node_nth(node, 0));
+  x = eval_node(env, node->cdr);
   if (x->t == NODE_ERROR) return x;
   if (x->t != NODE_STRING) {
     free_node(x);
     return new_errorn("malformed load: %s", node);
   }
 
-  FILE *fp = fopen(node_nth(node, 0)->u.s, "rb");
+  fp = fopen(node->cdr->u.s, "rb");
   if (!fp) {
     fclose(fp);
     return new_errorf("%s", strerror(errno));
@@ -1715,64 +1711,64 @@ eval_node(ENV *env, NODE *node) {
   NODE *c = NULL;
   switch (node->t) {
   case NODE_QUOTE:
-      c = node->car;
-      c->r++;
-      return c;
+    c = node->car;
+    c->r++;
+    return c;
   case NODE_IDENT:
-      return do_ident(env, node);
+    return do_ident(env, node);
   case NODE_LAMBDA:
-      node->r++;
-      return node;
+    node->r++;
+    return node;
   case NODE_INT:
-      node->r++;
-      return node;
+    node->r++;
+    return node;
   case NODE_DOUBLE:
-      node->r++;
-      return node;
+    node->r++;
+    return node;
   case NODE_NIL:
-      node->r++;
-      return node;
+    node->r++;
+    return node;
   case NODE_T:
-      node->r++;
-      return node;
+    node->r++;
+    return node;
   case NODE_STRING:
-      node->r++;
-      return node;
+    node->r++;
+    return node;
   case NODE_CELL:
-      c = NULL;
-      if (node->car) {
-        c = eval_node(env, node->car);
-        if (c->t == NODE_IDENT || c->t == NODE_LAMBDA) {
-          NODE *f, *x, *a;
-          f = x = new_node();
-          x->t = NODE_CELL;
-          x->car = c;
-          a = node->car->cdr;
-          while (a) {
-            x->cdr = a;
-            x = x->cdr;
-            a = a->cdr;
-          }
-          c = do_call(env, f);
+    c = NULL;
+    if (node->car) {
+      c = eval_node(env, node->car);
+      if (c->t == NODE_IDENT || c->t == NODE_LAMBDA) {
+        NODE *f, *x, *a;
+        f = x = new_node();
+        x->t = NODE_CELL;
+        x->car = c;
+        a = node->car->cdr;
+        while (a) {
+          x->cdr = a;
+          x = x->cdr;
+          a = a->cdr;
         }
-        else if (node->car->t == NODE_IDENT) {
-          c = do_call(env, node);
-        }
+        c = do_call(env, f);
       }
-      if (node->cdr && node->cdr->t == NODE_CELL) {
-        /*
-           node = node->cdr;
-           while (node) {
-           if (c) free_node(c);
-           c = eval_node(env, node);
-           node = node->cdr;
-           }
-           */
-        c = eval_node(env, node->cdr);
+      else if (node->car->t == NODE_IDENT) {
+        c = do_call(env, node);
       }
-      if (c) return c;
-      node->r++;
-      return node;
+    }
+    if (node->cdr && node->cdr->t == NODE_CELL) {
+      /*
+         node = node->cdr;
+         while (node) {
+         if (c) free_node(c);
+         c = eval_node(env, node);
+         node = node->cdr;
+         }
+         */
+      c = eval_node(env, node->cdr);
+    }
+    if (c) return c;
+    node->r++;
+    return node;
   }
 
   return new_error("unknown node");
@@ -1888,7 +1884,3 @@ main(int argc, char* argv[]) {
 }
 
 /* vim:set et cino=>2,\:0: */
-
-
-
-
