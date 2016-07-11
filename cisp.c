@@ -248,9 +248,7 @@ parse_paren(NODE *node, const char *p) {
         node = node->car;
       cdr = new_node();
       p = parse_any(cdr, p + 1);
-      if (p) {
-        node->car = cdr;
-      }
+      if (p) node->car = cdr;
       break;
     }
   }
@@ -1388,11 +1386,14 @@ do_cdr(ENV *env, NODE *node) {
     return c;
   }
   if (x->car) {
-    NODE *nn = new_node();
-    nn->t = NODE_CELL;
-    nn->car = x->car->cdr;
-    free_node(x);
-    return nn;
+    if (!x->car->car) {
+      NODE *nn = new_node();
+      nn->t = NODE_CELL;
+      nn->car = x->car->cdr;
+      free_node(x);
+      return nn;
+    }
+    return x->car->cdr;
   }
   free_node(x);
   return new_node();
@@ -1456,20 +1457,28 @@ do_cons(ENV *env, NODE *node) {
   switch (rhs->t) {
   case NODE_NIL:
   case NODE_CELL:
-    c->t = rhs->t;
-    c->car = lhs;
-    x = c->car;
-    rhs = rhs->car;
-    while (rhs) {
-      x->cdr = rhs;
-      x = x->cdr;
-      rhs = rhs->cdr;
+    if (rhs->t == NODE_NIL) {
+      c->t = NODE_CELL;
+      c->car = lhs;
+      lhs->cdr = NULL;
+    } else {
+      c->t = rhs->t;
+      c->car = lhs;
+      x = c->car;
+      rhs = rhs->car;
+      while (rhs) {
+        x->cdr = rhs;
+        x = x->cdr;
+        rhs = rhs->cdr;
+      }
     }
     break;
   default:
     c->t = NODE_CELL;
     c->car = lhs;
-    c->car->cdr = rhs;
+    while (lhs->car)
+      lhs = lhs->car;
+    lhs->car = rhs;
     break;
   }
   return c;
