@@ -155,14 +155,13 @@ new_env(ENV *p) {
 static int
 node_length(NODE *node) {
   int i = 0;
-  if (node->t == NODE_CELL) {
+  if (node->car) {
     node = node->car;
     i++;
-    if (!node) return i;
-  }
-  while (node->cdr) {
-    node = node->cdr;
-    i++;
+    while (node->cdr) {
+      node = node->cdr;
+      i++;
+    }
   }
   return i;
 }
@@ -1447,7 +1446,7 @@ do_cons(ENV *env, NODE *node) {
     c->t = rhs->t;
     c->car = lhs;
     x = c->car;
-	rhs = rhs->car;
+    rhs = rhs->car;
     while (rhs) {
       x->cdr = rhs;
       x = x->cdr;
