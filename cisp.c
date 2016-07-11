@@ -1,5 +1,5 @@
 #define _CRT_SECURE_NO_WARNINGS 1
-#define _POSIX_
+#define _POSIX_ 1
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -9,6 +9,11 @@
 #include <ctype.h>
 #ifndef _MSC_VER
 # include <unistd.h>
+#else
+# undef _POSIX_
+# include <io.h>
+# define isatty(f) _isatty(f)
+# define snprintf(b,n,f,...) _snprintf(b,n,f,__VA_ARGS__)
 #endif
 
 #define SYMBOL_CHARS "+-*/<>=&%"
@@ -232,11 +237,14 @@ parse_paren(NODE *node, const char *p) {
     p = skip_white(p);
     if (*p == '.') {
       NODE *cdr;
-      while (node->car)
-        node = node->car;
       cdr = new_node();
       p = parse_any(cdr, p + 1);
-      if (p) node->car = cdr;
+      if (p) {
+        NODE *x = new_node();
+        x->t = NODE_CELL;
+        x->car = child;
+        node->cdr = cdr;
+      }
       break;
     }
   }
@@ -327,36 +335,25 @@ print_args(size_t nbuf, char *buf, NODE *node, int mode) {
   }
 }
 
+
+
 static void
 print_cell(size_t nbuf, char *buf, NODE *node, int mode) {
   NODE *c;
   strncat(buf, "(", nbuf);
-  if (node->car) {
-    c = node->car;
-    while (c) {
-      if (c != node->car) strncat(buf, " ", nbuf);
-      print_node(nbuf, buf, c, mode);
-      if (c->car) {
-        strncat(buf, " . ", nbuf);
-        print_node(nbuf, buf, c->car, mode);
-        break;
-      }
-      c = c->cdr;
+  c = node->car;
+
+  while (c) {
+    if (c != node->car) strncat(buf, " ", nbuf);
+    print_node(nbuf, buf, c, mode);
+    if (c->cdr) {
+      strncat(buf, " . ", nbuf);
+      print_node(nbuf, buf, c->cdr, mode);
+      break;
     }
+    c = c->car;
   }
-  if (!node->car && node->cdr) {
-    c = node->cdr;
-    while (c) {
-      if (c != node->cdr) strncat(buf, " ", nbuf);
-      print_node(nbuf, buf, c, mode);
-      if (c->car) {
-        strncat(buf, " . ", nbuf);
-        print_node(nbuf, buf, c->car, mode);
-        break;
-      }
-      c = c->cdr;
-    }
-  }
+
   strncat(buf, ")", nbuf);
 }
 
