@@ -5,7 +5,11 @@
 #include <string.h>
 #include <errno.h>
 #include <memory.h>
-#include <io.h>
+#ifdef _WIN32
+# include <io.h>
+#else
+# include <sys/io.h>
+#endif
 #include <ctype.h>
 
 #define SYMBOL_CHARS "+-*/<>=&%"
