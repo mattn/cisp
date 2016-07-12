@@ -438,8 +438,8 @@ free_node(NODE *node) {
   if (!node) return;
   node->r--;
   if (node->r <= 0) {
-    free_node(node->cdr);
-    free_node(node->car);
+    if (node->cdr) free_node(node->cdr);
+    if (node->car) free_node(node->car);
     switch (node->t) {
     case NODE_STRING:
     case NODE_IDENT:
