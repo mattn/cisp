@@ -249,8 +249,7 @@ parse_paren(NODE *node, const char *p) {
     }
   }
   if (p && *p) {
-    if (*p == ')') p++;
-    else return raisef("shoud be )", p);
+    p = skip_white(p);
   }
   return p;
 }
@@ -332,7 +331,14 @@ parse_any(NODE *node, const char *p) {
   if (!p) return NULL;
   p = skip_white(p);
   if (!*p) return p;
-  if (*p == '(') return parse_paren(node, p + 1);
+  if (*p == '(') {
+    p = parse_paren(node, p + 1);
+    if (p && *p == ')') {
+      p++;
+      return p;
+    }
+    return raisef("shoud be )", p);
+  }
   if (*p == '-' || isdigit(*p)) return parse_number(node, p);
   if (*p == '\'') return parse_quote(node, p + 1);
   if (*p == '"') return parse_string(node, p + 1);
@@ -1828,7 +1834,6 @@ main(int argc, char* argv[]) {
       free_env(env);
       exit(1);
     }
-    p = (char*)skip_white((char*)p);
     if (*p) {
       free_node(top);
       free_env(env);
@@ -1866,6 +1871,7 @@ main(int argc, char* argv[]) {
     pp = skip_white(pp);
     if (*pp) {
       raise(pp);
+      free((void*)pp);
       continue;
     }
     ret = eval_node(env, top);
