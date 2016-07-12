@@ -481,9 +481,12 @@ compare_item(const void *a, const void *b) {
 static void
 add_variable(ENV *env, const char *k, NODE *node) {
   ITEM *ni;
-  int left = 0, right = env->nv-1, mid, r;
-  ITEM **lv = env->lv;
-  node->r++;
+  int left, right, mid, r;
+  ITEM **lv;
+
+  left = 0;
+  right = env->nv - 1;
+  lv = env->lv;
   while (left <= right) {
     mid = (left + right) / 2;
     r = strcmp(lv[mid]->k, k);
@@ -509,9 +512,12 @@ add_variable(ENV *env, const char *k, NODE *node) {
 static void
 add_function(ENV *env, const char *k, NODE *node) {
   ITEM *ni;
-  int left = 0, right = env->nf-1, mid, r;
-  ITEM **lf = env->lf;
-  node->r++;
+  int left, right, mid, r;
+  ITEM **lf;
+
+  left = 0;
+  right = env->nf - 1;
+  lf = env->lf;
   while (left <= right) {
     mid = (left + right) / 2;
     r = strcmp(lf[mid]->k, k);
@@ -1028,7 +1034,6 @@ do_let(ENV *env, NODE *node) {
     c = eval_node(env, x->car->cdr);
     if (x->t == NODE_ERROR) return c;
     add_variable(newenv, x->car->u.s, c);
-	free_node(c);
     x = x->cdr;
   }
   node = node->cdr->cdr;
@@ -1060,6 +1065,7 @@ do_setq(ENV *env, NODE *node) {
   c = eval_node(env, node->cdr->cdr);
   if (c->t == NODE_ERROR) return c;
   add_variable(global, x->u.s, c);
+  c->r++;
   return c;
 }
 
@@ -1071,7 +1077,7 @@ do_ident(ENV *env, NODE *node) {
   ITEM **lv;
 
   left = 0;
-  right = env->nv-1;
+  right = env->nv - 1;
   lv = env->lv;
   while (left <= right) {
     mid = (left + right) / 2;
@@ -1090,7 +1096,7 @@ do_ident(ENV *env, NODE *node) {
   while (env->p) env = env->p;
 
   left = 0;
-  right = env->nv-1;
+  right = env->nv - 1;
   lv = env->lv;
   while (left <= right) {
     mid = (left + right) / 2;
@@ -1123,7 +1129,7 @@ do_ident_global(ENV *env, NODE *node) {
   }
 
   left = 0;
-  right = global->nv-1;
+  right = global->nv - 1;
   lv = global->lv;
   while (left <= right) {
     mid = (left + right) / 2;
@@ -1145,7 +1151,7 @@ static NODE*
 look_func(ENV *env, const char *k) {
   NODE *x;
   static ENV *global;
-  int left = 0, right, mid, r;
+  int left, right, mid, r;
   ITEM **lf;
 
   if (!k) return NULL;
@@ -1154,7 +1160,8 @@ look_func(ENV *env, const char *k) {
     global = env;
   }
 
-  right = global->nf-1;
+  left = 0;
+  right = global->nf - 1;
   lf = global->lf;
   while (left <= right) {
     mid = (left + right) / 2;
@@ -1238,7 +1245,6 @@ do_call(ENV *env, NODE *node) {
         node = node->cdr;
       }
       add_variable(newenv, rest ? c->car->u.s : c->cdr->u.s, rr);
-      free_node(rr);
       free_node(nn);
       break;
     }
@@ -1249,7 +1255,6 @@ do_call(ENV *env, NODE *node) {
       return nn;
     }
     add_variable(newenv, c->u.s, nn);
-    free_node(nn);
     node = node->cdr;
     c = c->cdr;
     if (c && c->t == NODE_CELL && !c->cdr) rest = 1;
@@ -1314,6 +1319,7 @@ do_defun(ENV *env, NODE *node) {
     return new_errorn("invalid identifier: %s", x);
   }
   add_function(env, x->u.s, node);
+  node->r++;
   x->r++;
   return x;
 }
@@ -1360,7 +1366,6 @@ do_dotimes(ENV *env, NODE *node) {
     if (c->t == NODE_ERROR) break;
   }
   free_env(newenv);
-  free_node(nn);
   if (c) {
     return c;
   }
@@ -1530,7 +1535,7 @@ do_rplacd(ENV *env, NODE *node) {
 
 static NODE*
 do_cons(ENV *env, NODE *node) {
-  NODE *x, *c, *lhs, *rhs;
+  NODE *x, *c, *lhs, *rhs, *tmp;
 
   if (node_narg(node) != 2) return new_errorn("malformed cons: %s", node);
 
@@ -1555,7 +1560,11 @@ do_cons(ENV *env, NODE *node) {
       c->t = rhs->t;
       c->car = lhs;
       x = c->car;
-      rhs = rhs->car;
+      tmp = rhs->car;
+      tmp->r++;
+      free_node(rhs);
+      rhs = tmp;
+      if (x->cdr) free_node(x->cdr);
       while (rhs) {
         x->cdr = rhs;
         x = x->cdr;
