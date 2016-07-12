@@ -818,7 +818,7 @@ do_evenp(ENV *env, NODE *node) {
   if (node_narg(node) != 1) return new_errorn("malformed evenp: %s", node);
 
   c = new_node();
-  if (int_value(env, node->cdr, &err) % 2 == 1) {
+  if (int_value(env, node->cdr, &err) % 2 == 0) {
     c->t = NODE_T;
   }
   if (err) {
