@@ -29,9 +29,14 @@ debug :
 test : $(TARGET)
 	@./t/run-test.sh
 
-prof : $(TARGET)
+prof1 : $(TARGET)
 	gcc -o $(TARGET) -pg cisp.c
 	./$(TARGET) example/tak.lisp
+	gprof $(TARGET) gmon.out -p | less
+
+prof2 : $(TARGET)
+	gcc -o $(TARGET) -pg cisp.c
+	./$(TARGET) example/fib.lisp
 	gprof $(TARGET) gmon.out -p | less
 
 valgrind : $(TARGET)
