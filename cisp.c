@@ -1051,6 +1051,36 @@ do_setq(ENV *env, NODE *node) {
 }
 
 static inline NODE*
+do_ident_global(ENV *env, NODE *node) {
+  NODE *x;
+  const char *p = node->u.s;
+  int left = 0, right, mid, r;
+  ITEM **lv;
+  static ENV *global;
+
+  if (global == NULL) {
+    while (env->p) env = env->p;
+    global = env;
+  }
+  right = global->nv;
+  lv = global->lv;
+  while (left < right) {
+    mid = (left + right) / 2;
+    r = strcmp(lv[mid]->k, p);
+    if (r == 0) {
+      x = lv[mid]->v;
+      x->r++;
+      return x;
+    } else if (r > 0) {
+      right = mid;
+    } else {
+      left = mid + 1;
+    }
+  }
+  return new_errorf("unknown variable: %s", node->u.s);
+}
+
+static inline NODE*
 do_ident(ENV *env, NODE *node) {
   NODE *x;
   const char *p = node->u.s;
@@ -1117,7 +1147,7 @@ do_call(ENV *env, NODE *node) {
   int rest = 0;
 
   if (node->car->t == NODE_IDENT) {
-    x = do_ident(env, node->car);
+    x = do_ident_global(env, node->car);
     if (x->f) {
       f_do f = (f_do) x->f;
       free_node(x);
