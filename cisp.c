@@ -1049,15 +1049,16 @@ do_ident(ENV *env, NODE *node) {
   NODE *x;
   int i;
 
-  for (i = 0; i < env->nv; i++) {
-    if (!strcmp(env->lv[i]->k, node->u.s)) {
-      x = env->lv[i]->v;
-      x->r++;
-      return x;
+  while (env) {
+    for (i = 0; i < env->nv; i++) {
+      if (!strcmp(env->lv[i]->k, node->u.s)) {
+        x = env->lv[i]->v;
+        x->r++;
+        return x;
+      }
     }
+    env = env->p;
   }
-
-  if (env->p) return do_ident(env->p, node);
   return new_errorf("unknown variable: %s", node->u.s);
 }
 
@@ -1089,22 +1090,15 @@ static NODE*
 do_call(ENV *env, NODE *node) {
   ENV *newenv;
   NODE *x = NULL, *c = NULL, *p = NULL, *nn = NULL;
-  int i, rest = 0;
-  static ENV *global;
+  int rest = 0;
 
   if (node->car->t == NODE_IDENT) {
-    if (global == NULL) {
-      while (env->p) env = env->p;
-      global = env;
-    }
-    for (i = 0; i < global->nv; i++) {
-      if (match(node->car->u.s, global->lv[i]->k, strlen(global->lv[i]->k))) {
-        if (global->lv[i]->v->f) {
-          return ((f_do)(global->lv[i]->v->f))(env, node);
-        }
-      }
-    }
     x = do_ident(env, node->car);
+    if (x->f) {
+      f_do f = (f_do) x->f;
+      free_node(x);
+      return f(env, node);
+    }
     if (x->t != NODE_LAMBDA || x->t == NODE_ERROR) {
       free_node(x);
       x = look_func(env, node->car->u.s);
