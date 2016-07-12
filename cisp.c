@@ -1064,17 +1064,65 @@ do_setq(ENV *env, NODE *node) {
 }
 
 static inline NODE*
-do_ident_global(ENV *env, NODE *node) {
+do_ident(ENV *env, NODE *node) {
   NODE *x;
   const char *p = node->u.s;
-  int left = 0, right, mid, r;
+  int left, right, mid, r;
   ITEM **lv;
+
+  left = 0;
+  right = env->nv-1;
+  lv = env->lv;
+  while (left <= right) {
+    mid = (left + right) / 2;
+    r = strcmp(lv[mid]->k, p);
+    if (r == 0) {
+      x = lv[mid]->v;
+      x->r++;
+      return x;
+    } else if (r < 0) {
+      left = mid + 1;
+    } else {
+      right = mid - 1;
+    }
+  }
+
+  while (env->p) env = env->p;
+
+  left = 0;
+  right = env->nv-1;
+  lv = env->lv;
+  while (left <= right) {
+    mid = (left + right) / 2;
+    r = strcmp(lv[mid]->k, p);
+    if (r == 0) {
+      x = lv[mid]->v;
+      x->r++;
+      return x;
+    } else if (r < 0) {
+      left = mid + 1;
+    } else {
+      right = mid - 1;
+    }
+  }
+
+  return new_errorf("unknown variable: %s", node->u.s);
+}
+
+static inline NODE*
+do_ident_global(ENV *env, NODE *node) {
+  NODE *x;
   static ENV *global;
+  const char *p = node->u.s;
+  int left, right, mid, r;
+  ITEM **lv;
 
   if (global == NULL) {
     while (env->p) env = env->p;
     global = env;
   }
+
+  left = 0;
   right = global->nv-1;
   lv = global->lv;
   while (left <= right) {
@@ -1093,32 +1141,6 @@ do_ident_global(ENV *env, NODE *node) {
   return new_errorf("unknown variable: %s", node->u.s);
 }
 
-static inline NODE*
-do_ident(ENV *env, NODE *node) {
-  NODE *x;
-  const char *p = node->u.s;
-
-  while (env) {
-    int left = 0, right = env->nv-1, mid, r;
-    ITEM **lv = env->lv;
-    while (left <= right) {
-      mid = (left + right) / 2;
-      r = strcmp(lv[mid]->k, p);
-      if (r == 0) {
-        x = lv[mid]->v;
-        x->r++;
-        return x;
-      } else if (r < 0) {
-        left = mid + 1;
-      } else {
-        right = mid - 1;
-      }
-    }
-    env = env->p;
-  }
-  return new_errorf("unknown variable: %s", node->u.s);
-}
-
 static NODE*
 look_func(ENV *env, const char *k) {
   NODE *x;
@@ -1131,12 +1153,9 @@ look_func(ENV *env, const char *k) {
     while (env->p) env = env->p;
     global = env;
   }
-  else {
-    env = global;
-  }
 
-  right = env->nf-1;
-  lf = env->lf;
+  right = global->nf-1;
+  lf = global->lf;
   while (left <= right) {
     mid = (left + right) / 2;
     r = strcmp(lf[mid]->k, k);
