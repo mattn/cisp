@@ -289,7 +289,7 @@ parse_quote(NODE *node, const char *p) {
 
 static const char*
 parse_string(NODE *node, const char *p) {
-  const char *t = p;
+  const char *t = p, *q = p;
   char *sp;
   int n = 0;
   while (*p) {
@@ -302,10 +302,25 @@ parse_string(NODE *node, const char *p) {
   memset(node->u.s, 0, n + 1);
   sp = node->u.s;
   while (*t) {
-    if (*t == '\\' && *(t + 1)) t++;
+    if (*t == '\\' && *(t + 1)) {
+      switch (*(t+1)) {
+      case '\\': *sp++ = '\\'; break;
+      case 'b': *sp++ = '\b'; break;
+      case 'f': *sp++ = '\f'; break;
+      case 'n': *sp++ = '\n'; break;
+      case 'r': *sp++ = '\r'; break;
+      case 't': *sp++ = '\t'; break;
+      default: return raise(q); break;
+      }
+      t++;
+      t++;
+      continue;
+    }
     else if (*t == '"') break;
     *sp++ = *t++;
   }
+  *sp = 0;
+  if (*t != '"') return raise(q);
 
   p++;
   node->t = NODE_STRING;
@@ -369,7 +384,14 @@ print_str(size_t nbuf, char *buf, NODE *node, int mode) {
   tmp[1] = 0;
   strncat(buf, "\"", nbuf);
   while (*p) {
-    if (*p == '\\') strncat(buf, "\\", nbuf);
+    switch (*p) {
+    case '\\': strncat(buf, "\\\\", nbuf); p++; continue; break;
+    case '\n': strncat(buf, "\\n", nbuf); p++; continue; break;
+    case '\b': strncat(buf, "\\b", nbuf); p++; continue; break;
+    case '\f': strncat(buf, "\\f", nbuf); p++; continue; break;
+    case '\r': strncat(buf, "\\r", nbuf); p++; continue; break;
+    case '\t': strncat(buf, "\\t", nbuf); p++; continue; break;
+    }
     tmp[0] = *p;
     strncat(buf, tmp, nbuf);
     p++;
