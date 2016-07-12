@@ -1159,6 +1159,7 @@ do_call(ENV *env, NODE *node) {
       }
       add_variable(newenv, rest ? c->car->u.s : c->cdr->u.s, rr);
       free_node(rr);
+      free_node(nn);
       break;
     }
     nn = eval_node(env, node);
@@ -1174,8 +1175,8 @@ do_call(ENV *env, NODE *node) {
     if (c && c->t == NODE_CELL && !c->cdr) rest = 1;
   }
   c = eval_node(newenv, p);
-  free_node(x);
   free_env(newenv);
+  free_node(x);
   if (c) {
     return c;
   }
@@ -1184,25 +1185,25 @@ do_call(ENV *env, NODE *node) {
 
 static NODE*
 do_lambda(ENV *env, NODE *node) {
-  NODE *x, *c;
+  NODE *x, *xx, *c;
 
   if (node_narg(node) != 2) return new_errorf("malformed lambda: %s", node);
 
   c = x = new_node();
   x->t = NODE_LAMBDA;
-  node = node->cdr;
-  while (node) {
-    x->cdr = node;
-    x->cdr->r++;
+  xx = node->cdr;
+  xx->r++;
+  while (xx) {
+    x->cdr = xx;
     x = x->cdr;
-    node = node->cdr;
+    xx = xx->cdr;
   }
   return c;
 }
 
 static NODE*
 do_funcall(ENV *env, NODE *node) {
-  NODE *x, *c, *nn;
+  NODE *x, *xx, *c, *nn;
 
   if (node_narg(node) < 2) return new_errorf("malformed funcall: %s", node);
 
@@ -1210,12 +1211,12 @@ do_funcall(ENV *env, NODE *node) {
   x->t = NODE_CELL;
   x->car = node->cdr;
   x->car->r++;
-  node = node->cdr->cdr;
-  while (node) {
-    x->cdr = node;
-    x->cdr->r++;
+  xx = node->cdr->cdr;
+  xx->r++;
+  while (xx) {
+    x->cdr = xx;
     x = x->cdr;
-    node = node->cdr;
+    xx = xx->cdr;
   }
   nn = do_call(env, c);
   free_node(c);
@@ -1463,7 +1464,9 @@ do_cons(ENV *env, NODE *node) {
     if (rhs->t == NODE_NIL) {
       c->t = NODE_CELL;
       c->car = lhs;
+      if (lhs->cdr) free_node(lhs->cdr);
       lhs->cdr = NULL;
+      free_node(rhs);
     } else {
       c->t = rhs->t;
       c->car = lhs;
@@ -1479,6 +1482,7 @@ do_cons(ENV *env, NODE *node) {
   default:
     c->t = NODE_CELL;
     c->car = lhs;
+    if (c->car->cdr) free_node(c->car->cdr);
     c->car->cdr = new_node();
     c->car->cdr->t = NODE_CELL;
     c->car->cdr->car = rhs;
@@ -1636,7 +1640,7 @@ do_load(ENV *env, NODE *node) {
 
 static NODE*
 do_apply(ENV *env, NODE *node) {
-  NODE *f, *x, *c, *nn;
+  NODE *f, *x, *xx, *c, *nn;
 
   if (node_narg(node) < 2) return new_errorn("malformed apply: %s", node);
 
@@ -1652,12 +1656,12 @@ do_apply(ENV *env, NODE *node) {
   else
     c->car = node->cdr;
   c->car->r++;
-  x = x->car;
-  while (x) {
-    c->cdr = x;
-    c->cdr->r++;
+  xx = x->car;
+  xx->r++;
+  while (xx) {
+    c->cdr = xx;
     c = c->cdr;
-    x = x->cdr;
+    xx = xx->cdr;
   }
   nn = do_call(env, f);
   free_node(f);
@@ -1769,15 +1773,15 @@ eval_node(ENV *env, NODE *node) {
         x->car = c;
         x->car->r++;
         a = node->car->cdr;
+        a->r++;
         while (a) {
           x->cdr = a;
-          x->cdr->r++;
           x = x->cdr;
           a = a->cdr;
         }
         x = do_call(env, f);
-        free_node(c);
         free_node(f);
+        free_node(c);
         c = x;
       }
       else if (node->car->t == NODE_IDENT) {
@@ -1856,12 +1860,15 @@ main(int argc, char* argv[]) {
     if (isatty(fileno(stdin))) {
       printf("> ");
       if (!fgets(buf, sizeof(buf), stdin)) break;
+      fsize = strlen(buf);
+      if (buf[fsize-1] == '\n') buf[fsize-1] = 0;
     }
     else {
       fsize = (long)fread(buf, 1, sizeof(buf), stdin);
       if (fsize <= 0) break;
       buf[fsize] = 0;
     }
+    if (!strcmp(buf, "(exit)")) break;
     top = new_node();
     top->t = NODE_CELL;
     pp = parse_any(top, buf);
