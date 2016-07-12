@@ -1345,16 +1345,14 @@ static NODE*
 do_car(ENV *env, NODE *node) {
   NODE *x, *c;
 
-  if (!node->cdr) return new_errorn("malformed car: %s", node);
+  if (node_narg(node) != 1) return new_errorn("malformed car: %s", node);
 
   x = eval_node(env, node->cdr);
-  if (node->cdr->t == NODE_QUOTE && x->t != NODE_CELL) {
-    return x;
-  }
   if (x->t == NODE_QUOTE) {
-    c = x->car;
-    c->r++;
     free_node(x);
+    c = new_node();
+    c->t = NODE_IDENT;
+    c->u.s = strdup("quote");
     return c;
   }
   if (x->t != NODE_CELL && x->t != NODE_NIL) {

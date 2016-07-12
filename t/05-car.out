@@ -2,5 +2,4 @@
 a
 nil
 nil
-'a
-a
+quote
