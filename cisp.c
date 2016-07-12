@@ -1261,7 +1261,12 @@ do_call(ENV *env, NODE *node) {
     c = c->cdr;
     if (c && c->t == NODE_CELL && !c->cdr) rest = 1;
   }
-  c = eval_node(newenv, p);
+  c = NULL;
+  while (p) {
+    if (c) free_node(c);
+    c = eval_node(newenv, p);
+    p = p->cdr;
+  }
   free_env(newenv);
   free_node(x);
   if (c) {
@@ -1328,11 +1333,26 @@ do_defun(ENV *env, NODE *node) {
 
 static NODE*
 do_progn(ENV *env, NODE *node) {
-  NODE *c = NULL;
+  NODE *f, *c, *x, *a;
 
+  node = node->car;
+  c = NULL;
   while (node) {
     if (c) free_node(c);
-    c = eval_node(env, node->car);
+    f = x = new_node();
+    x->t = NODE_CELL;
+    x->car = node->car;
+    x->car->r++;
+    a = node->car->cdr;
+    if (a) a->r++;
+    while (a) {
+      x->cdr = a;
+      x = x->cdr;
+      a = a->cdr;
+    }
+    x = do_call(env, f);
+    free_node(f);
+    c = x;
     if (c->t == NODE_ERROR) break;
     node = node->cdr;
   }
@@ -1860,34 +1880,26 @@ eval_node(ENV *env, NODE *node) {
     return node;
   case NODE_CELL:
     c = NULL;
-    if (node->car) {
+    if (!node->car || node->car->car) {
       c = eval_node(env, node->car);
-      if (c->t == NODE_IDENT || c->t == NODE_LAMBDA) {
-        NODE *f, *x, *a;
-        f = x = new_node();
-        x->t = NODE_CELL;
-        x->car = c;
-        x->car->r++;
-        a = node->car->cdr;
-        a->r++;
-        while (a) {
-          x->cdr = a;
-          x = x->cdr;
-          a = a->cdr;
-        }
-        x = do_call(env, f);
-        free_node(f);
-        free_node(c);
-        c = x;
-      }
-      else if (node->car->t == NODE_IDENT) {
-        free_node(c);
-        c = do_call(env, node);
-      }
     }
-    if (node->cdr && node->cdr->t == NODE_CELL) {
+    if ((node->car && !node->car->car) || (c != NULL && c->t == NODE_LAMBDA)) {
+      NODE *f, *x, *a;
+      f = x = new_node();
+      x->t = NODE_CELL;
+      x->car = (c != NULL && c->t == NODE_LAMBDA) ? c : node->car;
+      x->car->r++;
+      a = node->car->cdr;
+      a->r++;
+      while (a) {
+        x->cdr = a;
+        x = x->cdr;
+        a = a->cdr;
+      }
+      x = do_call(env, f);
+      free_node(f);
       free_node(c);
-      c = eval_node(env, node->cdr);
+      c = x;
     }
     if (c) return c;
     node->r++;
@@ -1956,7 +1968,7 @@ main(int argc, char* argv[]) {
     if (isatty(fileno(stdin))) {
       printf("> ");
       if (!fgets(buf, sizeof(buf), stdin)) break;
-      fsize = strlen(buf);
+      fsize = (long)strlen(buf);
       if (buf[fsize-1] == '\n') buf[fsize-1] = 0;
     }
     else {
