@@ -93,8 +93,7 @@ skip_white(const char *p) {
     if (*p == ';') {
       p++;
       while (*p && *p != '\n') p++;
-    }
-    else if (isspace((int)*p)) p++;
+    } else if (isspace((int)*p)) p++;
     else break;
   }
   return p;
@@ -228,8 +227,7 @@ parse_paren(NODE *node, const char *p) {
       if (node->t == NODE_NIL) node->t = NODE_CELL;
       node->car = child;
       node = node->car;
-    }
-    else {
+    } else {
       node->cdr = child;
       node = node->cdr;
     }
@@ -314,8 +312,7 @@ parse_string(NODE *node, const char *p) {
       t++;
       t++;
       continue;
-    }
-    else if (*t == '"') break;
+    } else if (*t == '"') break;
     *sp++ = *t++;
   }
   *sp = 0;
@@ -602,8 +599,7 @@ do_plus(ENV *env, NODE *node) {
       if (c->t == NODE_DOUBLE) {
         nn->u.d = double_value(env, nn, &err) + double_value(env, c, &err);
         nn->t = c->t;
-      }
-      else
+      } else
         nn->u.i += int_value(env, c, &err);
       break;
     case NODE_DOUBLE:
@@ -646,8 +642,7 @@ do_minus(ENV *env, NODE *node) {
       if (c->t == NODE_DOUBLE) {
         nn->u.d = double_value(env, nn, &err) - double_value(env, c, &err);
         nn->t = c->t;
-      }
-      else
+      } else
         nn->u.i -= int_value(env, c, &err);
       break;
     case NODE_DOUBLE:
@@ -690,8 +685,7 @@ do_mul(ENV *env, NODE *node) {
       if (c->t == NODE_DOUBLE) {
         nn->u.d = double_value(env, nn, &err) * double_value(env, c, &err);
         nn->t = c->t;
-      }
-      else
+      } else
         nn->u.i *= int_value(env, c, &err);
       break;
     case NODE_DOUBLE:
@@ -734,8 +728,7 @@ do_div(ENV *env, NODE *node) {
       if (c->t == NODE_DOUBLE) {
         nn->u.d = double_value(env, nn, &err) / double_value(env, c, &err);
         nn->t = c->t;
-      }
-      else
+      } else
         nn->u.i /= int_value(env, c, &err);
       break;
     case NODE_DOUBLE:
@@ -1239,21 +1232,18 @@ do_call(ENV *env, NODE *node) {
       c = x->cdr->car;
       p = x->cdr->cdr;
       node = node->cdr;
-    }
-    else {
+    } else {
       c = x->cdr->cdr->car;
       p = x->cdr->cdr->cdr;
       node = node->car->cdr;
     }
-  }
-  else if (node->car && node->car->t == NODE_LAMBDA) {
+  } else if (node->car && node->car->t == NODE_LAMBDA) {
     x = node->car;
     x->r++;
     c = x->cdr->car;
     p = x->cdr->cdr;
     node = node->cdr;
-  }
-  else {
+  } else {
     return new_errorn("malformed arguments: %s", node);
   }
 
@@ -1437,8 +1427,7 @@ do_type_of(ENV *env, NODE *node) {
 
   if (node->cdr->t == NODE_QUOTE) {
     p = "symbol";
-  }
-  else {
+  } else {
     c = eval_node(env, node->cdr);
     if (c->t == NODE_ERROR) return c;
     switch (c->t) {
@@ -1696,8 +1685,7 @@ do_concatenate(ENV *env, NODE *node) {
       if (c->u.s) {
         c->u.s = (char*)realloc(c->u.s, strlen(c->u.s) + strlen(nn->u.s) + 1);
         strcat(c->u.s, nn->u.s);
-      }
-      else {
+      } else {
         c->u.s = (char*)malloc(strlen(nn->u.s) + 1);
         strcpy(c->u.s, nn->u.s);
       }
@@ -2006,8 +1994,7 @@ main(int argc, char* argv[]) {
       if (!fgets(buf, sizeof(buf), stdin)) break;
       fsize = (long)strlen(buf);
       if (buf[fsize-1] == '\n') buf[fsize-1] = 0;
-    }
-    else {
+    } else {
       fsize = (long)fread(buf, 1, sizeof(buf), stdin);
       if (fsize <= 0) break;
       buf[fsize] = 0;
@@ -2027,8 +2014,7 @@ main(int argc, char* argv[]) {
     ret = eval_node(env, top);
     if (ret->t == NODE_ERROR) {
       fprintf(stderr, "%s: %s\n", argv[0], ret->u.s);
-    }
-    else if (isatty(fileno(stdin))) {
+    } else if (isatty(fileno(stdin))) {
       dump_node(ret);
     }
     free_node(ret);
