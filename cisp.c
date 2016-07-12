@@ -473,22 +473,27 @@ free_env(ENV *env) {
   free((void*)env);
 }
 
+static int
+compare_item(const void *a, const void *b) {
+  return strcmp((*((ITEM**)a))->k, (*((ITEM**)b))->k);
+}
+
 static void
 add_variable(ENV *env, const char *k, NODE *node) {
   ITEM *ni;
-  node->r++;
-  int left = 0, right = env->nv, mid, r;
+  int left = 0, right = env->nv-1, mid, r;
   ITEM **lv = env->lv;
-  while (left < right) {
+  node->r++;
+  while (left <= right) {
     mid = (left + right) / 2;
     r = strcmp(lv[mid]->k, k);
     if (r == 0) {
       lv[mid]->v = node;
       return;
-    } else if (r > 0) {
-      right = mid;
-    } else {
+    } else if (r < 0) {
       left = mid + 1;
+    } else {
+      right = mid - 1;
     }
   }
   ni = (ITEM*)malloc(sizeof(ITEM));
@@ -498,18 +503,25 @@ add_variable(ENV *env, const char *k, NODE *node) {
   env->lv = (ITEM**)realloc(env->lv, sizeof(ITEM*) * (env->nv + 1));
   env->lv[env->nv] = ni;
   env->nv++;
+  qsort(env->lv, env->nv, sizeof(ITEM*), compare_item);
 }
 
 static void
 add_function(ENV *env, const char *k, NODE *node) {
-  int i;
   ITEM *ni;
+  int left = 0, right = env->nf-1, mid, r;
+  ITEM **lf = env->lf;
   node->r++;
-  for (i = 0; i < env->nf; i++) {
-    if (!strcmp(env->lf[i]->k, k)) {
-      free_node(env->lf[i]->v);
-      env->lf[i]->v = node;
+  while (left <= right) {
+    mid = (left + right) / 2;
+    r = strcmp(lf[mid]->k, k);
+    if (r == 0) {
+      lf[mid]->v = node;
       return;
+    } else if (r < 0) {
+      left = mid + 1;
+    } else {
+      right = mid - 1;
     }
   }
   ni = (ITEM*)malloc(sizeof(ITEM));
@@ -519,6 +531,7 @@ add_function(ENV *env, const char *k, NODE *node) {
   env->lf = (ITEM**)realloc(env->lf, sizeof(ITEM*) * (env->nf + 1));
   env->lf[env->nf] = ni;
   env->nf++;
+  qsort(env->lf, env->nf, sizeof(ITEM*), compare_item);
 }
 
 static long
@@ -1015,7 +1028,7 @@ do_let(ENV *env, NODE *node) {
     c = eval_node(env, x->car->cdr);
     if (x->t == NODE_ERROR) return c;
     add_variable(newenv, x->car->u.s, c);
-    free_node(c);
+	free_node(c);
     x = x->cdr;
   }
   node = node->cdr->cdr;
@@ -1062,19 +1075,19 @@ do_ident_global(ENV *env, NODE *node) {
     while (env->p) env = env->p;
     global = env;
   }
-  right = global->nv;
+  right = global->nv-1;
   lv = global->lv;
-  while (left < right) {
+  while (left <= right) {
     mid = (left + right) / 2;
     r = strcmp(lv[mid]->k, p);
     if (r == 0) {
       x = lv[mid]->v;
       x->r++;
       return x;
-    } else if (r > 0) {
-      right = mid;
-    } else {
+    } else if (r < 0) {
       left = mid + 1;
+    } else {
+      right = mid - 1;
     }
   }
   return new_errorf("unknown variable: %s", node->u.s);
@@ -1086,19 +1099,19 @@ do_ident(ENV *env, NODE *node) {
   const char *p = node->u.s;
 
   while (env) {
-    int left = 0, right = env->nv, mid, r;
+    int left = 0, right = env->nv-1, mid, r;
     ITEM **lv = env->lv;
-    while (left < right) {
+    while (left <= right) {
       mid = (left + right) / 2;
       r = strcmp(lv[mid]->k, p);
       if (r == 0) {
         x = lv[mid]->v;
         x->r++;
         return x;
-      } else if (r > 0) {
-        right = mid;
-      } else {
+      } else if (r < 0) {
         left = mid + 1;
+      } else {
+        right = mid - 1;
       }
     }
     env = env->p;
@@ -1122,19 +1135,19 @@ look_func(ENV *env, const char *k) {
     env = global;
   }
 
-  right = env->nf;
+  right = env->nf-1;
   lf = env->lf;
-  while (left < right) {
+  while (left <= right) {
     mid = (left + right) / 2;
     r = strcmp(lf[mid]->k, k);
     if (r == 0) {
       x = lf[mid]->v;
       x->r++;
       return x;
-    } else if (r > 0) {
-      right = mid;
-    } else {
+    } else if (r < 0) {
       left = mid + 1;
+    } else {
+      right = mid - 1;
     }
   }
   return NULL;
@@ -1784,6 +1797,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "type-of", do_type_of);
   add_sym(env, NODE_NIL, "nil", NULL);
   add_sym(env, NODE_T, "t", NULL);
+  qsort(env->lv, env->nv, sizeof(ITEM*), compare_item);
 }
 
 static NODE*
