@@ -812,6 +812,40 @@ do_not(ENV *env, NODE *node) {
 }
 
 static NODE*
+do_evenp(ENV *env, NODE *node) {
+  NODE *c, *err = NULL;
+
+  if (node_narg(node) != 1) return new_errorn("malformed evenp: %s", node);
+
+  c = new_node();
+  if (int_value(env, node->cdr, &err) % 2 == 1) {
+    c->t = NODE_T;
+  }
+  if (err) {
+    free_node(c);
+    return err;
+  }
+  return c;
+}
+
+static NODE*
+do_oddp(ENV *env, NODE *node) {
+  NODE *c, *err = NULL;
+
+  if (node_narg(node) != 1) return new_errorn("malformed oddp: %s", node);
+
+  c = new_node();
+  if (int_value(env, node->cdr, &err) % 2 == 1) {
+    c->t = NODE_T;
+  }
+  if (err) {
+    free_node(c);
+    return err;
+  }
+  return c;
+}
+
+static NODE*
 do_mod(ENV *env, NODE *node) {
   NODE *c, *err = NULL;
 
@@ -1836,6 +1870,8 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "make-string", do_make_string);
   add_sym(env, NODE_IDENT, "mod", do_mod);
   add_sym(env, NODE_IDENT, "not", do_not);
+  add_sym(env, NODE_IDENT, "evenp", do_evenp);
+  add_sym(env, NODE_IDENT, "oddp", do_oddp);
   add_sym(env, NODE_IDENT, "princ", do_princ);
   add_sym(env, NODE_IDENT, "print", do_print);
   add_sym(env, NODE_IDENT, "println", do_println);
