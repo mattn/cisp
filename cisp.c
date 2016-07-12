@@ -1354,12 +1354,18 @@ do_car(ENV *env, NODE *node) {
   if (!node->cdr) return new_errorn("malformed car: %s", node);
 
   x = eval_node(env, node->cdr);
-  if (x->t != NODE_CELL && x->t != NODE_NIL && x->t != NODE_QUOTE) {
-    free_node(x);
-    return new_errorn("argument is not a list: %s", node);
+  if (node->cdr->t == NODE_QUOTE && x->t != NODE_CELL) {
+    return x;
   }
   if (x->t == NODE_QUOTE) {
-    return x;
+    c = x->car;
+    c->r++;
+    free_node(x);
+    return c;
+  }
+  if (x->t != NODE_CELL && x->t != NODE_NIL) {
+    free_node(x);
+    return new_errorn("argument is not a list: %s", node);
   }
   if (x->car) {
     c = x->car;
@@ -1462,11 +1468,11 @@ do_cons(ENV *env, NODE *node) {
   case NODE_NIL:
   case NODE_CELL:
     if (rhs->t == NODE_NIL) {
+      free_node(rhs);
       c->t = NODE_CELL;
       c->car = lhs;
       if (lhs->cdr) free_node(lhs->cdr);
       lhs->cdr = NULL;
-      free_node(rhs);
     } else {
       c->t = rhs->t;
       c->car = lhs;

@@ -3,3 +3,5 @@
 (print (car x))
 (print (car nil))
 (print (car ()))
+(print (car ''a))
+(print (car (car ''a)))
