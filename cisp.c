@@ -176,7 +176,7 @@ node_narg(NODE *node) {
   return i;
 }
 
-static int
+static inline int
 match(const char *lhs, const char *rhs, size_t n) {
   const char *p = lhs, *e = lhs + n;
   while (p < e) if (*p++ != *rhs++) return 0;
@@ -475,14 +475,20 @@ free_env(ENV *env) {
 
 static void
 add_variable(ENV *env, const char *k, NODE *node) {
-  int i;
   ITEM *ni;
   node->r++;
-  for (i = 0; i < env->nv; i++) {
-    if (!strcmp(env->lv[i]->k, k)) {
-      free_node(env->lv[i]->v);
-      env->lv[i]->v = node;
+  int left = 0, right = env->nv, mid, r;
+  ITEM **lv = env->lv;
+  while (left < right) {
+    mid = (left + right) / 2;
+    r = strcmp(lv[mid]->k, k);
+    if (r == 0) {
+      lv[mid]->v = node;
       return;
+    } else if (r > 0) {
+      right = mid;
+    } else {
+      left = mid + 1;
     }
   }
   ni = (ITEM*)malloc(sizeof(ITEM));
@@ -1044,17 +1050,25 @@ do_setq(ENV *env, NODE *node) {
   return c;
 }
 
-static NODE*
+static inline NODE*
 do_ident(ENV *env, NODE *node) {
   NODE *x;
-  int i;
+  const char *p = node->u.s;
 
   while (env) {
-    for (i = 0; i < env->nv; i++) {
-      if (!strcmp(env->lv[i]->k, node->u.s)) {
-        x = env->lv[i]->v;
+    int left = 0, right = env->nv, mid, r;
+    ITEM **lv = env->lv;
+    while (left < right) {
+      mid = (left + right) / 2;
+      r = strcmp(lv[mid]->k, p);
+      if (r == 0) {
+        x = lv[mid]->v;
         x->r++;
         return x;
+      } else if (r > 0) {
+        right = mid;
+      } else {
+        left = mid + 1;
       }
     }
     env = env->p;
@@ -1066,7 +1080,8 @@ static NODE*
 look_func(ENV *env, const char *k) {
   NODE *x;
   static ENV *global;
-  int i;
+  int left = 0, right, mid, r;
+  ITEM **lf;
 
   if (!k) return NULL;
   if (global == NULL) {
@@ -1076,11 +1091,20 @@ look_func(ENV *env, const char *k) {
   else {
     env = global;
   }
-  for (i = 0; i < env->nf; i++) {
-    if (!strcmp(env->lf[i]->k, k)) {
-      x = env->lf[i]->v;
+
+  right = env->nf;
+  lf = env->lf;
+  while (left < right) {
+    mid = (left + right) / 2;
+    r = strcmp(lf[mid]->k, k);
+    if (r == 0) {
+      x = lf[mid]->v;
       x->r++;
       return x;
+    } else if (r > 0) {
+      right = mid;
+    } else {
+      left = mid + 1;
     }
   }
   return NULL;
@@ -1689,45 +1713,45 @@ add_sym(ENV *env, enum T t, const char* n, f_do f) {
 
 static void
 add_defaults(ENV *env) {
+  add_sym(env, NODE_IDENT, "%", do_mod);
+  add_sym(env, NODE_IDENT, "*", do_mul);
   add_sym(env, NODE_IDENT, "+", do_plus);
   add_sym(env, NODE_IDENT, "-", do_minus);
-  add_sym(env, NODE_IDENT, "*", do_mul);
   add_sym(env, NODE_IDENT, "/", do_div);
   add_sym(env, NODE_IDENT, "1+", do_plus1);
   add_sym(env, NODE_IDENT, "1-", do_minus1);
-  add_sym(env, NODE_IDENT, "not", do_not);
-  add_sym(env, NODE_IDENT, "mod", do_mod);
-  add_sym(env, NODE_IDENT, "%", do_mod);
-  add_sym(env, NODE_IDENT, "if", do_if);
-  add_sym(env, NODE_IDENT, ">", do_gt);
-  add_sym(env, NODE_IDENT, ">=", do_ge);
   add_sym(env, NODE_IDENT, "<", do_lt);
   add_sym(env, NODE_IDENT, "<=", do_le);
   add_sym(env, NODE_IDENT, "=", do_eq);
-  add_sym(env, NODE_IDENT, "eq", do_eq);
-  add_sym(env, NODE_IDENT, "print", do_print);
-  add_sym(env, NODE_IDENT, "println", do_println);
-  add_sym(env, NODE_IDENT, "princ", do_princ);
-  add_sym(env, NODE_IDENT, "quote", do_quote);
-  add_sym(env, NODE_IDENT, "setq", do_setq);
-  add_sym(env, NODE_IDENT, "let", do_let);
-  add_sym(env, NODE_IDENT, "defun", do_defun);
-  add_sym(env, NODE_IDENT, "progn", do_progn);
-  add_sym(env, NODE_IDENT, "cond", do_cond);
+  add_sym(env, NODE_IDENT, ">", do_gt);
+  add_sym(env, NODE_IDENT, ">=", do_ge);
+  add_sym(env, NODE_IDENT, "apply", do_apply);
   add_sym(env, NODE_IDENT, "car", do_car);
   add_sym(env, NODE_IDENT, "cdr", do_cdr);
-  add_sym(env, NODE_IDENT, "rplaca", do_rplaca);
-  add_sym(env, NODE_IDENT, "rplacd", do_rplacd);
-  add_sym(env, NODE_IDENT, "length", do_length);
   add_sym(env, NODE_IDENT, "concatenate", do_concatenate);
+  add_sym(env, NODE_IDENT, "cond", do_cond);
   add_sym(env, NODE_IDENT, "cons", do_cons);
-  add_sym(env, NODE_IDENT, "apply", do_apply);
+  add_sym(env, NODE_IDENT, "defun", do_defun);
   add_sym(env, NODE_IDENT, "dotimes", do_dotimes);
-  add_sym(env, NODE_IDENT, "lambda", do_lambda);
+  add_sym(env, NODE_IDENT, "eq", do_eq);
   add_sym(env, NODE_IDENT, "funcall", do_funcall);
-  add_sym(env, NODE_IDENT, "type-of", do_type_of);
+  add_sym(env, NODE_IDENT, "if", do_if);
+  add_sym(env, NODE_IDENT, "lambda", do_lambda);
+  add_sym(env, NODE_IDENT, "length", do_length);
+  add_sym(env, NODE_IDENT, "let", do_let);
   add_sym(env, NODE_IDENT, "load", do_load);
   add_sym(env, NODE_IDENT, "make-string", do_make_string);
+  add_sym(env, NODE_IDENT, "mod", do_mod);
+  add_sym(env, NODE_IDENT, "not", do_not);
+  add_sym(env, NODE_IDENT, "princ", do_princ);
+  add_sym(env, NODE_IDENT, "print", do_print);
+  add_sym(env, NODE_IDENT, "println", do_println);
+  add_sym(env, NODE_IDENT, "progn", do_progn);
+  add_sym(env, NODE_IDENT, "quote", do_quote);
+  add_sym(env, NODE_IDENT, "rplaca", do_rplaca);
+  add_sym(env, NODE_IDENT, "rplacd", do_rplacd);
+  add_sym(env, NODE_IDENT, "setq", do_setq);
+  add_sym(env, NODE_IDENT, "type-of", do_type_of);
   add_sym(env, NODE_NIL, "nil", NULL);
   add_sym(env, NODE_T, "t", NULL);
 }
