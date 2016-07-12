@@ -491,6 +491,7 @@ add_variable(ENV *env, const char *k, NODE *node) {
     mid = (left + right) / 2;
     r = strcmp(lv[mid]->k, k);
     if (r == 0) {
+      free_node(lv[mid]->v);
       lv[mid]->v = node;
       return;
     } else if (r < 0) {
@@ -522,6 +523,7 @@ add_function(ENV *env, const char *k, NODE *node) {
     mid = (left + right) / 2;
     r = strcmp(lf[mid]->k, k);
     if (r == 0) {
+      free_node(lf[mid]->v);
       lf[mid]->v = node;
       return;
     } else if (r < 0) {
