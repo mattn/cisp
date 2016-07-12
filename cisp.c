@@ -1871,7 +1871,6 @@ main(int argc, char* argv[]) {
     pp = skip_white(pp);
     if (*pp) {
       raise(pp);
-      free((void*)pp);
       continue;
     }
     ret = eval_node(env, top);
