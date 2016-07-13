@@ -1218,7 +1218,6 @@ do_call(ENV *env, NODE *node) {
   NODE *x = NULL, *c = NULL, *p = NULL, *nn = NULL;
   int rest = 0;
 
-  dump_node(node);
   if (node->car->t == NODE_IDENT) {
     x = do_ident_global(env, node->car);
     if (x->f) {
