@@ -365,8 +365,13 @@ print_cell(size_t nbuf, char *buf, NODE *node, int mode) {
     if (c != node->car) strncat(buf, " ", nbuf);
     print_node(nbuf, buf, c, mode);
     if (c->cdr && c->cdr->car && !c->cdr->cdr) {
-      strncat(buf, " . ", nbuf);
-      print_node(nbuf, buf, c->cdr->car, mode);
+      if (c->cdr->car->cdr) {
+        strncat(buf, " ", nbuf);
+        print_node(nbuf, buf, c->cdr, mode);
+      } else {
+        strncat(buf, " . ", nbuf);
+        print_node(nbuf, buf, c->cdr->car, mode);
+      }
       break;
     }
     c = c->cdr;
