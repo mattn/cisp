@@ -1372,25 +1372,26 @@ do_progn(ENV *env, NODE *node) {
   NODE *f, *c, *x, *a;
 
   node = node->car;
+  if (!node->car) {
+    return new_errorn("malformed function: %s", node);
+  }
   c = NULL;
   while (node) {
     if (c) free_node(c);
     f = x = new_node();
-    if (node->car) {
-      x->t = NODE_CELL;
-      x->car = node->car;
-      x->car = node->car;
-      x->car->r++;
-      a = node->car->cdr;
-      if (a) a->r++;
-      while (a) {
-        x->cdr = a;
-        x = x->cdr;
-        a = a->cdr;
-      }
-      x = do_call(env, f);
-      free_node(f);
+    x->t = NODE_CELL;
+    x->car = node->car;
+    x->car = node->car;
+    x->car->r++;
+    a = node->car->cdr;
+    if (a) a->r++;
+    while (a) {
+      x->cdr = a;
+      x = x->cdr;
+      a = a->cdr;
     }
+    x = do_call(env, f);
+    free_node(f);
     c = x;
     if (c->t == NODE_ERROR) break;
     node = node->cdr;
