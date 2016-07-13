@@ -1079,6 +1079,14 @@ do_let(ENV *env, NODE *node) {
 }
 
 static NODE*
+do_exit(ENV *env, NODE *node) {
+  if (node_narg(node)) return new_errorn("malformed exit: %s", node);
+
+  exit(0);
+  return NULL;
+}
+
+static NODE*
 do_setq(ENV *env, NODE *node) {
   NODE *x, *c;
   static ENV *global;
@@ -1368,18 +1376,21 @@ do_progn(ENV *env, NODE *node) {
   while (node) {
     if (c) free_node(c);
     f = x = new_node();
-    x->t = NODE_CELL;
-    x->car = node->car;
-    x->car->r++;
-    a = node->car->cdr;
-    if (a) a->r++;
-    while (a) {
-      x->cdr = a;
-      x = x->cdr;
-      a = a->cdr;
+    if (node->car) {
+      x->t = NODE_CELL;
+      x->car = node->car;
+      x->car = node->car;
+      x->car->r++;
+      a = node->car->cdr;
+      if (a) a->r++;
+      while (a) {
+        x->cdr = a;
+        x = x->cdr;
+        a = a->cdr;
+      }
+      x = do_call(env, f);
+      free_node(f);
     }
-    x = do_call(env, f);
-    free_node(f);
     c = x;
     if (c->t == NODE_ERROR) break;
     node = node->cdr;
@@ -1761,7 +1772,6 @@ do_load(ENV *env, NODE *node) {
 
   fp = fopen(node->cdr->u.s, "rb");
   if (!fp) {
-    fclose(fp);
     return new_errorf("%s", strerror(errno));
   }
   fseek(fp, 0, SEEK_END);
@@ -1790,11 +1800,10 @@ do_load(ENV *env, NODE *node) {
     return new_errorf("invalid token: %s", node);
   }
   free((char*)t);
-  ret = eval_node(env, top);
+  ret = do_progn(env, top);
   if (ret->t == NODE_ERROR) return ret;
   free_node(ret);
   free_node(top);
-  free_env(env);
   ret = new_node();
   ret->t = NODE_T;
   return ret;
@@ -1893,6 +1902,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "rplaca", do_rplaca);
   add_sym(env, NODE_IDENT, "rplacd", do_rplacd);
   add_sym(env, NODE_IDENT, "setq", do_setq);
+  add_sym(env, NODE_IDENT, "exit", do_exit);
   add_sym(env, NODE_IDENT, "type-of", do_type_of);
   add_sym(env, NODE_IDENT, "getenv", do_getenv);
   add_sym(env, NODE_NIL, "nil", NULL);
