@@ -1772,9 +1772,11 @@ do_load(ENV *env, NODE *node) {
   }
 
   fp = fopen(node->cdr->u.s, "rb");
+  free_node(x);
   if (!fp) {
     return new_errorf("%s", strerror(errno));
   }
+
   fseek(fp, 0, SEEK_END);
   fsize = ftell(fp);
   fseek(fp, 0, SEEK_SET);
@@ -1802,9 +1804,11 @@ do_load(ENV *env, NODE *node) {
   }
   free((char*)t);
   ret = do_progn(env, top);
-  if (ret->t == NODE_ERROR) return ret;
-  free_node(ret);
   free_node(top);
+  if (ret->t == NODE_ERROR) {
+    return ret;
+  }
+  free_node(ret);
   ret = new_node();
   ret->t = NODE_T;
   return ret;
