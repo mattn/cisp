@@ -217,19 +217,31 @@ parse_paren(NODE *node, const char *p) {
 
   while (p && *p && *p != ')') {
     NODE *child = new_node();
-    p = parse_any(child, p);
-    if (!p) {
-      free_node(child);
-      return NULL;
-    }
-
-    if (node == head) {
-      if (node->t == NODE_NIL) node->t = NODE_CELL;
+    if (*p == '(') {
+      p = parse_any(child, p);
+      if (!p) {
+        free_node(child);
+        return NULL;
+      }
       node->car = child;
       node = node->car;
-    } else {
-      node->cdr = child;
-      node = node->cdr;
+    }
+    else {
+      p = parse_any(child, p);
+      if (!p) {
+        free_node(child);
+        return NULL;
+      }
+      if (node == head) {
+        if (node->t == NODE_NIL) node->t = NODE_CELL;
+        node->car = child;
+        node = node->car;
+      }
+      else {
+        node->cdr = child;
+        node = node->cdr;
+      }
+
     }
 
     p = skip_white(p);
@@ -372,6 +384,10 @@ print_cell(size_t nbuf, char *buf, NODE *node, int mode) {
         strncat(buf, " . ", nbuf);
         print_node(nbuf, buf, c->cdr->car, mode);
       }
+      break;
+    } else if (c->car) {
+      strncat(buf, " ", nbuf);
+      print_node(nbuf, buf, c->car, mode);
       break;
     }
     c = c->cdr;
