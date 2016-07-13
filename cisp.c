@@ -434,7 +434,7 @@ print_node(size_t nbuf, char* buf, NODE *node, int mode) {
   }
 }
 
-static void
+static inline void
 free_node(NODE *node) {
   if (!node) return;
   node->r--;
@@ -1900,7 +1900,7 @@ add_defaults(ENV *env) {
   qsort(env->lv, env->nv, sizeof(ITEM*), compare_item);
 }
 
-static NODE*
+static inline NODE*
 eval_node(ENV *env, NODE *node) {
   NODE *c = NULL;
   switch (node->t) {
@@ -1930,7 +1930,7 @@ eval_node(ENV *env, NODE *node) {
     return node;
   case NODE_CELL:
     c = NULL;
-    if (!node->car || node->car->car) {
+    if (node->car && node->car->car) {
       c = eval_node(env, node->car);
     }
     if ((node->car && !node->car->car) || (c != NULL && c->t == NODE_LAMBDA)) {
