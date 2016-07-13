@@ -384,6 +384,10 @@ print_str(size_t nbuf, char *buf, NODE *node, int mode) {
     return;
   }
   p = node->u.s;
+  if (!p) {
+    strncat(buf, "nil", nbuf);
+    return;
+  }
   tmp[1] = 0;
   strncat(buf, "\"", nbuf);
   while (*p) {
@@ -1214,6 +1218,7 @@ do_call(ENV *env, NODE *node) {
   NODE *x = NULL, *c = NULL, *p = NULL, *nn = NULL;
   int rest = 0;
 
+  dump_node(node);
   if (node->car->t == NODE_IDENT) {
     x = do_ident_global(env, node->car);
     if (x->f) {
@@ -1445,6 +1450,27 @@ do_type_of(ENV *env, NODE *node) {
   c->t = NODE_STRING;
   c->u.s = strdup(p);
   return c;
+}
+
+static NODE*
+do_getenv(ENV *env, NODE *node) {
+  NODE *c;
+  const char *p;
+  if (!node->cdr) return new_errorn("malformed getenv: %s", node);
+
+  c = eval_node(env, node->cdr);
+  if (c->t != NODE_STRING || !c->u.s) {
+    free_node(c);
+    return new_errorn("malformed getenv: %s", node);
+  }
+  p = getenv(c->u.s);
+  if (p) {
+    c = new_node();
+    c->t = NODE_STRING;
+    c->u.s = strdup(p);
+    return c;
+  }
+  return new_node();
 }
 
 static NODE*
@@ -1869,6 +1895,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "rplacd", do_rplacd);
   add_sym(env, NODE_IDENT, "setq", do_setq);
   add_sym(env, NODE_IDENT, "type-of", do_type_of);
+  add_sym(env, NODE_IDENT, "getenv", do_getenv);
   add_sym(env, NODE_NIL, "nil", NULL);
   add_sym(env, NODE_T, "t", NULL);
   qsort(env->lv, env->nv, sizeof(ITEM*), compare_item);
