@@ -16,7 +16,7 @@
 # define snprintf(b,n,f,...) _snprintf(b,n,f,__VA_ARGS__)
 #endif
 
-#define SYMBOL_CHARS "+-*/<>=&%"
+#define SYMBOL_CHARS "+-*/<>=&%?"
 
 enum T {
   NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_IDENT,
