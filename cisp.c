@@ -16,6 +16,12 @@
 # define snprintf(b,n,f,...) _snprintf(b,n,f,__VA_ARGS__)
 #endif
 
+#ifndef _MSC_VER
+# define INLINE inline
+#else
+# define INLINE
+#endif
+
 #define SYMBOL_CHARS "+-*/<>=&%?."
 
 enum T {
@@ -76,6 +82,7 @@ static const char* parse_any(NODE *node, const char *p);
 static NODE* eval_node(ENV *env, NODE *node);
 static void print_node(size_t nbuf, char *buf, NODE *node, int mode);
 static void free_node(NODE *node);
+static NODE* do_ident_global(ENV *env, NODE *node);
 
 static void
 dump_node(NODE *node) {
@@ -155,6 +162,8 @@ node_length(NODE *node) {
   int i = 0;
   if (node->car) {
     node = node->car;
+    if (!node->car && !node->cdr)
+      return 0;
     i++;
     while (node->cdr) {
       node = node->cdr;
@@ -174,7 +183,7 @@ node_narg(NODE *node) {
   return i;
 }
 
-static inline int
+static INLINE int
 match(const char *lhs, const char *rhs, size_t n) {
   const char *p = lhs, *e = lhs + n;
   while (p < e) if (*p++ != *rhs++) return 0;
@@ -191,7 +200,14 @@ parse_paren(NODE *node, const char *p) {
 
   while (p && *p && *p != ')') {
     NODE *child = new_node();
-    p = parse_any(child, p);
+    if (node != head && *p == '(') {
+      child->t = NODE_CELL;
+      child->car = new_node();
+      child->car->t = NODE_CELL;
+      p = parse_any(child->car, p);
+    } else {
+      p = parse_any(child, p);
+    }
     if (!p) {
       free_node(child);
       return NULL;
@@ -225,6 +241,7 @@ parse_paren(NODE *node, const char *p) {
 
     p = skip_white(p);
   }
+
   if (p && *p) {
     p = skip_white(p);
   }
@@ -324,7 +341,7 @@ parse_any(NODE *node, const char *p) {
       p++;
       return p;
     }
-    return raisef("shoud be )", p);
+    return raisef("should be )", p);
   }
   if (*p == '\'') return parse_quote(node, p + 1);
   if (*p == '"') return parse_string(node, p + 1);
@@ -358,9 +375,14 @@ print_cell(size_t nbuf, char *buf, NODE *node, int mode) {
         strncat(buf, " ", nbuf);
         print_node(nbuf, buf, c->cdr, mode);
       } else {
-        strncat(buf, " . ", nbuf);
+        if (c->cdr->car->car) strncat(buf, " ", nbuf);
+        else strncat(buf, " . ", nbuf);
         print_node(nbuf, buf, c->cdr->car, mode);
       }
+      break;
+    } else if (c->car) {
+      strncat(buf, " ", nbuf);
+      print_node(nbuf, buf, c->car, mode);
       break;
     }
     c = c->cdr;
@@ -428,7 +450,7 @@ print_node(size_t nbuf, char* buf, NODE *node, int mode) {
   }
 }
 
-static inline void
+static INLINE void
 free_node(NODE *node) {
   if (!node) return;
   node->r--;
@@ -1034,6 +1056,11 @@ static NODE*
 do_quote(ENV *env, NODE *node) {
   if (node_narg(node) != 1) return new_errorn("malformed quote: %s", node);
 
+  if (node->cdr->t == NODE_CELL && node->cdr->car) {
+    node = node->cdr->car;
+    node->r++;
+    return node;
+  }
   node->cdr->r++;
   return node->cdr;
 }
@@ -1097,14 +1124,18 @@ do_setq(ENV *env, NODE *node) {
     global = env;
   }
 
-  c = eval_node(env, node->cdr->cdr);
+  c = node->cdr->cdr;
+  if (c->t == NODE_CELL && c->car && c->car->t == NODE_CELL) {
+	  c = c->car;
+  }
+  c = eval_node(env, c);
   if (c->t == NODE_ERROR) return c;
   add_variable(global, x->u.s, c);
   c->r++;
   return c;
 }
 
-static inline NODE*
+static INLINE NODE*
 do_ident(ENV *env, NODE *node) {
   NODE *x;
   const char *p = node->u.s;
@@ -1150,7 +1181,7 @@ do_ident(ENV *env, NODE *node) {
   return new_errorf("unknown variable: %s", node->u.s);
 }
 
-static inline NODE*
+static INLINE NODE*
 do_ident_global(ENV *env, NODE *node) {
   NODE *x;
   static ENV *global;
@@ -1239,16 +1270,16 @@ do_call(ENV *env, NODE *node) {
       p = x->cdr->cdr;
       node = node->cdr;
     } else {
-      c = x->cdr->cdr->car;
-      p = x->cdr->cdr->cdr;
+      c = x->car->cdr->cdr->car->car;
+      p = x->car->cdr->cdr->cdr;
       node = node->car->cdr;
     }
   } else if (node->car && node->car->t == NODE_LAMBDA) {
     x = node->car;
     x->r++;
-    c = x->cdr->car;
-    p = x->cdr->cdr;
-    node = node->cdr;
+    c = x->cdr->car->car;
+	p = x->cdr->cdr->car;
+	node = node->cdr;
   } else {
     return new_errorn("malformed arguments: %s", node);
   }
@@ -1375,7 +1406,6 @@ do_progn(ENV *env, NODE *node) {
     f = x = new_node();
     x->t = NODE_CELL;
     x->car = node->car;
-    x->car = node->car;
     x->car->r++;
     a = node->car->cdr;
     if (a) a->r++;
@@ -1405,7 +1435,7 @@ do_dotimes(ENV *env, NODE *node) {
   if (node_narg(node) != 2) return new_errorn("malformed dotimes: %s", node);
 
   x = node->cdr;
-  c = eval_node(env, x->car->cdr);
+  c = eval_node(env, x->car->car->cdr);
   if (c->t == NODE_ERROR) return c;
   r = int_value(env, c, &err);
   free_node(c);
@@ -1413,7 +1443,7 @@ do_dotimes(ENV *env, NODE *node) {
   newenv = new_env(env);
   nn = new_node();
   nn->t = NODE_INT;
-  add_variable(newenv, x->car->u.s, nn);
+  add_variable(newenv, x->car->car->u.s, nn);
   c = NULL;
   for (i = 0; i < r; i++) {
     nn->u.i = i;
@@ -1498,7 +1528,7 @@ do_cond(ENV *env, NODE *node) {
     }
     if (r != 0) {
       free_node(c);
-      return eval_node(env, node->car->cdr);
+      return eval_node(env, node->car->car->cdr);
     }
     node = node->cdr;
   }
@@ -1528,9 +1558,11 @@ do_car(ENV *env, NODE *node) {
   }
   if (x->car) {
     c = x->car;
-    c->r++;
-    free_node(x);
-    return c;
+    if (c->car || c->cdr) {
+      c->r++;
+      free_node(x);
+      return c;
+    }
   }
   free_node(x);
   return new_node();
@@ -1549,7 +1581,7 @@ do_cdr(ENV *env, NODE *node) {
   }
 
   if (x->car) {
-    if (!x->car->cdr->car) {
+    if (x->car->cdr && !x->car->cdr->car) {
       c = new_node();
       c->t = NODE_CELL;
       c->car = x->car->cdr;
@@ -1558,10 +1590,12 @@ do_cdr(ENV *env, NODE *node) {
       return c;
     }
     c = x->car->cdr;
-    if (!c->car->cdr) c = c->car;
-    c->r++;
-    free_node(x);
-    return c;
+    if (c) {
+      if (!c->car->cdr) c = c->car;
+      c->r++;
+      free_node(x);
+      return c;
+    }
   }
   free_node(x);
   return new_node();
@@ -1673,7 +1707,7 @@ do_length(ENV *env, NODE *node) {
   }
   c = new_node();
   c->t = NODE_INT;
-  c->u.i = x->t == NODE_STRING ? (long)strlen(x->u.s) : node_length(x);
+  c->u.i = x->t == NODE_NIL ? 0 : x->t == NODE_STRING ? (long)strlen(x->u.s) : node_length(x);
   free_node(x);
   return c;
 }
@@ -1752,7 +1786,7 @@ do_make_string(ENV *env, NODE *node) {
 
 static NODE*
 do_load(ENV *env, NODE *node) {
-  NODE *x, *ret, *top;
+  NODE *x, *ret, *top, *part;
   char *p, *t;
   long fsize;
   FILE *fp;
@@ -1797,7 +1831,15 @@ do_load(ENV *env, NODE *node) {
     return new_errorf("invalid token: %s", node);
   }
   free((char*)t);
-  ret = do_progn(env, top);
+
+  part = top->car;
+  ret = NULL;
+  while (part) {
+    if (ret) free_node(ret);
+    ret = eval_node(env, part);
+    part = part->cdr;
+  }
+
   free_node(top);
   if (ret->t == NODE_ERROR) {
     return ret;
@@ -1909,7 +1951,7 @@ add_defaults(ENV *env) {
   qsort(env->lv, env->nv, sizeof(ITEM*), compare_item);
 }
 
-static inline NODE*
+static INLINE NODE*
 eval_node(ENV *env, NODE *node) {
   NODE *c = NULL;
   switch (node->t) {
@@ -1942,23 +1984,25 @@ eval_node(ENV *env, NODE *node) {
     if (node->car && node->car->car) {
       c = eval_node(env, node->car);
     }
-    if ((node->car && !node->car->car) || (c != NULL && c->t == NODE_LAMBDA)) {
+    if ((node->car && !node->car->car && node->car->t != NODE_NIL) || (c != NULL && c->t == NODE_LAMBDA)) {
       NODE *f, *x, *a;
       f = x = new_node();
       x->t = NODE_CELL;
       x->car = (c != NULL && c->t == NODE_LAMBDA) ? c : node->car;
-      x->car->r++;
-      a = node->car->cdr;
-      a->r++;
-      while (a) {
-        x->cdr = a;
-        x = x->cdr;
-        a = a->cdr;
+      if (x->car->t != NODE_CELL || x->car->car || x->car->cdr) {
+        x->car->r++;
+        a = node->car->cdr;
+        if (a) a->r++;
+        while (a) {
+          x->cdr = a;
+          x = x->cdr;
+          a = a->cdr;
+        }
+        x = do_call(env, f);
+        free_node(f);
+        free_node(c);
+        c = x;
       }
-      x = do_call(env, f);
-      free_node(f);
-      free_node(c);
-      c = x;
     }
     if (c) return c;
     node->r++;
@@ -1971,7 +2015,7 @@ eval_node(ENV *env, NODE *node) {
 int
 main(int argc, char* argv[]) {
   ENV *env;
-  NODE *top, *ret;
+  NODE *top, *ret, *part;
   char buf[BUFSIZ], *p;
   const char *pp;
   long fsize;
@@ -2005,17 +2049,19 @@ main(int argc, char* argv[]) {
       free_env(env);
       exit(1);
     }
-    if (*p) {
-      free_node(top);
-      free_env(env);
-      raise(p);
-      exit(1);
-    }
     free((char*)pp);
-    ret = do_progn(env, top);
-    if (ret->t == NODE_ERROR)
-      fprintf(stderr, "%s: %s\n", argv[0], ret->u.s);
-    free_node(ret);
+    part = top->car;
+    ret = NULL;
+    while (part) {
+      if (ret) free_node(ret);
+      ret = eval_node(env, part);
+      part = part->cdr;
+    }
+    if (ret) {
+      if (ret->t == NODE_ERROR)
+        fprintf(stderr, "%s: %s\n", argv[0], ret->u.s);
+      free_node(ret);
+    }
     free_node(top);
     free_env(env);
     exit(0);
