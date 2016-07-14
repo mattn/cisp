@@ -16,7 +16,7 @@
 # define snprintf(b,n,f,...) _snprintf(b,n,f,__VA_ARGS__)
 #endif
 
-#define SYMBOL_CHARS "+-*/<>=&%?"
+#define SYMBOL_CHARS "+-*/<>=&%?."
 
 enum T {
   NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_IDENT,
@@ -73,7 +73,6 @@ raise(const char *p) {
 }
 
 static const char* parse_any(NODE *node, const char *p);
-static const char* parse_ident(NODE *node, const char *p);
 static NODE* eval_node(ENV *env, NODE *node);
 static void print_node(size_t nbuf, char *buf, NODE *node, int mode);
 static void free_node(NODE *node);
@@ -184,31 +183,6 @@ match(const char *lhs, const char *rhs, size_t n) {
 }
 
 static const char*
-parse_number(NODE *node, const char* p) {
-  const char *t = p;
-  if (*p == '-') p++;
-  while (*p && isdigit(*p)) p++;
-
-  if (t == p) {
-    return parse_ident(node, t);
-  }
-  if (*p == '.') {
-    p++;
-    while (*p && isdigit(*p)) p++;
-    node->t = NODE_DOUBLE;
-    node->u.d = atof(t);
-    return p;
-  }
-
-  if (*(p - 1) == '-' || strchr(SYMBOL_CHARS, *p)) {
-    return parse_ident(node, t);
-  }
-  node->t = NODE_INT;
-  node->u.i = atoi(t);
-  return p;
-}
-
-static const char*
 parse_paren(NODE *node, const char *p) {
   NODE *head = node;
 
@@ -223,6 +197,23 @@ parse_paren(NODE *node, const char *p) {
       return NULL;
     }
 
+    if (child->t == NODE_IDENT && !strcmp(".", child->u.s)) {
+      if (node == head) {
+        free_node(child);
+        return raise(".");
+      }
+      free_node(child);
+      child = new_node();
+      p = skip_white(p);
+      p = parse_any(child, p);
+      if (p) {
+        NODE *x = new_node();
+        x->t = NODE_CELL;
+        x->car = child;
+        node->cdr = x;
+      }
+      break;
+    }
     if (node == head) {
       if (node->t == NODE_NIL) node->t = NODE_CELL;
       node->car = child;
@@ -233,18 +224,6 @@ parse_paren(NODE *node, const char *p) {
     }
 
     p = skip_white(p);
-    if (*p == '.') {
-      NODE *cdr;
-      cdr = new_node();
-      p = parse_any(cdr, p + 1);
-      if (p) {
-        NODE *x = new_node();
-        x->t = NODE_CELL;
-        x->car = cdr;
-        node->cdr = x;
-      }
-      break;
-    }
   }
   if (p && *p) {
     p = skip_white(p);
@@ -254,14 +233,25 @@ parse_paren(NODE *node, const char *p) {
 
 static const char*
 parse_ident(NODE *node, const char *p) {
+  char *e;
   const char *t = p;
-  while (*p && (isalpha(*p) || isdigit(*p) || strchr(SYMBOL_CHARS, *p))) p++;
+  while (*p && (isalnum(*p) || strchr(SYMBOL_CHARS, *p))) p++;
   if (match(t, "nil", (size_t)(p - t))) {
     node->t = NODE_NIL;
     return p;
   }
   if (match(t, "t", (size_t)(p - t))) {
     node->t = NODE_T;
+    return p;
+  }
+  node->u.i = strtol(t, &e, 10);
+  if (p == e) {
+    node->t = NODE_INT;
+    return p;
+  }
+  node->u.d = strtod(t, &e);
+  if (p == e) {
+    node->t = NODE_DOUBLE;
     return p;
   }
   node->t = NODE_IDENT;
@@ -336,10 +326,9 @@ parse_any(NODE *node, const char *p) {
     }
     return raisef("shoud be )", p);
   }
-  if (*p == '-' || isdigit(*p)) return parse_number(node, p);
   if (*p == '\'') return parse_quote(node, p + 1);
   if (*p == '"') return parse_string(node, p + 1);
-  if (isalpha(*p) || strchr(SYMBOL_CHARS, *p)) return parse_ident(node, p);
+  if (isalnum(*p) || strchr(SYMBOL_CHARS, *p)) return parse_ident(node, p);
   if (*p) return raise(p);
   return p;
 }
