@@ -186,8 +186,8 @@ node_narg(NODE *node) {
 static INLINE int
 match(const char *lhs, const char *rhs, size_t n) {
   const char *p = lhs, *e = lhs + n;
-  while (p < e) if (*p++ != *rhs++) return 0;
-  if (*p || *rhs) return 0;
+  while (p < e) if (!*rhs || *p++ != *rhs++) return 0;
+  if (*rhs) return 0;
   return 1;
 }
 
@@ -1465,22 +1465,21 @@ do_type_of(ENV *env, NODE *node) {
 
   if (!node->cdr) return new_errorn("malformed type-of: %s", node);
 
-  if (node->cdr->t == NODE_QUOTE) {
-    p = "symbol";
-  } else {
-    c = eval_node(env, node->cdr);
-    if (c->t == NODE_ERROR) return c;
-    switch (c->t) {
-    case NODE_NIL: p = "null"; break;
-    case NODE_T: p = "boolean"; break;
-    case NODE_INT: p = "int"; break;
-    case NODE_DOUBLE: p = "float"; break;
-    case NODE_STRING: p = "string"; break;
-    case NODE_QUOTE: p = "symbol"; break;
-    case NODE_ERROR: p = "error"; break;
-    }
-    free_node(c);
+  c = eval_node(env, node->cdr);
+  if (c->t == NODE_ERROR) return c;
+  switch (c->t) {
+  case NODE_NIL: p = "null"; break;
+  case NODE_T: p = "boolean"; break;
+  case NODE_INT: p = "int"; break;
+  case NODE_DOUBLE: p = "float"; break;
+  case NODE_STRING: p = "string"; break;
+  case NODE_QUOTE: p = "cons"; break;
+  case NODE_CELL: p = "cons"; break;
+  case NODE_LAMBDA: p = "function"; break;
+  case NODE_IDENT: p = "symbol"; break;
+  case NODE_ERROR: p = "error"; break;
   }
+  free_node(c);
   c = new_node();
   c->t = NODE_STRING;
   c->u.s = strdup(p);
@@ -1946,8 +1945,6 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "exit", do_exit);
   add_sym(env, NODE_IDENT, "type-of", do_type_of);
   add_sym(env, NODE_IDENT, "getenv", do_getenv);
-  add_sym(env, NODE_NIL, "nil", NULL);
-  add_sym(env, NODE_T, "t", NULL);
   qsort(env->lv, env->nv, sizeof(ITEM*), compare_item);
 }
 
