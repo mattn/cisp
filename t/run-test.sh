@@ -8,7 +8,7 @@ cd `dirname $0`
     echo "SKIP"
     continue
   fi
-  EXPECT=$(cat `basename $file .lisp`.out)
+  EXPECT=$(cat `basename $file .lisp`.out | tr -d "\r")
   ACTUAL=$(../cisp $file | tr -d "\r")
   if [ "$ACTUAL" != "$EXPECT" ]; then
     echo "NG"
