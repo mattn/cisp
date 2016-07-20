@@ -198,16 +198,10 @@ parse_paren(NODE *node, const char *p) {
   if (!p) return NULL;
   p = skip_white(p);
 
+  node->t = NODE_CELL;
   while (p && *p && *p != ')') {
     NODE *child = new_node();
-    if (node != head && *p == '(') {
-      child->t = NODE_CELL;
-      child->car = new_node();
-      child->car->t = NODE_CELL;
-      p = parse_any(child->car, p);
-    } else {
-      p = parse_any(child, p);
-    }
+    p = parse_any(child, p);
     if (!p) {
       free_node(child);
       return NULL;
@@ -219,24 +213,28 @@ parse_paren(NODE *node, const char *p) {
         return raise(".");
       }
       free_node(child);
+
       child = new_node();
+
       p = skip_white(p);
       p = parse_any(child, p);
-      if (p) {
+      if (!p) {
+        free_node(child);
+        return NULL;
+      }
+      node->cdr = child;
+      break;
+    } else {
+      if (node == head) {
+        node->car = child;
+        node = child;
+      } else {
         NODE *x = new_node();
         x->t = NODE_CELL;
         x->car = child;
         node->cdr = x;
+        node = x;
       }
-      break;
-    }
-    if (node == head) {
-      if (node->t == NODE_NIL) node->t = NODE_CELL;
-      node->car = child;
-      node = node->car;
-    } else {
-      node->cdr = child;
-      node = node->cdr;
     }
 
     p = skip_white(p);
@@ -365,24 +363,36 @@ static void
 print_cell(size_t nbuf, char *buf, NODE *node, int mode) {
   NODE *c;
   strncat(buf, "(", nbuf);
-  c = node->car;
+  c = node;
 
+  /*
+     while (c) {
+     if (c != node->car) strncat(buf, " ", nbuf);
+     print_node(nbuf, buf, c, mode);
+     if (c->cdr && c->cdr->car && !c->cdr->cdr) {
+     if (c->cdr->car->cdr) {
+     strncat(buf, " ", nbuf);
+     print_node(nbuf, buf, c->cdr, mode);
+     } else {
+     if (c->cdr->car->car) strncat(buf, " ", nbuf);
+     else strncat(buf, " . ", nbuf);
+     print_node(nbuf, buf, c->cdr->car, mode);
+     }
+     break;
+     } else if (c->car) {
+     strncat(buf, " ", nbuf);
+     print_node(nbuf, buf, c->car, mode);
+     break;
+     }
+     c = c->cdr;
+     }
+     */
   while (c) {
-    if (c != node->car) strncat(buf, " ", nbuf);
-    print_node(nbuf, buf, c, mode);
-    if (c->cdr && c->cdr->car && !c->cdr->cdr) {
-      if (c->cdr->car->cdr) {
-        strncat(buf, " ", nbuf);
-        print_node(nbuf, buf, c->cdr, mode);
-      } else {
-        if (c->cdr->car->car) strncat(buf, " ", nbuf);
-        else strncat(buf, " . ", nbuf);
-        print_node(nbuf, buf, c->cdr->car, mode);
-      }
-      break;
-    } else if (c->car) {
-      strncat(buf, " ", nbuf);
-      print_node(nbuf, buf, c->car, mode);
+    if (c != node) strncat(buf, " ", nbuf);
+    print_node(nbuf, buf, c->car, mode);
+    if (c->cdr && c->cdr->t == NODE_CELL && !c->cdr->cdr) {
+      strncat(buf, " . ", nbuf);
+      print_node(nbuf, buf, c->cdr, mode);
       break;
     }
     c = c->cdr;
@@ -1126,7 +1136,7 @@ do_setq(ENV *env, NODE *node) {
 
   c = node->cdr->cdr;
   if (c->t == NODE_CELL && c->car && c->car->t == NODE_CELL) {
-	  c = c->car;
+    c = c->car;
   }
   c = eval_node(env, c);
   if (c->t == NODE_ERROR) return c;
@@ -1278,8 +1288,8 @@ do_call(ENV *env, NODE *node) {
     x = node->car;
     x->r++;
     c = x->cdr->car->car;
-	p = x->cdr->cdr->car;
-	node = node->cdr;
+    p = x->cdr->cdr->car;
+    node = node->cdr;
   } else {
     return new_errorn("malformed arguments: %s", node);
   }
@@ -1979,7 +1989,7 @@ eval_node(ENV *env, NODE *node) {
   case NODE_CELL:
     c = NULL;
     if (node->car && node->car->car) {
-      c = eval_node(env, node->car);
+      return eval_node(env, node->car);
     }
     if ((node->car && !node->car->car && node->car->t != NODE_NIL) || (c != NULL && c->t == NODE_LAMBDA)) {
       NODE *f, *x, *a;
@@ -1991,7 +2001,7 @@ eval_node(ENV *env, NODE *node) {
         a = node->car->cdr;
         if (a) a->r++;
         while (a) {
-          x->cdr = a;
+          x->cdr = a->car;
           x = x->cdr;
           a = a->cdr;
         }
