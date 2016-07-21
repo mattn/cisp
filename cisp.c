@@ -1628,7 +1628,7 @@ do_rplaca(ENV *env, NODE *node) {
 
   lhs = eval_node(env, node->cdr->car);
   if (lhs->t == NODE_ERROR) return lhs;
-  if (lhs->t != NODE_CELL || !lhs->car->cdr)
+  if (lhs->t != NODE_CELL || !lhs->cdr->cdr)
     return new_errorn("malformed rplaca: %s", node);
   rhs = eval_node(env, node->cdr->cdr->car);
   if (rhs->t == NODE_ERROR) {
@@ -1658,17 +1658,15 @@ do_rplacd(ENV *env, NODE *node) {
 
   lhs = eval_node(env, node->cdr->car);
   if (lhs->t == NODE_ERROR) return lhs;
-  if (lhs->t != NODE_CELL || !lhs->car->cdr)
+  if (lhs->t != NODE_CELL || !lhs->cdr->cdr)
     return new_errorn("malformed rplacd: %s", node);
   rhs = eval_node(env, node->cdr->cdr->car);
   if (rhs->t == NODE_ERROR) {
     free_node(lhs);
     return rhs;
   }
-  free_node(lhs->car->cdr);
-  lhs->car->cdr = new_node();
-  lhs->car->cdr->t = NODE_CELL;
-  lhs->car->cdr->car = rhs;
+  free_node(lhs->cdr);
+  lhs->cdr = rhs;
   return lhs;
 }
 
