@@ -160,15 +160,11 @@ new_env(ENV *p) {
 static int
 node_length(NODE *node) {
   int i = 0;
-  if (node->car) {
-    node = node->car;
-    if (!node->car && !node->cdr)
-      return 0;
+  if (!node) return 0;
+  i++;
+  while (node->cdr) {
+    node = node->cdr;
     i++;
-    while (node->cdr) {
-      node = node->cdr;
-      i++;
-    }
   }
   return i;
 }
@@ -1280,7 +1276,6 @@ static NODE*
 do_call(ENV *env, NODE *node) {
   ENV *newenv;
   NODE *x = NULL, *c = NULL, *p = NULL, *nn = NULL;
-  int rest = 0;
 
   if (node->car->t == NODE_IDENT) {
     x = do_ident_global(env, node->car);
@@ -1318,12 +1313,12 @@ do_call(ENV *env, NODE *node) {
   newenv = new_env(env);
 
   while (node) {
-    if ((c && c->car && !strcmp("&rest", c->car->s)) || rest) {
+    if ((c && c->car && !strcmp("&rest", c->car->s)) || c->t == NODE_IDENT) {
       NODE *l, *rr;
       rr = l = new_node();
       l->t = NODE_CELL;
       while (node) {
-        nn = eval_node(env, node);
+        nn = eval_node(env, node->car);
         if (nn->t == NODE_ERROR) {
           free_env(newenv);
           free_node(x);
@@ -1338,7 +1333,7 @@ do_call(ENV *env, NODE *node) {
         }
         node = node->cdr;
       }
-      add_variable(newenv, rest ? c->car->s : c->cdr->s, rr);
+      add_variable(newenv, c->t == NODE_IDENT ? c->s : c->cdr->car->s, rr);
       free_node(nn);
       break;
     }
@@ -1351,7 +1346,6 @@ do_call(ENV *env, NODE *node) {
     add_variable(newenv, c->car->s, nn);
     node = node->cdr;
     c = c->cdr;
-    //if (c && c->cdr->t == NODE_CELL && !c->cdr) rest = 1;
   }
   c = NULL;
   while (p) {
@@ -1559,7 +1553,7 @@ do_cond(ENV *env, NODE *node) {
     }
     if (r != 0) {
       free_node(c);
-      return eval_node(env, node->car->car->cdr->car);
+      return eval_node(env, node->car->cdr->car);
     }
     node = node->cdr;
   }
@@ -1682,7 +1676,7 @@ do_rplacd(ENV *env, NODE *node) {
 
 static NODE*
 do_cons(ENV *env, NODE *node) {
-  NODE *x, *c, *lhs, *rhs, *tmp;
+  NODE *c, *lhs, *rhs;
 
   if (node_narg(node) != 2) return new_errorn("malformed cons: %s", node);
 
@@ -1694,41 +1688,9 @@ do_cons(ENV *env, NODE *node) {
     return rhs;
   }
   c = new_node();
-  switch (rhs->t) {
-  case NODE_NIL:
-    free_node(rhs);
-    c->t = NODE_CELL;
-    c->car = new_node();
-    c->car->t = NODE_CELL;
-    c->car->car = lhs;
-    if (lhs->cdr) free_node(lhs->cdr);
-    lhs->cdr = NULL;
-    break;
-  case NODE_CELL:
-    c->t = rhs->t;
-    c->car = lhs;
-    x = c->car;
-    tmp = rhs->car;
-    tmp->r++;
-    free_node(rhs);
-    rhs = tmp;
-    if (x->cdr) free_node(x->cdr);
-    while (rhs) {
-      x->cdr = rhs;
-      x = x->cdr;
-      rhs = rhs->cdr;
-    }
-    break;
-  default:
-    c->t = NODE_CELL;
-    c->car = new_node();
-    c->car->t = NODE_CELL;
-    c->car->car = lhs;
-    c->cdr = new_node();
-    c->cdr->t = NODE_CELL;
-    c->cdr->car = rhs;
-    break;
-  }
+  c->t = NODE_CELL;
+  c->car = lhs;
+  c->cdr = rhs;
   return c;
 }
 
@@ -1870,7 +1832,7 @@ do_load(ENV *env, NODE *node) {
   }
   free((char*)t);
 
-  part = top->car;
+  part = top;
   ret = NULL;
   while (part) {
     if (ret) free_node(ret);
