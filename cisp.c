@@ -1105,11 +1105,9 @@ do_let(ENV *env, NODE *node) {
     if (x->car->t != NODE_CELL) {
       return new_errorn("malformed let: %s", node);
     }
-    //if (node_narg(x->car) != 1 || x->car->t != NODE_IDENT)
-    //return new_errorn("malformed let: %s", node);
     c = eval_node(env, x->car->cdr->car);
     if (x->t == NODE_ERROR) return c;
-    add_variable(newenv, x->car->s, c);
+    add_variable(newenv, x->car->car->s, c);
     x = x->cdr;
   }
   node = node->cdr->cdr;
