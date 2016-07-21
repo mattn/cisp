@@ -232,6 +232,9 @@ parse_paren(NODE *node, const char *p) {
     p = skip_white(p);
   }
 
+  if (!head->car && !head->cdr)
+    head->t = NODE_NIL;
+
   if (p && *p) {
     p = skip_white(p);
   }
@@ -1312,9 +1315,7 @@ do_call(ENV *env, NODE *node) {
 
   while (node) {
     if ((c && c->car && !strcmp("&rest", c->car->s)) || c->t == NODE_IDENT) {
-      NODE *l, *rr;
-      rr = l = new_node();
-      l->t = NODE_CELL;
+      NODE *l = NULL, *rr = NULL, *nc;
       while (node) {
         nn = eval_node(env, node->car);
         if (nn->t == NODE_ERROR) {
@@ -1322,17 +1323,19 @@ do_call(ENV *env, NODE *node) {
           free_node(x);
           return nn;
         }
-        if (rr == l) {
-          l->car = nn;
-          l = l->car;
+         
+        nc = new_node();
+        nc->t = NODE_CELL;
+        nc->car = nn;
+        if (l == NULL) {
+          rr = l = nc;
         } else {
-          l->cdr = nn;
+          l->cdr = nc;
           l = l->cdr;
         }
         node = node->cdr;
       }
-      add_variable(newenv, c->t == NODE_IDENT ? c->s : c->cdr->car->s, rr);
-      free_node(nn);
+      if (rr) add_variable(newenv, c->t == NODE_IDENT ? c->s : c->cdr->car->s, rr);
       break;
     }
     nn = eval_node(env, node->car);
