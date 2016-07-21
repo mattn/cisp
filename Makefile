@@ -27,7 +27,7 @@ debug :
 	gcc -g -o cisp -pg cisp.c
 
 test : $(TARGET)
-	@./t/run-test.sh ${MAKECMDGOALS}
+	@./t/run-test.sh
 
 prof1 : $(TARGET)
 	gcc -o $(TARGET) -pg cisp.c
