@@ -1386,7 +1386,7 @@ do_funcall(ENV *env, NODE *node) {
 
   c = x = new_node();
   x->t = NODE_CELL;
-  x->car = node->cdr;
+  x->car = node->cdr->car;
   x->car->r++;
   xx = node->cdr->cdr;
   xx->r++;
