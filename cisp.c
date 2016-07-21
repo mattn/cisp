@@ -1848,7 +1848,7 @@ do_load(ENV *env, NODE *node) {
 
 static NODE*
 do_apply(ENV *env, NODE *node) {
-  NODE *f, *x, *xx, *c, *nn;
+  NODE *f, *x, *c, *nn;
 
   if (node_narg(node) < 2) return new_errorn("malformed apply: %s", node);
 
@@ -1864,12 +1864,11 @@ do_apply(ENV *env, NODE *node) {
   else
     c->car = node->cdr->car;
   c->car->r++;
-  xx = x->car;
-  xx->r++;
-  while (xx) {
-    c->cdr = xx;
+  x->r++;
+  while (x) {
+    c->cdr = x;
     c = c->cdr;
-    xx = xx->cdr;
+    x = x->cdr;
   }
   nn = do_call(env, f);
   free_node(f);
