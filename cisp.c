@@ -224,15 +224,13 @@ parse_paren(NODE *node, const char *p) {
       node->cdr = child;
       break;
     } else {
-      x = new_node();
-      x->t = NODE_CELL;
-      x->car = child;
-      if (!head->car) {
-        head->car = x;
-      } else {
+      if (head->car) {
+        x = new_node();
+        x->t = NODE_CELL;
         node->cdr = x;
+        node = x;
       }
-      node = x;
+      node->car = child;
     }
 
     p = skip_white(p);
@@ -355,23 +353,24 @@ print_args(size_t nbuf, char *buf, NODE *node, int mode) {
   }
 }
 
-
-
 static void
 print_cell(size_t nbuf, char *buf, NODE *node, int mode) {
-  NODE *c;
   strncat(buf, "(", nbuf);
-  c = node->car;
 
-  while (c) {
-    if (c != node->car) strncat(buf, " ", nbuf);
-    if (c->car) print_node(nbuf, buf, c->car, mode);
-    if (c->cdr && c->cdr->t != NODE_CELL) {
+  while (node) {
+    if (node->car)
+      print_node(nbuf, buf, node->car, mode);
+    else
+      strncat(buf, "nil", nbuf);
+    if (!node->cdr || node->cdr->t == NODE_NIL)
+      break;
+    if (node->cdr->t != NODE_CELL) {
       strncat(buf, " . ", nbuf);
-      print_node(nbuf, buf, c->cdr, mode);
+      print_node(nbuf, buf, node->cdr, mode);
       break;
     }
-    c = c->cdr;
+    strncat(buf, " ", nbuf);
+    node = node->cdr;
   }
 
   strncat(buf, ")", nbuf);
@@ -1111,7 +1110,7 @@ do_let(ENV *env, NODE *node) {
       return new_errorn("malformed let: %s", node);
     }
     //if (node_narg(x->car) != 1 || x->car->t != NODE_IDENT)
-      //return new_errorn("malformed let: %s", node);
+    //return new_errorn("malformed let: %s", node);
     c = eval_node(env, x->car->cdr->car);
     if (x->t == NODE_ERROR) return c;
     add_variable(newenv, x->car->s, c);
@@ -1302,7 +1301,7 @@ do_call(ENV *env, NODE *node) {
       p = x->cdr->cdr;
       node = node->cdr;
     } else {
-      c = x->cdr->cdr->car->car;
+      c = x->cdr->cdr->car;
       p = x->cdr->cdr->cdr;
       node = node->cdr;
     }
@@ -1468,7 +1467,7 @@ do_dotimes(ENV *env, NODE *node) {
   if (node_narg(node) != 2) return new_errorn("malformed dotimes: %s", node);
 
   x = node->cdr;
-  c = eval_node(env, x->car->car->cdr->car);
+  c = eval_node(env, x->car->cdr->car);
   if (c->t == NODE_ERROR) return c;
   r = int_value(env, c, &err);
   free_node(c);
@@ -1476,7 +1475,7 @@ do_dotimes(ENV *env, NODE *node) {
   newenv = new_env(env);
   nn = new_node();
   nn->t = NODE_INT;
-  add_variable(newenv, x->car->car->car->s, nn);
+  add_variable(newenv, x->car->car->s, nn);
   c = NULL;
   for (i = 0; i < r; i++) {
     nn->i = i;
@@ -1588,8 +1587,8 @@ do_car(ENV *env, NODE *node) {
     free_node(x);
     return new_errorn("argument is not a list: %s", node);
   }
-  if (x->car && x->car->car) {
-    c = x->car->car;
+  if (x->car) {
+    c = x->car;
     c->r++;
     free_node(x);
     return c;
@@ -1620,15 +1619,10 @@ do_cdr(ENV *env, NODE *node) {
       return c;
     }
 
-    c = x->car->cdr;
-    if (c) {
-      free_node(x);
-      x = new_node();
-      x->t = NODE_CELL;
-      x->car = c;
-      x->car->r++;
-      return x;
-    }
+    c = x->cdr;
+    c->r++;
+    free_node(x);
+    return c;
   }
   free_node(x);
   return new_node();
@@ -2023,9 +2017,9 @@ eval_node(ENV *env, NODE *node) {
     return node;
   case NODE_CELL:
     c = NULL;
-	if (!node->car) {
-		return new_node();
-	}
+    if (!node->car) {
+      return new_node();
+    }
     if (node->car && node->car->car) {
       return eval_node(env, node->car);
     }
@@ -2077,7 +2071,7 @@ main(int argc, char* argv[]) {
       exit(1);
     }
     free((char*)pp);
-    part = top->car;
+    part = top;
     ret = NULL;
     while (part) {
       ret = eval_node(env, part);
