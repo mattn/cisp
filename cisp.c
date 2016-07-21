@@ -1976,14 +1976,17 @@ eval_node(ENV *env, NODE *node) {
     node->r++;
     return node;
   case NODE_CELL:
-    c = NULL;
-    if (!node->car) {
+    c = node->car;
+    if (!c) {
       return new_node();
     }
-    if (node->car && node->car->car) {
-      return eval_node(env, node->car);
+    if (c && c->car) {
+      c = eval_node(env, c);
+      if (c->t == NODE_LAMBDA) {
+        c = do_call(env, node);
+      }
     }
-    if (node->car->t == NODE_IDENT || node->car->t == NODE_LAMBDA) {
+    if (c->t == NODE_IDENT || c->t == NODE_LAMBDA) {
       c = do_call(env, node);
     }
     if (c) return c;
