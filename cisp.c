@@ -221,10 +221,7 @@ parse_paren(NODE *node, const char *p) {
         free_node(child);
         return NULL;
       }
-      x = new_node();
-      x->t = NODE_CELL;
-      x->car = child;
-      node->cdr = x;
+      node->cdr = child;
       break;
     } else {
       x = new_node();
@@ -366,36 +363,15 @@ print_cell(size_t nbuf, char *buf, NODE *node, int mode) {
   strncat(buf, "(", nbuf);
   c = node->car;
 
-  /*
-     while (c) {
-     if (c != node->car) strncat(buf, " ", nbuf);
-     print_node(nbuf, buf, c, mode);
-     if (c->cdr && c->cdr->car && !c->cdr->cdr) {
-     if (c->cdr->car->cdr) {
-     strncat(buf, " ", nbuf);
-     print_node(nbuf, buf, c->cdr, mode);
-     } else {
-     if (c->cdr->car->car) strncat(buf, " ", nbuf);
-     else strncat(buf, " . ", nbuf);
-     print_node(nbuf, buf, c->cdr->car, mode);
-     }
-     break;
-     } else if (c->car) {
-     strncat(buf, " ", nbuf);
-     print_node(nbuf, buf, c->car, mode);
-     break;
-     }
-     c = c->cdr;
-     }
-     */
   while (c) {
     if (c != node->car) strncat(buf, " ", nbuf);
-    print_node(nbuf, buf, c->car, mode);
+    if (c->car) print_node(nbuf, buf, c->car, mode);
+    if (c->cdr && c->cdr->t != NODE_CELL) {
+      strncat(buf, " . ", nbuf);
+      print_node(nbuf, buf, c->cdr, mode);
+      break;
+    }
     c = c->cdr;
-  }
-  if (node->cdr) {
-    strncat(buf, " . ", nbuf);
-    print_node(nbuf, buf, node->cdr->car, mode);
   }
 
   strncat(buf, ")", nbuf);

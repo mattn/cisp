@@ -1,8 +1,13 @@
 #!/bin/sh
 
 cd `dirname $0`
+FILTER=.
 
-/bin/ls *.lisp | /usr/bin/sort | while read file; do
+if [ "x$1" != "x" ]; then
+  FILTER=$1
+fi
+
+/bin/ls *.lisp | grep $FILTER | /usr/bin/sort | while read file; do
   echo -n "$file: "
   if [ -e `basename $file .lisp`.skip ]; then
     echo "SKIP"
@@ -12,8 +17,10 @@ cd `dirname $0`
   ACTUAL=$(../cisp $file | tr -d "\r")
   if [ "$ACTUAL" != "$EXPECT" ]; then
     echo "NG"
-    echo "EXPECT: $EXPECT"
-    echo "ACTUAL: $ACTUAL"
+    echo "EXPECT:"
+    echo "$EXPECT" | nl
+    echo "ACTUAL:"
+    echo "$ACTUAL" | nl
     exit 1
   else
     echo "OK"
