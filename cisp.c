@@ -78,6 +78,13 @@ raisef(const char* msg, const char *p) {
 #endif
 
 static char*
+raisep(const char *p) {
+  if (!p) return NULL;
+  fprintf(stderr, "%s\n", p);
+  return NULL;
+}
+
+static char*
 raise(const char *p) {
   if (!p) return NULL;
   fprintf(stderr, "invalid token: %s\n", p);
@@ -355,7 +362,7 @@ parse_any(NODE *node, const char *p) {
       p++;
       return p;
     }
-    return raise("unexpected end of file");
+    return p ? raisep("unexpected end of file") : NULL;
   }
   if (*p == '\'') return parse_quote(node, p + 1);
   if (*p == '`') return parse_bquote(node, p + 1);
