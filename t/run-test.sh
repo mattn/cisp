@@ -26,10 +26,8 @@ export CISP_BASE_DIR=..
     echo "NG"
     echo "EXPECT:"
     echo "$EXPECT" | nl
-    echo "$EXPECT" | xxd
     echo "ACTUAL:"
     echo "$ACTUAL" | nl
-    echo "$ACTUAL" | xxd
     exit 1
   else
     echo "OK"
