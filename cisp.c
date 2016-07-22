@@ -1747,22 +1747,13 @@ do_make_string(ENV *env, NODE *alist) {
 }
 
 static NODE*
-do_load(ENV *env, NODE *alist) {
-  NODE *x, *ret, *top, *part;
+load_lisp(ENV *env, const char *fname) {
+  NODE *ret, *top, *part;
   char *p, *t;
   long fsize;
   FILE *fp;
 
-  if (!alist->car) return new_errorn("malformed load: %s", alist);
-  x = eval_node(env, alist->car);
-  if (x->t == NODE_ERROR) return x;
-  if (x->t != NODE_STRING) {
-    free_node(x);
-    return new_errorn("malformed load: %s", alist);
-  }
-
-  fp = fopen(x->s, "rb");
-  free_node(x);
+  fp = fopen(fname, "rb");
   if (!fp) {
     return new_errorf("%s", strerror(errno));
   }
@@ -1784,13 +1775,12 @@ do_load(ENV *env, NODE *alist) {
   p = (char*)parse_paren(top, p);
   if (!p) {
     free_node(top);
-    free_node(x);
-    return new_errorn("failed to load: %s", alist);
+    return new_error("failed to load");
   }
   p = (char*)skip_white((char*)p);
   if (*p) {
     free_node(top);
-    return new_errorf("invalid token: %s", alist);
+    return new_error("failed to load");
   }
   free((char*)t);
 
@@ -1799,10 +1789,31 @@ do_load(ENV *env, NODE *alist) {
   while (part) {
     if (ret) free_node(ret);
     ret = eval_node(env, part);
+    if (ret->t == NODE_ERROR) {
+      fprintf(stderr, "cisp: %s\n", ret->s);
+      free_node(ret);
+      break;
+    }
     part = part->cdr;
   }
 
   free_node(top);
+  return ret;
+}
+
+static NODE*
+do_load(ENV *env, NODE *alist) {
+  NODE *x, *ret;
+
+  if (!alist->car) return new_errorn("malformed load: %s", alist);
+  x = eval_node(env, alist->car);
+  if (x->t == NODE_ERROR) return x;
+  if (x->t != NODE_STRING) {
+    free_node(x);
+    return new_errorn("malformed load: %s", alist);
+  }
+  ret = load_lisp(env, x->s);
+  free_node(x);
   if (ret->t == NODE_ERROR) {
     return ret;
   }
@@ -1952,56 +1963,23 @@ eval_node(ENV *env, NODE *node) {
 int
 main(int argc, char* argv[]) {
   ENV *env;
-  NODE *top, *ret, *part;
-  char buf[BUFSIZ], *p;
+  NODE *top, *ret;
+  char buf[BUFSIZ];
   const char *pp;
   long fsize;
 
   if (argc > 1) {
-    FILE *fp = fopen(argv[1], "rb");
-
-    if (!fp) {
-      fprintf(stderr, "%s: %s\n", argv[0], strerror(errno));
-      exit(1);
-    }
-    fseek(fp, 0, SEEK_END);
-    fsize = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-    p = (char*)malloc(fsize + 1);
-    pp = p;
-    memset(p, 0, fsize + 1);
-    if (!fread(p, fsize, 1, fp)) {
-      fprintf(stderr, "%s: %s\n", argv[0], strerror(errno));
-      exit(1);
-    }
-    fclose(fp);
-
+    int err = 0;
     env = new_env(NULL);
     add_defaults(env);
-    top = new_node();
-    top->t = NODE_CELL;
-    p = (char*)parse_paren(top, p);
-    if (!p) {
-      free_node(top);
-      free_env(env);
-      exit(1);
+    ret = load_lisp(env, argv[1]);
+    if (ret->t == NODE_ERROR) {
+      fprintf(stderr, "cisp: %s\n", ret->s);
+      err = 1;
     }
-    free((char*)pp);
-    part = top;
-    ret = NULL;
-    while (part) {
-      ret = eval_node(env, part);
-      if (ret->t == NODE_ERROR) {
-        fprintf(stderr, "%s: %s\n", argv[0], ret->s);
-        free_node(ret);
-        break;
-      }
-      free_node(ret);
-      part = part->cdr;
-    }
-    free_node(top);
+    free_node(ret);
     free_env(env);
-    exit(0);
+    exit(err);
   }
 
   env = new_env(NULL);
@@ -2031,7 +2009,7 @@ main(int argc, char* argv[]) {
     }
     ret = eval_node(env, top);
     if (ret->t == NODE_ERROR) {
-      fprintf(stderr, "%s: %s\n", argv[0], ret->s);
+      fprintf(stderr, "cisp: %s\n", ret->s);
     } else if (isatty(fileno(stdin))) {
       dump_node(ret);
     }
