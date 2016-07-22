@@ -1930,7 +1930,9 @@ eval_node(ENV *env, NODE *node) {
     if (c && c->car && c->car->t != NODE_LAMBDA) {
       NODE *r = eval_node(env, c);
       if (!(c->car->t == NODE_IDENT && !strcmp(c->car->s, "lambda") && r->t == NODE_LAMBDA)) return r;
-      c = r;
+      c = do_call(env, r, node->cdr);
+      free_node(r);
+      return c;
     }
     if (c->t == NODE_IDENT || c->t == NODE_LAMBDA) {
       c = do_call(env, c, node->cdr);
