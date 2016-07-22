@@ -1295,13 +1295,8 @@ do_call(ENV *env, NODE *node, NODE *alist) {
         return new_errorn("malformed arguments: %s", node);
       }
     }
-    if (x->t == NODE_LAMBDA) {
-      c = x->cdr->car;
-      p = x->cdr->cdr;
-    } else {
-      c = x->cdr->car;
-      p = x->cdr->cdr;
-    }
+    c = x->cdr->car;
+    p = x->cdr->cdr;
   } else if (node->t == NODE_LAMBDA) {
     x = node->cdr;
     x->r++;
