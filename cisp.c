@@ -1402,13 +1402,10 @@ static NODE*
 do_progn(ENV *env, NODE *alist) {
   NODE *c;
 
-  if (!alist->car) {
-    return new_errorn("malformed function: %s", alist);
-  }
   c = NULL;
   while (alist) {
     if (c) free_node(c);
-    c = do_call(env, alist->car->car, alist->car->cdr);
+    c = eval_node(env, alist->car);
     if (c->t == NODE_ERROR) break;
     alist = alist->cdr;
   }
