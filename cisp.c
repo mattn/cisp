@@ -1097,7 +1097,7 @@ do_let(ENV *env, NODE *alist) {
   ENV *newenv;
   NODE *x, *c;
 
-  if (node_narg(alist) != 2) return new_errorn("malformed let: %s", alist);
+  if (node_narg(alist) < 1) return new_errorn("malformed let: %s", alist);
 
   x = alist->car;
   newenv = new_env(env);
@@ -1105,10 +1105,14 @@ do_let(ENV *env, NODE *alist) {
   /* TODO */
   while (x) {
     if (x->car->t != NODE_CELL) {
+      free_env(newenv);
       return new_errorn("malformed let: %s", alist);
     }
     c = eval_node(env, x->car->cdr->car);
-    if (x->t == NODE_ERROR) return c;
+    if (x->t == NODE_ERROR) {
+      free_env(newenv);
+      return c;
+    }
     add_variable(newenv, x->car->car->s, c);
     x = x->cdr;
   }
