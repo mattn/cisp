@@ -491,27 +491,33 @@ compare_item(const void *a, const void *b) {
   return strcmp((*((ITEM**)a))->k, (*((ITEM**)b))->k);
 }
 
-static void
-add_variable(ENV *env, const char *k, NODE *node) {
-  ITEM *ni;
+static INLINE ITEM*
+find_item(ITEM **ll, int nl, const char *k) {
   int left, right, mid, r;
-  ITEM **lv;
 
   left = 0;
-  right = env->nv - 1;
-  lv = env->lv;
+  right = nl - 1;
   while (left <= right) {
     mid = (left + right) / 2;
-    r = strcmp(lv[mid]->k, k);
+    r = strcmp(ll[mid]->k, k);
     if (r == 0) {
-      free_node(lv[mid]->v);
-      lv[mid]->v = node;
-      return;
+      return ll[mid];
     } else if (r < 0) {
       left = mid + 1;
     } else {
       right = mid - 1;
     }
+  }
+  return NULL;
+}
+
+static void
+add_variable(ENV *env, const char *k, NODE *node) {
+  ITEM *ni = find_item(env->lv, env->nv, k);
+  if (ni) {
+    free_node(ni->v);
+    ni->v = node;
+    return;
   }
   ni = (ITEM*)malloc(sizeof(ITEM));
   memset(ni, 0, sizeof(ITEM));
@@ -525,25 +531,11 @@ add_variable(ENV *env, const char *k, NODE *node) {
 
 static void
 add_function(ENV *env, const char *k, NODE *node) {
-  ITEM *ni;
-  int left, right, mid, r;
-  ITEM **lf;
-
-  left = 0;
-  right = env->nf - 1;
-  lf = env->lf;
-  while (left <= right) {
-    mid = (left + right) / 2;
-    r = strcmp(lf[mid]->k, k);
-    if (r == 0) {
-      free_node(lf[mid]->v);
-      lf[mid]->v = node;
-      return;
-    } else if (r < 0) {
-      left = mid + 1;
-    } else {
-      right = mid - 1;
-    }
+  ITEM *ni = find_item(env->lf, env->nf, k);
+  if (ni) {
+    free_node(ni->v);
+    ni->v = node;
+    return;
   }
   ni = (ITEM*)malloc(sizeof(ITEM));
   memset(ni, 0, sizeof(ITEM));
@@ -557,25 +549,11 @@ add_function(ENV *env, const char *k, NODE *node) {
 
 static void
 add_macro(ENV *env, const char *k, NODE *node) {
-  ITEM *ni;
-  int left, right, mid, r;
-  ITEM **lm;
-
-  left = 0;
-  right = env->nm - 1;
-  lm = env->lm;
-  while (left <= right) {
-    mid = (left + right) / 2;
-    r = strcmp(lm[mid]->k, k);
-    if (r == 0) {
-      free_node(lm[mid]->v);
-      lm[mid]->v = node;
-      return;
-    } else if (r < 0) {
-      left = mid + 1;
-    } else {
-      right = mid - 1;
-    }
+  ITEM *ni = find_item(env->lm, env->nm, k);
+  if (ni) {
+    free_node(ni->v);
+    ni->v = node;
+    return;
   }
   ni = (ITEM*)malloc(sizeof(ITEM));
   memset(ni, 0, sizeof(ITEM));
@@ -1206,45 +1184,20 @@ do_setq(ENV *env, NODE *alist) {
 
 static INLINE NODE*
 do_ident(ENV *env, NODE *alist) {
-  NODE *x;
-  const char *p = alist->s;
-  int left, right, mid, r;
-  ITEM **lv;
+  ITEM *ni;
 
-  left = 0;
-  right = env->nv - 1;
-  lv = env->lv;
-  while (left <= right) {
-    mid = (left + right) / 2;
-    r = strcmp(lv[mid]->k, p);
-    if (r == 0) {
-      x = lv[mid]->v;
-      x->r++;
-      return x;
-    } else if (r < 0) {
-      left = mid + 1;
-    } else {
-      right = mid - 1;
-    }
+  ni = find_item(env->lv, env->nv, alist->s);
+  if (ni) {
+    ni->v->r++;
+    return ni->v;
   }
 
   while (env->p) env = env->p;
 
-  left = 0;
-  right = env->nv - 1;
-  lv = env->lv;
-  while (left <= right) {
-    mid = (left + right) / 2;
-    r = strcmp(lv[mid]->k, p);
-    if (r == 0) {
-      x = lv[mid]->v;
-      x->r++;
-      return x;
-    } else if (r < 0) {
-      left = mid + 1;
-    } else {
-      right = mid - 1;
-    }
+  ni = find_item(env->lv, env->nv, alist->s);
+  if (ni) {
+    ni->v->r++;
+    return ni->v;
   }
 
   return new_errorf("unknown variable: %s", alist->s);
@@ -1252,59 +1205,33 @@ do_ident(ENV *env, NODE *alist) {
 
 static INLINE NODE*
 do_ident_global(ENV *env, NODE *node) {
-  NODE *x;
   static ENV *global;
-  const char *p = node->s;
-  int left, right, mid, r;
-  ITEM **lv, **lm;
+  ITEM *ni;
 
   if (global == NULL) {
     while (env->p) env = env->p;
     global = env;
   }
 
-  left = 0;
-  right = global->nv - 1;
-  lv = global->lv;
-  while (left <= right) {
-    mid = (left + right) / 2;
-    r = strcmp(lv[mid]->k, p);
-    if (r == 0) {
-      x = lv[mid]->v;
-      x->r++;
-      return x;
-    } else if (r < 0) {
-      left = mid + 1;
-    } else {
-      right = mid - 1;
-    }
+  ni = find_item(global->lv, global->nv, node->s);
+  if (ni) {
+    ni->v->r++;
+    return ni->v;
   }
 
-  left = 0;
-  right = global->nm - 1;
-  lm = global->lm;
-  while (left <= right) {
-    mid = (left + right) / 2;
-    r = strcmp(lm[mid]->k, p);
-    if (r == 0) {
-      x = lm[mid]->v;
-      x->r++;
-      return x;
-    } else if (r < 0) {
-      left = mid + 1;
-    } else {
-      right = mid - 1;
-    }
+  ni = find_item(global->lm, global->nm, node->s);
+  if (ni) {
+    ni->v->r++;
+    return ni->v;
   }
-  return new_errorf("unknown variable: %s", node->s);
+
+  return new_errorf("unknown identify: %s", node->s);
 }
 
 static NODE*
 look_func(ENV *env, const char *k) {
-  NODE *x;
   static ENV *global;
-  int left, right, mid, r;
-  ITEM **lf;
+  ITEM *ni;
 
   if (!k) return NULL;
   if (global == NULL) {
@@ -1312,22 +1239,12 @@ look_func(ENV *env, const char *k) {
     global = env;
   }
 
-  left = 0;
-  right = global->nf - 1;
-  lf = global->lf;
-  while (left <= right) {
-    mid = (left + right) / 2;
-    r = strcmp(lf[mid]->k, k);
-    if (r == 0) {
-      x = lf[mid]->v;
-      x->r++;
-      return x;
-    } else if (r < 0) {
-      left = mid + 1;
-    } else {
-      right = mid - 1;
-    }
+  ni = find_item(global->lf, global->nf, k);
+  if (ni) {
+    ni->v->r++;
+    return ni->v;
   }
+
   return NULL;
 }
 
