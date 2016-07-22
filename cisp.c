@@ -1453,7 +1453,7 @@ do_defun(ENV *env, NODE *alist) {
   if (alist->cdr->car->t != NODE_CELL && alist->cdr->car->t != NODE_NIL) {
     return new_errorn("argument is not a list: %s", alist);
   }
-  add_macro(env, x->s, alist);
+  add_function(env, x->s, alist);
   alist->r++;
   x->r++;
   return x;
@@ -1469,7 +1469,7 @@ do_defmacro(ENV *env, NODE *alist) {
   if (x->t != NODE_IDENT) {
     return new_errorn("invalid identifier: %s", x);
   }
-  add_function(env, x->s, alist);
+  add_macro(env, x->s, alist);
   alist->r++;
   x->r++;
   return x;
