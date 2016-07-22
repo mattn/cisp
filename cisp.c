@@ -903,9 +903,10 @@ do_mod(ENV *env, NODE *alist) {
 static NODE*
 do_if(ENV *env, NODE *alist) {
   NODE *c;
-  int r = 0;
+  int r = 0, narg;
 
-  if (node_narg(alist) != 3) return new_errorn("malformed if: %s", alist);
+  narg = node_narg(alist);
+  if (narg != 2 && narg != 3) return new_errorn("malformed if: %s", alist);
 
   c = eval_node(env, alist->car);
   if (c->t == NODE_ERROR) return c;
@@ -927,6 +928,10 @@ do_if(ENV *env, NODE *alist) {
     break;
   }
   free_node(c);
+  if (narg == 2) {
+    if (r > 0) return eval_node(env, alist->cdr->car);
+    return new_node();
+  }
   return eval_node(env, r > 0 ? alist->cdr->car : alist->cdr->cdr->car);
 }
 
@@ -1868,7 +1873,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "cons", do_cons);
   add_sym(env, NODE_IDENT, "defun", do_defun);
   add_sym(env, NODE_IDENT, "dotimes", do_dotimes);
-  add_sym(env, NODE_IDENT, "eq", do_eq);
+  add_sym(env, NODE_IDENT, "eq?", do_eq);
   add_sym(env, NODE_IDENT, "funcall", do_funcall);
   add_sym(env, NODE_IDENT, "if", do_if);
   add_sym(env, NODE_IDENT, "lambda", do_lambda);
