@@ -1758,6 +1758,11 @@ load_lisp(ENV *env, const char *fname) {
   if (!fread(p, fsize, 1, fp)) {
     free((void*)t);
     fclose(fp);
+    if (errno == 0) {
+      ret = new_node();
+      ret->t = NODE_T;
+      return ret;
+    }
     return new_errorf("%s", strerror(errno));
   }
   fclose(fp);
