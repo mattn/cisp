@@ -1323,7 +1323,7 @@ do_call(ENV *env, NODE *node, NODE *alist) {
           free_node(x);
           return nn;
         }
-         
+
         nc = new_node();
         nc->t = NODE_CELL;
         nc->car = nn;
