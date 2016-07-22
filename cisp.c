@@ -35,9 +35,11 @@ typedef struct _NODE {
     long i;
     double d;
     char* s;
+    struct {
+      struct _NODE *car;
+      struct _NODE *cdr;
+    };
   };
-  struct _NODE *car;
-  struct _NODE *cdr;
   void *f;
   int r;
 } NODE;
@@ -445,12 +447,13 @@ free_node(NODE *node) {
   if (!node) return;
   node->r--;
   if (node->r <= 0) {
-    if (node->cdr) free_node(node->cdr);
-    if (node->car) free_node(node->car);
     switch (node->t) {
+    case NODE_CELL:
+      if (node->cdr) free_node(node->cdr);
+      if (node->car) free_node(node->car);
+      break;
     case NODE_STRING:
     case NODE_IDENT:
-    case NODE_CELL:
     case NODE_LAMBDA:
     case NODE_ERROR:
     case NODE_NIL:
@@ -1305,7 +1308,7 @@ do_call(ENV *env, NODE *node, NODE *alist) {
   newenv = new_env(env);
 
   while (alist) {
-    if ((c && c->car && !strcmp("&rest", c->car->s)) || c->t == NODE_IDENT) {
+    if (c && (c->t == NODE_IDENT || (c->car && !strcmp("&rest", c->car->s)))) {
       NODE *l = NULL, *rr = NULL, *nc;
       while (alist) {
         nn = eval_node(env, alist->car);
@@ -1933,7 +1936,7 @@ eval_node(ENV *env, NODE *node) {
     if (!c) {
       return new_node();
     }
-    if (c && c->car && c->car->t != NODE_LAMBDA) {
+    if (c && c->t == NODE_CELL && c->car && c->car->t != NODE_LAMBDA) {
       NODE *r = eval_node(env, c);
       if (!(c->car->t == NODE_IDENT && !strcmp(c->car->s, "lambda") && r->t == NODE_LAMBDA)) return r;
       c = do_call(env, r, node->cdr);
@@ -1942,6 +1945,10 @@ eval_node(ENV *env, NODE *node) {
     }
     if (c->t == NODE_IDENT || c->t == NODE_LAMBDA) {
       c = do_call(env, c, node->cdr);
+    }
+    if (c == node->car) {
+      c->r++;
+      return c;
     }
     if (c) return c;
     return new_errorn("illegal function call: %s", node);
