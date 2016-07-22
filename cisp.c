@@ -1200,7 +1200,7 @@ do_ident(ENV *env, NODE *alist) {
     return ni->v;
   }
 
-  return new_errorf("unknown variable: %s", alist->s);
+  return new_errorf("unknown identity: %s", alist->s);
 }
 
 static INLINE NODE*
@@ -1249,7 +1249,7 @@ look_func(ENV *env, const char *k) {
 }
 
 static NODE*
-do_call(ENV *env, NODE *node, NODE *alist) {
+call_node(ENV *env, NODE *node, NODE *alist) {
   ENV *newenv;
   NODE *x = NULL, *p = NULL, *c = NULL, *nn = NULL;
 
@@ -1354,7 +1354,7 @@ do_eval(ENV *env, NODE *alist) {
 static NODE*
 do_funcall(ENV *env, NODE *alist) {
   if (node_narg(alist) < 2) return new_errorf("malformed funcall: %s", alist);
-  return do_call(env, alist->car, alist->cdr);
+  return call_node(env, alist->car, alist->cdr);
 }
 
 static NODE*
@@ -1824,9 +1824,9 @@ do_apply(ENV *env, NODE *alist) {
     return new_errorn("second argument should be list: %s", alist);
   }
   if (alist->car->t == NODE_QUOTE)
-    nn = do_call(env, alist->car->car, x);
+    nn = call_node(env, alist->car->car, x);
   else
-    nn = do_call(env, alist->car, x);
+    nn = call_node(env, alist->car, x);
   free_node(x);
   if (nn->t == NODE_ERROR) {
     return nn;
@@ -1937,12 +1937,12 @@ eval_node(ENV *env, NODE *node) {
     if (c && c->t == NODE_CELL && c->car && c->car->t != NODE_LAMBDA) {
       NODE *r = eval_node(env, c);
       if (!(c->car->t == NODE_IDENT && !strcmp(c->car->s, "lambda") && r->t == NODE_LAMBDA)) return r;
-      c = do_call(env, r, node->cdr);
+      c = call_node(env, r, node->cdr);
       free_node(r);
       return c;
     }
     if (c->t == NODE_IDENT || c->t == NODE_LAMBDA) {
-      c = do_call(env, c, node->cdr);
+      c = call_node(env, c, node->cdr);
     }
     if (c == node->car) {
       c->r++;
