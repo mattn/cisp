@@ -1489,6 +1489,7 @@ do_getenv(ENV *env, NODE *alist) {
     return new_errorn("malformed getenv: %s", alist);
   }
   p = getenv(c->s);
+  free_node(c);
   if (p) {
     c = new_node();
     c->t = NODE_STRING;
@@ -1783,12 +1784,13 @@ do_load(ENV *env, NODE *alist) {
   top->t = NODE_CELL;
   p = (char*)parse_paren(top, p);
   if (!p) {
+    free((char*)t);
     free_node(top);
-    free_node(x);
     return new_errorn("failed to load: %s", alist);
   }
   p = (char*)skip_white((char*)p);
   if (*p) {
+    free((char*)t);
     free_node(top);
     return new_errorf("invalid token: %s", alist);
   }
