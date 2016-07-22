@@ -1087,13 +1087,9 @@ static NODE*
 do_quote(ENV *env, NODE *alist) {
   if (node_narg(alist) != 1) return new_errorn("malformed quote: %s", alist);
 
-  if (alist->car->t == NODE_CELL && alist->car->cdr) {
-    alist = alist->car;
-    alist->r++;
-    return alist;
-  }
-  alist->cdr->r++;
-  return alist->cdr;
+  alist = alist->car;
+  alist->r++;
+  return alist;
 }
 
 static NODE*
