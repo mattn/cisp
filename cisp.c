@@ -54,6 +54,8 @@ typedef struct _ENV {
   ITEM **lv;
   int nf;
   ITEM **lf;
+  int nm;
+  ITEM **lm;
   struct _ENV *p;
 } ENV;
 
@@ -551,6 +553,38 @@ add_function(ENV *env, const char *k, NODE *node) {
   env->lf[env->nf] = ni;
   env->nf++;
   qsort(env->lf, env->nf, sizeof(ITEM*), compare_item);
+}
+
+static void
+add_macro(ENV *env, const char *k, NODE *node) {
+  ITEM *ni;
+  int left, right, mid, r;
+  ITEM **lm;
+
+  left = 0;
+  right = env->nm - 1;
+  lm = env->lm;
+  while (left <= right) {
+    mid = (left + right) / 2;
+    r = strcmp(lm[mid]->k, k);
+    if (r == 0) {
+      free_node(lm[mid]->v);
+      lm[mid]->v = node;
+      return;
+    } else if (r < 0) {
+      left = mid + 1;
+    } else {
+      right = mid - 1;
+    }
+  }
+  ni = (ITEM*)malloc(sizeof(ITEM));
+  memset(ni, 0, sizeof(ITEM));
+  ni->k = strdup(k);
+  ni->v = node;
+  env->lm = (ITEM**)realloc(env->lm, sizeof(ITEM*) * (env->nm + 1));
+  env->lm[env->nm] = ni;
+  env->nm++;
+  qsort(env->lm, env->nm, sizeof(ITEM*), compare_item);
 }
 
 static long
@@ -1222,7 +1256,7 @@ do_ident_global(ENV *env, NODE *node) {
   static ENV *global;
   const char *p = node->s;
   int left, right, mid, r;
-  ITEM **lv;
+  ITEM **lv, **lm;
 
   if (global == NULL) {
     while (env->p) env = env->p;
@@ -1237,6 +1271,23 @@ do_ident_global(ENV *env, NODE *node) {
     r = strcmp(lv[mid]->k, p);
     if (r == 0) {
       x = lv[mid]->v;
+      x->r++;
+      return x;
+    } else if (r < 0) {
+      left = mid + 1;
+    } else {
+      right = mid - 1;
+    }
+  }
+
+  left = 0;
+  right = global->nm - 1;
+  lm = global->lm;
+  while (left <= right) {
+    mid = (left + right) / 2;
+    r = strcmp(lm[mid]->k, p);
+    if (r == 0) {
+      x = lm[mid]->v;
       x->r++;
       return x;
     } else if (r < 0) {
@@ -1394,6 +1445,25 @@ do_defun(ENV *env, NODE *alist) {
   NODE *x;
 
   if (node_narg(alist) < 3) return new_errorn("malformed defun: %s", alist);
+
+  x = alist->car;
+  if (x->t != NODE_IDENT) {
+    return new_errorn("invalid identifier: %s", x);
+  }
+  if (alist->cdr->car->t != NODE_CELL && alist->cdr->car->t != NODE_NIL) {
+    return new_errorn("argument is not a list: %s", alist);
+  }
+  add_macro(env, x->s, alist);
+  alist->r++;
+  x->r++;
+  return x;
+}
+
+static NODE*
+do_defmacro(ENV *env, NODE *alist) {
+  NODE *x;
+
+  if (node_narg(alist) != 3) return new_errorn("malformed defmacro: %s", alist);
 
   x = alist->car;
   if (x->t != NODE_IDENT) {
@@ -1885,6 +1955,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "cond", do_cond);
   add_sym(env, NODE_IDENT, "cons", do_cons);
   add_sym(env, NODE_IDENT, "defun", do_defun);
+  add_sym(env, NODE_IDENT, "defmacro", do_defmacro);
   add_sym(env, NODE_IDENT, "dotimes", do_dotimes);
   add_sym(env, NODE_IDENT, "eq?", do_eq);
   add_sym(env, NODE_IDENT, "eval", do_eval);
