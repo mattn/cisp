@@ -1200,7 +1200,14 @@ do_setq(ENV *env, NODE *alist) {
   }
   c = eval_node(env, c);
   if (c->t == NODE_ERROR) return c;
-  add_variable(global, x->s, c);
+  while (env) {
+    ITEM *ni = find_item(env->lv, env->nv, x->s);
+    if (ni || env->p == NULL) {
+      add_variable(env, x->s, c);
+      break;
+    }
+    env = env->p;
+  }
   c->r++;
   return c;
 }
@@ -1381,7 +1388,7 @@ static NODE*
 do_lambda(ENV *env, NODE *alist) {
   NODE *x;
 
-  if (node_narg(alist) != 2) return new_errorf("malformed lambda: %s", alist);
+  if (node_narg(alist) < 2) return new_errorf("malformed lambda: %s", alist);
 
   x = new_node();
   x->t = NODE_LAMBDA;
