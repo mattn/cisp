@@ -1786,11 +1786,7 @@ load_lisp(ENV *env, const char *fname) {
   while (part) {
     if (ret) free_node(ret);
     ret = eval_node(env, part);
-    if (ret->t == NODE_ERROR) {
-      fprintf(stderr, "cisp: %s\n", ret->s);
-      free_node(ret);
-      break;
-    }
+    if (ret->t == NODE_ERROR) break;
     part = part->cdr;
   }
 
