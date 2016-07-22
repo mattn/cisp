@@ -15,14 +15,21 @@ export CISP_BASE_DIR=..
     echo "SKIP"
     continue
   fi
-  EXPECT=$(cat `basename $file .lisp`.out | tr -d "\r")
-  ACTUAL=$(../cisp $file | tr -d "\r")
+  if [ -e `basename $file .lisp`.out ]; then
+    EXPECT=$(cat `basename $file .lisp`.out | tr -d "\r")
+    ACTUAL=$(../cisp $file | tr -d "\r")
+  else
+    EXPECT=$(cat `basename $file .lisp`.err | tr -d "\r")
+    ACTUAL=$(../cisp $file 2>&1 | tr -d "\r")
+  fi
   if [ "$ACTUAL" != "$EXPECT" ]; then
     echo "NG"
     echo "EXPECT:"
     echo "$EXPECT" | nl
+    echo "$EXPECT" | xxd
     echo "ACTUAL:"
     echo "$ACTUAL" | nl
+    echo "$ACTUAL" | xxd
     exit 1
   else
     echo "OK"
