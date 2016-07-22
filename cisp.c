@@ -1557,31 +1557,25 @@ static NODE*
 do_cdr(ENV *env, NODE *alist) {
   NODE *x, *c;
 
-  if (!alist) return new_errorn("malformed cdr: %s", alist);
+  if (node_narg(alist) != 1) return new_errorn("malformed cdr: %s", alist);
 
   x = eval_node(env, alist->car);
+  if (x->t == NODE_QUOTE) {
+    x->t = NODE_CELL;
+    return x;
+  }
   if (x->t != NODE_CELL && x->t != NODE_NIL) {
     free_node(x);
     return new_errorn("argument is not a list: %s", alist);
   }
 
-  if (x->car) {
-    if (x->car->cdr && !x->car->cdr->car) {
-      c = new_node();
-      c->t = NODE_CELL;
-      c->car = x->car->cdr;
-      c->car->r++;
-      free_node(x);
-      return c;
-    }
-
-    c = x->cdr;
+  c = x->cdr;
+  if (c)
     c->r++;
-    free_node(x);
-    return c;
-  }
+  else
+    c = new_node();
   free_node(x);
-  return new_node();
+  return c;
 }
 
 static NODE*
