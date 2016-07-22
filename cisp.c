@@ -25,7 +25,7 @@
 #define SYMBOL_CHARS "+-*/<>=&%?."
 
 enum T {
-  NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_IDENT,
+  NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_BQUOTE, NODE_IDENT,
   NODE_LAMBDA, NODE_CELL, NODE_ERROR,
 };
 
@@ -68,12 +68,14 @@ typedef struct _SCANNER {
 
 typedef NODE* (*f_do)(ENV*, NODE*);
 
+#if 0
 static char*
 raisef(const char* msg, const char *p) {
   if (!p) return NULL;
   fprintf(stderr, "%s: %s\n", msg, p);
   return NULL;
 }
+#endif
 
 static char*
 raise(const char *p) {
@@ -291,6 +293,19 @@ parse_quote(NODE *node, const char *p) {
 }
 
 static const char*
+parse_bquote(NODE *node, const char *p) {
+  NODE *child = new_node();
+  p = parse_any(child, p);
+  if (!p) {
+    free_node(child);
+    return NULL;
+  }
+  node->t = NODE_BQUOTE;
+  node->car = child;
+  return p;
+}
+
+static const char*
 parse_string(NODE *node, const char *p) {
   const char *t = p, *q = p;
   char *sp;
@@ -340,9 +355,10 @@ parse_any(NODE *node, const char *p) {
       p++;
       return p;
     }
-    return raisef("should be )", p);
+    return raise("unexpected end of file");
   }
   if (*p == '\'') return parse_quote(node, p + 1);
+  if (*p == '`') return parse_bquote(node, p + 1);
   if (*p == '"') return parse_string(node, p + 1);
   if (isalnum(*p) || strchr(SYMBOL_CHARS, *p)) return parse_ident(node, p);
   if (*p) return raise(p);
@@ -1219,12 +1235,6 @@ do_ident_global(ENV *env, NODE *node) {
     return ni->v;
   }
 
-  ni = find_item(global->lm, global->nm, node->s);
-  if (ni) {
-    ni->v->r++;
-    return ni->v;
-  }
-
   return new_errorf("unknown identify: %s", node->s);
 }
 
@@ -1249,6 +1259,32 @@ look_func(ENV *env, const char *k) {
 }
 
 static NODE*
+look_macro(ENV *env, const char *k) {
+  static ENV *global;
+  ITEM *ni;
+
+  if (!k) return NULL;
+  if (global == NULL) {
+    while (env->p) env = env->p;
+    global = env;
+  }
+
+  ni = find_item(global->lm, global->nm, k);
+  if (ni) {
+    ni->v->r++;
+    return ni->v;
+  }
+
+  return NULL;
+}
+
+static NODE*
+do_macro(ENV *env, NODE *node, NODE *alist) {
+  /* TODO */
+  return NULL;
+}
+
+static NODE*
 call_node(ENV *env, NODE *node, NODE *alist) {
   ENV *newenv;
   NODE *x = NULL, *p = NULL, *c = NULL, *nn = NULL;
@@ -1264,7 +1300,11 @@ call_node(ENV *env, NODE *node, NODE *alist) {
       free_node(x);
       x = look_func(env, node->s);
       if (!x) {
-        return new_errorn("malformed arguments: %s", node);
+        x = look_macro(env, node->s);
+        if (!x) {
+          return new_errorn("illegal function call: %s", node);
+        }
+        return do_macro(env, x, alist);
       }
     }
     c = x->cdr->car;
