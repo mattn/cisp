@@ -3,3 +3,6 @@
 (print (cdr x))
 (print (cdr nil))
 (print (cdr ()))
+(print (cdr ''a))
+(print (cdr '(1 . 2)))
+(print (cdr '(a)))
