@@ -1402,13 +1402,10 @@ static NODE*
 do_progn(ENV *env, NODE *alist) {
   NODE *c;
 
-  if (!alist->car) {
-    return new_errorn("malformed function: %s", alist);
-  }
   c = NULL;
   while (alist) {
     if (c) free_node(c);
-    c = do_call(env, alist->car->car, alist->car->cdr);
+    c = eval_node(env, alist->car);
     if (c->t == NODE_ERROR) break;
     alist = alist->cdr;
   }
@@ -1489,6 +1486,7 @@ do_getenv(ENV *env, NODE *alist) {
     return new_errorn("malformed getenv: %s", alist);
   }
   p = getenv(c->s);
+  free_node(c);
   if (p) {
     c = new_node();
     c->t = NODE_STRING;
@@ -1774,11 +1772,13 @@ load_lisp(ENV *env, const char *fname) {
   top->t = NODE_CELL;
   p = (char*)parse_paren(top, p);
   if (!p) {
+    free((char*)t);
     free_node(top);
     return new_error("failed to load");
   }
   p = (char*)skip_white((char*)p);
   if (*p) {
+    free((char*)t);
     free_node(top);
     return new_error("failed to load");
   }
