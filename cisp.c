@@ -988,7 +988,7 @@ do_le(ENV *env, NODE *alist) {
   if (node_narg(alist) != 2) return new_errorn("malformed <=: %s", alist);
 
   nn = new_node();
-  if (double_value(env, alist, &err) <= double_value(env, alist->cdr, &err)) {
+  if (double_value(env, alist->car, &err) <= double_value(env, alist->cdr->car, &err)) {
     nn->t = NODE_T;
   }
   if (err) {
