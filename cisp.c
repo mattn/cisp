@@ -448,13 +448,14 @@ free_node(NODE *node) {
   node->r--;
   if (node->r <= 0) {
     switch (node->t) {
+    case NODE_LAMBDA:
+    case NODE_QUOTE:
     case NODE_CELL:
       if (node->cdr) free_node(node->cdr);
       if (node->car) free_node(node->car);
       break;
     case NODE_STRING:
     case NODE_IDENT:
-    case NODE_LAMBDA:
     case NODE_ERROR:
     case NODE_NIL:
     case NODE_T:
