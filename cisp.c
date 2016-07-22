@@ -1376,6 +1376,14 @@ do_lambda(ENV *env, NODE *alist) {
 }
 
 static NODE*
+do_eval(ENV *env, NODE *alist) {
+  if (node_narg(alist) != 1) return new_errorf("malformed eval: %s", alist);
+  if (alist->car->t == NODE_QUOTE)
+    return eval_node(env, alist->car->car);
+  return eval_node(env, alist->car);
+}
+
+static NODE*
 do_funcall(ENV *env, NODE *alist) {
   if (node_narg(alist) < 2) return new_errorf("malformed funcall: %s", alist);
   return do_call(env, alist->car, alist->cdr);
@@ -1879,6 +1887,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "defun", do_defun);
   add_sym(env, NODE_IDENT, "dotimes", do_dotimes);
   add_sym(env, NODE_IDENT, "eq?", do_eq);
+  add_sym(env, NODE_IDENT, "eval", do_eval);
   add_sym(env, NODE_IDENT, "funcall", do_funcall);
   add_sym(env, NODE_IDENT, "if", do_if);
   add_sym(env, NODE_IDENT, "lambda", do_lambda);
