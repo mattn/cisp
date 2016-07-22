@@ -1755,9 +1755,14 @@ load_lisp(ENV *env, const char *fname) {
   fseek(fp, 0, SEEK_SET);
   t = p = (char*)malloc(fsize + 1);
   memset(p, 0, fsize + 1);
-  if (fread(p, fsize, 1, fp) < 0) {
+  if (!fread(p, fsize, 1, fp)) {
     free((void*)t);
     fclose(fp);
+    if (errno == 0) {
+      ret = new_node();
+      ret->t = NODE_T;
+      return ret;
+    }
     return new_errorf("%s", strerror(errno));
   }
   fclose(fp);
