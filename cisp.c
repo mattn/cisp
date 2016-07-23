@@ -1216,10 +1216,10 @@ do_setq(ENV *env, NODE *alist) {
   if (c->t == NODE_ERROR) return c;
   while (env) {
     ITEM *ni = find_item(env->lv, env->nv, x->s);
-	if (!env->p) {
+    if (!env->p) {
       add_variable(env, x->s, c);
-	  break;
-	}
+      break;
+    }
     if (ni) {
       free_node(ni->v);
       ni->v = c;
@@ -1245,10 +1245,12 @@ do_ident(ENV *env, NODE *alist) {
     return ni->v;
   }
 
-  c = do_ident(env->p, alist);
-  if (c) {
-    c->r++;
-    return c;
+  if (env->p) {
+    c = do_ident(env->p, alist);
+    if (c) {
+      c->r++;
+      return c;
+    }
   }
 
   return new_errorf("unknown identity: %s", alist->s);
@@ -1314,15 +1316,45 @@ look_macro(ENV *env, const char *k) {
 }
 
 static NODE*
-do_macro(ENV *env, NODE *node, NODE *alist) {
-  /* TODO */
-  return NULL;
+copy_node(ENV *env, NODE *lhs) {
+  ITEM *ni;
+  NODE *rhs;
+
+  if (!lhs) return NULL;
+  if (lhs->t == NODE_IDENT) {
+    ni = find_item(env->lv, env->nv, lhs->s);
+    if (ni) {
+      ni->v->r++;
+      rhs = ni->v;
+    } else {
+      rhs = new_node();
+      rhs->t = lhs->t;
+      rhs->s = strdup(lhs->s);
+    }
+    return rhs;
+  }
+  rhs = new_node();
+  rhs->t = lhs->t;
+  switch (lhs->t) {
+  case NODE_INT: rhs->i = lhs->i; break;
+  case NODE_DOUBLE:rhs->d = lhs->d; break;
+  case NODE_STRING: rhs->s = strdup(lhs->s); break;
+  case NODE_ERROR: rhs->s = strdup(lhs->s); break;
+  case NODE_LAMBDA:
+  case NODE_QUOTE:
+  case NODE_CELL:
+    rhs->car = copy_node(env, lhs->car);
+    rhs->cdr = copy_node(env, lhs->cdr);
+    break;
+  }
+  return rhs;
 }
 
 static NODE*
 call_node(ENV *env, NODE *node, NODE *alist) {
   ENV *newenv = NULL;
   NODE *x = NULL, *p = NULL, *c = NULL, *nn = NULL;
+  int macro = 0;
 
   if (node->t == NODE_IDENT) {
     x = do_ident_global(env, node);
@@ -1339,7 +1371,7 @@ call_node(ENV *env, NODE *node, NODE *alist) {
         if (!x) {
           return new_errorn("illegal function call: %s", node);
         }
-        return do_macro(env, x, alist);
+        macro = 1;
       }
     }
     if (x->t == NODE_LAMBDA) {
@@ -1396,6 +1428,12 @@ call_node(ENV *env, NODE *node, NODE *alist) {
     add_variable(newenv, c->car->s, nn);
     alist = alist->cdr;
     c = c->cdr;
+  }
+  if (macro) {
+    c = copy_node(newenv, x->cdr->cdr->car);
+    free_env(newenv);
+    free_node(x);
+    return c;
   }
   c = NULL;
   while (p) {
@@ -1551,6 +1589,7 @@ do_type_of(ENV *env, NODE *alist) {
   case NODE_CELL: p = "cons"; break;
   case NODE_LAMBDA: p = "function"; break;
   case NODE_IDENT: p = "symbol"; break;
+  case NODE_ENV: p = "environment"; break;
   case NODE_ERROR: p = "error"; break;
   }
   free_node(c);
@@ -1997,30 +2036,21 @@ static INLINE NODE*
 eval_node(ENV *env, NODE *node) {
   NODE *c = NULL;
   switch (node->t) {
+  case NODE_LAMBDA:
+  case NODE_INT:
+  case NODE_DOUBLE:
+  case NODE_NIL:
+  case NODE_T:
+  case NODE_STRING:
+  case NODE_ENV:
+    node->r++;
+    return node;
   case NODE_QUOTE:
     c = node->car;
     c->r++;
     return c;
   case NODE_IDENT:
     return do_ident(env, node);
-  case NODE_LAMBDA:
-    node->r++;
-    return node;
-  case NODE_INT:
-    node->r++;
-    return node;
-  case NODE_DOUBLE:
-    node->r++;
-    return node;
-  case NODE_NIL:
-    node->r++;
-    return node;
-  case NODE_T:
-    node->r++;
-    return node;
-  case NODE_STRING:
-    node->r++;
-    return node;
   case NODE_CELL:
     c = node->car;
     if (!c) {
