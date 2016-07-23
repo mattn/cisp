@@ -40,5 +40,5 @@ prof2 : $(TARGET)
 	gprof $(TARGET) gmon.out -p | less
 
 valgrind : $(TARGET)
-	ls t/*.lisp | xargs -n 1 valgrind --leak-check=full ./$(TARGET) > valgrind.log 2>&1
+	ls t/*.lisp | grep -v error\. | xargs -n 1 valgrind --leak-check=full ./$(TARGET) > valgrind.log 2>&1
 
