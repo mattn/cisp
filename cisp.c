@@ -1266,13 +1266,7 @@ do_ident(ENV *env, NODE *alist) {
     return ni->v;
   }
 
-  if (env->p) {
-    c = do_ident(env->p, alist);
-    if (c) {
-      c->r++;
-      return c;
-    }
-  }
+  if (env->p) return do_ident(env->p, alist);
 
   return new_errorf("unknown identity: %s", alist->s);
 }
