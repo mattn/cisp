@@ -1222,14 +1222,11 @@ do_setq(ENV *env, NODE *alist) {
     }
     env = env->p;
   }
-  if (c->t == NODE_LAMBDA) {
-    c = new_node();
-    c->t = NODE_IDENT;
-    c->s = strdup("lambda");
-    return c;
-  }
+  x = new_node();
+  x->t = NODE_QUOTE;
+  x->car = c;
   c->r++;
-  return c;
+  return x;
 }
 
 static INLINE NODE*
@@ -1440,8 +1437,11 @@ do_eval(ENV *env, NODE *alist) {
 
 static NODE*
 do_funcall(ENV *env, NODE *alist) {
+  NODE *x;
   if (node_narg(alist) < 2) return new_errorf("malformed funcall: %s", alist);
-  return call_node(env, alist->car, alist->cdr);
+  x = eval_node(env, alist->car);
+  if (x->t == NODE_QUOTE) x = x->car;
+  return call_node(env, x, alist->cdr);
 }
 
 static NODE*
