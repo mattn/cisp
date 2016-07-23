@@ -26,7 +26,7 @@
 
 enum T {
   NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_BQUOTE, NODE_IDENT,
-  NODE_LAMBDA, NODE_CELL, NODE_ERROR,
+  NODE_LAMBDA, NODE_CELL, NODE_ENV, NODE_ERROR,
 };
 
 typedef struct _NODE {
@@ -35,6 +35,7 @@ typedef struct _NODE {
     long i;
     double d;
     char* s;
+    void* p;
     struct {
       struct _NODE *car;
       struct _NODE *cdr;
@@ -57,6 +58,7 @@ typedef struct _ENV {
   int nm;
   ITEM **lm;
   struct _ENV *p;
+  int r;
 } ENV;
 
 typedef size_t(*f_reader)(char*, size_t, size_t, void*);
@@ -95,13 +97,14 @@ static const char* parse_any(NODE *node, const char *p);
 static NODE* eval_node(ENV *env, NODE *node);
 static void print_node(size_t nbuf, char *buf, NODE *node, int mode);
 static void free_node(NODE *node);
+static void free_env(ENV *env);
 static NODE* do_ident_global(ENV *env, NODE *node);
 
 static void
 dump_node(NODE *node) {
   char buf[BUFSIZ];
   buf[0] = 0;
-  print_node(sizeof(buf), buf, node, 0);
+  print_node(sizeof(buf), buf, node, 1);
   puts(buf);
 }
 
@@ -167,6 +170,7 @@ new_env(ENV *p) {
   ENV* env = (ENV*)malloc(sizeof(ENV));
   memset(env, 0, sizeof(ENV));
   env->p = p;
+  env->r++;
   return env;
 }
 
@@ -471,29 +475,33 @@ static INLINE void
 free_node(NODE *node) {
   if (!node) return;
   node->r--;
-  if (node->r <= 0) {
-    switch (node->t) {
-    case NODE_LAMBDA:
-    case NODE_QUOTE:
-    case NODE_CELL:
-      if (node->cdr) free_node(node->cdr);
-      if (node->car) free_node(node->car);
-      break;
-    case NODE_STRING:
-    case NODE_IDENT:
-    case NODE_ERROR:
-    case NODE_NIL:
-    case NODE_T:
-      free((void*)node->s);
-      break;
-    }
-    free((void*)node);
+  if (node->r > 0) return;
+  switch (node->t) {
+  case NODE_LAMBDA:
+    free_env((ENV*) node->car->p);
+    if (node->cdr) free_node(node->cdr);
+    break;
+  case NODE_QUOTE:
+  case NODE_CELL:
+    if (node->cdr) free_node(node->cdr);
+    if (node->car) free_node(node->car);
+    break;
+  case NODE_STRING:
+  case NODE_IDENT:
+  case NODE_ERROR:
+  case NODE_NIL:
+  case NODE_T:
+    free((void*)node->s);
+    break;
   }
+  free((void*)node);
 }
 
 static void
 free_env(ENV *env) {
   int i;
+  env->r--;
+  if (env->r > 0) return;
   for (i = 0; i < env->nv; i++) {
     free_node(env->lv[i]->v);
     free((void*)env->lv[i]->k);
@@ -1089,6 +1097,10 @@ do_print(ENV *env, NODE *alist) {
   buf[0] = 0;
   print_node(sizeof(buf), buf, c, 0);
   puts(buf);
+  free_node(c);
+  c = new_node();
+  c->t = NODE_STRING;
+  c->s = strdup(buf);
   return c;
 }
 
@@ -1104,6 +1116,10 @@ do_println(ENV *env, NODE *alist) {
   buf[0] = 0;
   print_node(sizeof(buf), buf, c, 0);
   puts(buf);
+  free_node(c);
+  c = new_node();
+  c->t = NODE_STRING;
+  c->s = strdup(buf);
   return c;
 }
 
@@ -1119,6 +1135,10 @@ do_princ(ENV *env, NODE *alist) {
   buf[0] = 0;
   print_node(sizeof(buf), buf, c, 1);
   printf("%s", buf);
+  free_node(c);
+  c = new_node();
+  c->t = NODE_STRING;
+  c->s = strdup(buf);
   return c;
 }
 
@@ -1180,18 +1200,12 @@ do_exit(ENV *env, NODE *alist) {
 static NODE*
 do_setq(ENV *env, NODE *alist) {
   NODE *x, *c;
-  static ENV *global;
 
   if (node_narg(alist) < 2) return new_errorn("malformed setq: %s", alist);
 
   x = alist->car;
   if (x->t != NODE_IDENT) {
     return new_errorn("invalid identifier: %s", x);
-  }
-
-  if (global == NULL) {
-    while (env->p) env = env->p;
-    global = env;
   }
 
   c = alist->cdr->car;
@@ -1208,12 +1222,19 @@ do_setq(ENV *env, NODE *alist) {
     }
     env = env->p;
   }
+  if (c->t == NODE_LAMBDA) {
+    c = new_node();
+    c->t = NODE_IDENT;
+    c->s = strdup("lambda");
+    return c;
+  }
   c->r++;
   return c;
 }
 
 static INLINE NODE*
 do_ident(ENV *env, NODE *alist) {
+  NODE *c;
   ITEM *ni;
 
   ni = find_item(env->lv, env->nv, alist->s);
@@ -1222,12 +1243,10 @@ do_ident(ENV *env, NODE *alist) {
     return ni->v;
   }
 
-  while (env->p) env = env->p;
-
-  ni = find_item(env->lv, env->nv, alist->s);
-  if (ni) {
-    ni->v->r++;
-    return ni->v;
+  c = do_ident(env->p, alist);
+  if (c) {
+    c->r++;
+    return c;
   }
 
   return new_errorf("unknown identity: %s", alist->s);
@@ -1300,7 +1319,7 @@ do_macro(ENV *env, NODE *node, NODE *alist) {
 
 static NODE*
 call_node(ENV *env, NODE *node, NODE *alist) {
-  ENV *newenv;
+  ENV *newenv = NULL;
   NODE *x = NULL, *p = NULL, *c = NULL, *nn = NULL;
 
   if (node->t == NODE_IDENT) {
@@ -1321,18 +1340,25 @@ call_node(ENV *env, NODE *node, NODE *alist) {
         return do_macro(env, x, alist);
       }
     }
+    if (x->t == NODE_LAMBDA) {
+      newenv = (ENV*) x->car->p;
+      newenv->r++;
+    }
     c = x->cdr->car;
     p = x->cdr->cdr;
   } else if (node->t == NODE_LAMBDA) {
+    x = node;
+    newenv = (ENV*) x->car->p;
+    newenv->r++;
+    c = x->cdr->car;
+    p = x->cdr->cdr;
     x = node->cdr;
     x->r++;
-    c = x->car;
-    p = x->cdr;
   } else {
     return new_errorn("malformed arguments: %s", node);
   }
 
-  newenv = new_env(env);
+  if (!newenv) newenv = new_env(env);
 
   while (alist) {
     if (c && (c->t == NODE_IDENT || (c->car && !strcmp("&rest", c->car->s)))) {
@@ -1376,6 +1402,7 @@ call_node(ENV *env, NODE *node, NODE *alist) {
     if (c->t == NODE_ERROR) break;
     p = p->cdr;
   }
+
   free_env(newenv);
   free_node(x);
   if (c) {
@@ -1386,12 +1413,18 @@ call_node(ENV *env, NODE *node, NODE *alist) {
 
 static NODE*
 do_lambda(ENV *env, NODE *alist) {
-  NODE *x;
+  NODE *e, *x;
 
   if (node_narg(alist) < 2) return new_errorf("malformed lambda: %s", alist);
 
+  e = new_node();
+  e->t = NODE_ENV;
+  e->p = env;
+  env->r++;
+
   x = new_node();
   x->t = NODE_LAMBDA;
+  x->car = e;
   x->cdr = alist;
   alist->r++;
   return x;
@@ -1990,10 +2023,12 @@ eval_node(ENV *env, NODE *node) {
     }
     if (c && c->t == NODE_CELL && c->car && c->car->t != NODE_LAMBDA) {
       NODE *r = eval_node(env, c);
-      if (!(c->car->t == NODE_IDENT && !strcmp(c->car->s, "lambda") && r->t == NODE_LAMBDA)) return r;
-      c = call_node(env, r, node->cdr);
-      free_node(r);
-      return c;
+      if (r->t == NODE_LAMBDA) {
+        c = call_node(env, r, node->cdr);
+        free_node(r);
+        return c;
+      }
+      return r;
     }
     if (c->t == NODE_IDENT || c->t == NODE_LAMBDA) {
       c = call_node(env, c, node->cdr);
