@@ -921,7 +921,7 @@ do_oddp(ENV *env, NODE *alist) {
   if (node_narg(alist) != 1) return new_errorn("malformed oddp: %s", alist);
 
   c = new_node();
-  if (int_value(env, alist->car, &err) % 2 == 1) {
+  if (int_value(env, alist->car, &err) % 2 != 0) {
     c->t = NODE_T;
   }
   if (err) {
