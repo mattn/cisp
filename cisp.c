@@ -1257,7 +1257,6 @@ do_setq(ENV *env, NODE *alist) {
 
 static INLINE NODE*
 do_ident(ENV *env, NODE *alist) {
-  NODE *c;
   ITEM *ni;
 
   ni = find_item(env->lv, env->nv, alist->s);
