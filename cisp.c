@@ -1216,8 +1216,13 @@ do_setq(ENV *env, NODE *alist) {
   if (c->t == NODE_ERROR) return c;
   while (env) {
     ITEM *ni = find_item(env->lv, env->nv, x->s);
-    if (ni || env->p == NULL) {
+	if (!env->p) {
       add_variable(env, x->s, c);
+	  break;
+	}
+    if (ni) {
+      free_node(ni->v);
+      ni->v = c;
       break;
     }
     env = env->p;
