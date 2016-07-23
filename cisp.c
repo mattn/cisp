@@ -16,10 +16,10 @@
 # define snprintf(b,n,f,...) _snprintf(b,n,f,__VA_ARGS__)
 #endif
 
-#ifndef _MSC_VER
-# define INLINE inline
-#else
+#ifdef _MSC_VER
 # define INLINE
+#else
+# define INLINE inline
 #endif
 
 #define SYMBOL_CHARS "+-*/<>=&%?."
@@ -543,6 +543,18 @@ compare_item(const void *a, const void *b) {
   return strcmp((*((ITEM**)a))->k, (*((ITEM**)b))->k);
 }
 
+static INLINE void
+add_item(ITEM ***ll, int *nl, const char *k, NODE *v) {
+  ITEM *ni = (ITEM*)malloc(sizeof(ITEM));
+  memset(ni, 0, sizeof(ITEM));
+  ni->k = strdup(k);
+  ni->v = v;
+  *ll = (ITEM**)realloc(*ll, sizeof(ITEM*) * (*nl + 1));
+  (*ll)[*nl] = ni;
+  (*nl)++;
+  qsort(*ll, *nl, sizeof(ITEM*), compare_item);
+}
+
 static INLINE ITEM*
 find_item(ITEM **ll, int nl, const char *k) {
   int left, right, mid, r;
@@ -571,14 +583,7 @@ add_variable(ENV *env, const char *k, NODE *node) {
     ni->v = node;
     return;
   }
-  ni = (ITEM*)malloc(sizeof(ITEM));
-  memset(ni, 0, sizeof(ITEM));
-  ni->k = strdup(k);
-  ni->v = node;
-  env->lv = (ITEM**)realloc(env->lv, sizeof(ITEM*) * (env->nv + 1));
-  env->lv[env->nv] = ni;
-  env->nv++;
-  qsort(env->lv, env->nv, sizeof(ITEM*), compare_item);
+  add_item(&env->lv, &env->nv, k, node);
 }
 
 static void
@@ -589,14 +594,7 @@ add_function(ENV *env, const char *k, NODE *node) {
     ni->v = node;
     return;
   }
-  ni = (ITEM*)malloc(sizeof(ITEM));
-  memset(ni, 0, sizeof(ITEM));
-  ni->k = strdup(k);
-  ni->v = node;
-  env->lf = (ITEM**)realloc(env->lf, sizeof(ITEM*) * (env->nf + 1));
-  env->lf[env->nf] = ni;
-  env->nf++;
-  qsort(env->lf, env->nf, sizeof(ITEM*), compare_item);
+  add_item(&env->lf, &env->nf, k, node);
 }
 
 static void
@@ -607,14 +605,7 @@ add_macro(ENV *env, const char *k, NODE *node) {
     ni->v = node;
     return;
   }
-  ni = (ITEM*)malloc(sizeof(ITEM));
-  memset(ni, 0, sizeof(ITEM));
-  ni->k = strdup(k);
-  ni->v = node;
-  env->lm = (ITEM**)realloc(env->lm, sizeof(ITEM*) * (env->nm + 1));
-  env->lm[env->nm] = ni;
-  env->nm++;
-  qsort(env->lm, env->nm, sizeof(ITEM*), compare_item);
+  add_item(&env->lm, &env->nm, k, node);
 }
 
 static long
