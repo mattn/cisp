@@ -478,9 +478,6 @@ free_node(NODE *node) {
   if (node->r > 0) return;
   switch (node->t) {
   case NODE_LAMBDA:
-    free_env((ENV*) node->car->p);
-    if (node->cdr) free_node(node->cdr);
-    break;
   case NODE_QUOTE:
   case NODE_CELL:
     if (node->cdr) free_node(node->cdr);
@@ -492,6 +489,9 @@ free_node(NODE *node) {
   case NODE_NIL:
   case NODE_T:
     free((void*)node->s);
+    break;
+  case NODE_ENV:
+    free_env((ENV*) node->p);
     break;
   }
   free((void*)node);
