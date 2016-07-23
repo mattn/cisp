@@ -73,10 +73,11 @@ typedef NODE* (*f_do)(ENV*, NODE*);
 static NODE* parse_any(char **p);
 static NODE* eval_node(ENV *env, NODE *node);
 static void print_node(size_t nbuf, char *buf, NODE *node, int mode);
+
+static NODE* new_node();
 static void free_node(NODE *node);
 static void free_env(ENV *env);
 static NODE* do_ident_global(ENV *env, NODE *node);
-static NODE* new_node();
 
 #if 0
 static char*
@@ -294,7 +295,7 @@ parse_ident(char **p) {
 static NODE*
 parse_quote(char **p) {
   NODE *node, *child;
-  
+
   (*p)++;
   child = parse_any(p);
   if (child->t == NODE_ERROR) {
@@ -309,7 +310,7 @@ parse_quote(char **p) {
 static NODE*
 parse_bquote(char **p) {
   NODE *node, *child;
-  
+
   (*p)++;
   child = parse_any(p);
   if (child->t == NODE_ERROR) {
@@ -1341,10 +1342,18 @@ copy_node(ENV *env, NODE *lhs) {
   rhs = new_node();
   rhs->t = lhs->t;
   switch (lhs->t) {
-  case NODE_INT: rhs->i = lhs->i; break;
-  case NODE_DOUBLE:rhs->d = lhs->d; break;
-  case NODE_STRING: rhs->s = strdup(lhs->s); break;
-  case NODE_ERROR: rhs->s = strdup(lhs->s); break;
+  case NODE_INT:
+    rhs->i = lhs->i;
+    break;
+  case NODE_DOUBLE:
+    rhs->d = lhs->d;
+    break;
+  case NODE_STRING:
+    rhs->s = strdup(lhs->s);
+    break;
+  case NODE_ERROR:
+    rhs->s = strdup(lhs->s);
+    break;
   case NODE_LAMBDA:
   case NODE_QUOTE:
   case NODE_CELL:
@@ -2126,7 +2135,7 @@ main(int argc, char* argv[]) {
       buf[fsize] = 0;
     }
     if (!strcmp(buf, "(exit)")) break;
-	pp = buf;
+    pp = buf;
     top = parse_any(&pp);
     if (!pp) {
       continue;
