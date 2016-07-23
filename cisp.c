@@ -1398,7 +1398,10 @@ call_node(ENV *env, NODE *node, NODE *alist) {
     if (c && (c->t == NODE_IDENT || (c->car && !strcmp("&rest", c->car->s)))) {
       NODE *l = NULL, *rr = NULL, *nc;
       while (alist) {
-        nn = eval_node(env, alist->car);
+        if (macro) {
+          nn = alist->car;
+          nn->r++;
+        } else nn = eval_node(env, alist->car);
         if (nn->t == NODE_ERROR) {
           free_env(newenv);
           free_node(x);
@@ -1419,7 +1422,10 @@ call_node(ENV *env, NODE *node, NODE *alist) {
       if (rr) add_variable(newenv, c->t == NODE_IDENT ? c->s : c->cdr->car->s, rr);
       break;
     }
-    nn = eval_node(env, alist->car);
+    if (macro) {
+      nn = alist->car;
+      nn->r++;
+    } else nn = eval_node(env, alist->car);
     if (nn->t == NODE_ERROR) {
       free_env(newenv);
       free_node(x);
@@ -1430,7 +1436,9 @@ call_node(ENV *env, NODE *node, NODE *alist) {
     c = c->cdr;
   }
   if (macro) {
-    c = copy_node(newenv, x->cdr->cdr->car);
+    nn = copy_node(newenv, x->cdr->cdr->car);
+    c = eval_node(newenv, nn);
+    free_node(nn);
     free_env(newenv);
     free_node(x);
     return c;
