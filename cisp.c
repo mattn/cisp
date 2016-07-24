@@ -1967,6 +1967,44 @@ do_make_array(ENV *env, NODE *alist) {
   return c;
 }
 
+#if 0
+static NODE*
+do_aref(ENV *env, NODE *alist) {
+  NODE *x, *y;
+  int i, n;
+
+  if (node_narg(alist) != 2) return new_errorn("malformed aref: %s", alist);
+
+  x = eval_node(env, alist->car);
+  if (x->t == NODE_ERROR) return x;
+  if (x->t != NODE_CELL) {
+    free_node(x);
+    return new_errorn("malformed aref: %s", alist);
+  }
+  y = eval_node(env, alist->cdr->car);
+  if (y->t == NODE_ERROR) {
+    free_node(x);
+    return y;
+  }
+  if (y->t != NODE_INT) {
+    free_node(x);
+    free_node(y);
+    return new_errorn("malformed aref: %s", alist);
+  }
+  n = y->i;
+  free_node(y);
+
+  for (i = 0; i < n; i++) {
+    x = x->cdr;
+    if (x == NULL) return new_node();
+  }
+  x = x->car;
+  x->r++;
+  /* TODO: should return reference not value */
+  return x;
+}
+#endif
+
 static char
 file_peek(SCANNER *s) {
   int c = fgetc((FILE*)s->v);
@@ -2185,6 +2223,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "load", do_load);
   add_sym(env, NODE_IDENT, "make-string", do_make_string);
   add_sym(env, NODE_IDENT, "make-array", do_make_array);
+  /* add_sym(env, NODE_IDENT, "aref", do_aref); */
   add_sym(env, NODE_IDENT, "mod", do_mod);
   add_sym(env, NODE_IDENT, "not", do_not);
   add_sym(env, NODE_IDENT, "evenp", do_evenp);
