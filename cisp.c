@@ -382,8 +382,7 @@ parse_string(SCANNER *s) {
 
   node = new_node();
   node->t = NODE_STRING;
-  node->s = strdup(buf);
-  free(buf);
+  node->s = realloc(buf, n+1);
   return node;
 }
 
