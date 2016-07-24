@@ -29,6 +29,11 @@ enum T {
   NODE_LAMBDA, NODE_CELL, NODE_ENV, NODE_ERROR,
 };
 
+struct _ENV;
+struct _NODE;
+
+typedef struct _NODE* (*f_do)(struct _ENV*, struct _NODE*);
+
 typedef struct _NODE {
   int t;
   union {
@@ -41,7 +46,7 @@ typedef struct _NODE {
       struct _NODE *cdr;
     };
   };
-  void *f;
+  f_do f;
   int r;
 } NODE;
 
@@ -61,16 +66,25 @@ typedef struct _ENV {
   int r;
 } ENV;
 
-typedef size_t(*f_reader)(char*, size_t, size_t, void*);
+struct _SCANNER;
+
+typedef char (*f_getc)(struct _SCANNER*);
+typedef char (*f_peek)(struct _SCANNER*);
+typedef char (*f_eof)(struct _SCANNER*);
+typedef long (*f_pos)(struct _SCANNER*);
+typedef void (*f_reset)(struct _SCANNER*);
 
 typedef struct _SCANNER {
-  void *v;
-  f_reader f;
+  void *v, *o;
+  f_peek  peek;
+  f_getc  getc;
+  f_eof   eof;
+  f_pos   pos;
+  f_reset reset;
+  char *err;
 } SCANNER;
 
-typedef NODE* (*f_do)(ENV*, NODE*);
-
-static NODE* parse_any(char **p);
+static NODE* parse_any(SCANNER *s);
 static NODE* eval_node(ENV *env, NODE *node);
 static void print_node(size_t nbuf, char *buf, NODE *node, int mode);
 
@@ -79,31 +93,45 @@ static void free_node(NODE *node);
 static void free_env(ENV *env);
 static NODE* do_ident_global(ENV *env, NODE *node);
 
-#if 0
-static char*
-raisef(const char* msg, const char *p) {
-  if (!p) return NULL;
-  fprintf(stderr, "%s: %s\n", msg, p);
+static char
+s_peek(SCANNER *s) {
+  return s->peek(s);
+}
+
+static char
+s_getc(SCANNER *s) {
+  return s->getc(s);
+}
+
+static char
+s_eof(SCANNER *s) {
+  return s->eof(s);
+}
+
+static long
+s_pos(SCANNER *s) {
+  return s->pos(s);
+}
+
+static void
+s_reset(SCANNER *s) {
+  s->reset(s);
+  if (s->err) free(s->err);
+  s->err = NULL;
+}
+
+static NODE*
+raise(SCANNER *s, const char *p) {
+  s->err = strdup(p);
   return NULL;
 }
-#endif
 
 static NODE*
-raisep(const char *p) {
-  NODE *e = new_node();
-  e->t = NODE_ERROR;
-  e->s = strdup(p);
-  return e;
-}
-
-static NODE*
-raise(const char *p) {
+invalid_token(SCANNER *s) {
   char buf[BUFSIZ];
-  NODE *e = new_node();
-  e->t = NODE_ERROR;
-  snprintf(buf, sizeof(buf), "invalid token: %s\n", p);
-  e->s = strdup(buf);
-  return e;
+  snprintf(buf, sizeof(buf), "invalid token at offset %ld", (long)s_pos(s));
+  s->err = strdup(buf);
+  return NULL;
 }
 
 static void
@@ -115,13 +143,12 @@ dump_node(NODE *node) {
 }
 
 static void
-skip_white(char **p) {
-  if (!*p || !**p) return;
-  while (**p) {
-    if (**p == ';') {
-      (*p)++;
-      while (**p && **p != '\n') (*p)++;
-    } else if (isspace((int)**p)) (*p)++;
+skip_white(SCANNER *s) {
+  while (!s_eof(s)) {
+    if (s_peek(s) == ';') {
+      s_getc(s);
+      while (!s_eof(s) && s_peek(s) != '\n') s_getc(s);
+    } else if (isspace((int)s_peek(s))) s_getc(s);
     else break;
   }
 }
@@ -212,32 +239,28 @@ match(const char *lhs, const char *rhs, size_t n) {
 }
 
 static NODE*
-parse_paren(char **p) {
+parse_paren(SCANNER *s) {
   NODE *head, *node, *x;
 
-  skip_white(p);
-  if (!*p) return raisep("unexpected end of file");
+  skip_white(s);
+  if (s_eof(s)) return raise(s, "unexpected end of file");
 
   head = node = new_node();
   node->t = NODE_CELL;
-  while (*p && **p && **p != ')') {
-    NODE *child = parse_any(p);
-    if (child->t == NODE_ERROR) {
-      return child;
-    }
+  while (!s_eof(s) && s_peek(s) != ')') {
+    NODE *child = parse_any(s);
+    if (child == NULL) return NULL;
 
     if (child->t == NODE_IDENT && !strcmp(".", child->s)) {
       if (!head->car) {
         free_node(child);
-        return raise(".");
+        return raise(s, "illegal dot operation");
       }
       free_node(child);
 
-      skip_white(p);
-      child = parse_any(p);
-      if (child->t == NODE_ERROR) {
-        return child;
-      }
+      skip_white(s);
+      child = parse_any(s);
+      if (child == NULL) return NULL;
       node->cdr = child;
       break;
     } else {
@@ -250,57 +273,59 @@ parse_paren(char **p) {
       node->car = child;
     }
 
-    skip_white(p);
+    skip_white(s);
   }
 
   if (!head->car && !head->cdr)
     head->t = NODE_NIL;
 
-  skip_white(p);
+  skip_white(s);
   return head;
 }
 
 static NODE*
-parse_ident(char **p) {
+parse_primitive(SCANNER *s) {
+  char buf[BUFSIZ];
+  size_t n = 0;
   char *e;
-  const char *t = *p;
   NODE *c;
 
   c = new_node();
-  while (**p && (isalnum(**p) || strchr(SYMBOL_CHARS, **p))) (*p)++;
-  if (match(t, "nil", (size_t)(*p - t))) {
+  while (!s_eof(s) && (isalnum(s_peek(s)) || strchr(SYMBOL_CHARS, s_peek(s)))) {
+    buf[n++] = s_getc(s);
+  }
+  buf[n] = 0;
+  if (match(buf, "nil", n)) {
     return c;
   }
-  if (match(t, "t", (size_t)(*p - t))) {
+  if (match(buf, "t", n)) {
     c->t = NODE_T;
     return c;
   }
-  c->i = strtol(t, &e, 10);
-  if (*p == e) {
+  c->i = strtol(buf, &e, 10);
+  if (e == buf+n) {
     c->t = NODE_INT;
     return c;
   }
-  c->d = strtod(t, &e);
-  if (*p == e) {
+  c->d = strtod(buf, &e);
+  if (e == buf+n) {
     c->t = NODE_DOUBLE;
     return c;
   }
   c->t = NODE_IDENT;
-  c->s = (char*)malloc((size_t)(*p - t) + 1);
-  memset(c->s, 0, (size_t)(*p - t) + 1);
-  memcpy(c->s, t, (size_t)(*p - t));
+  c->s = (char*)malloc(n + 1);
+  memset(c->s, 0, n + 1);
+  memcpy(c->s, buf, n);
   return c;
 }
 
 static NODE*
-parse_quote(char **p) {
+parse_quote(SCANNER *s) {
   NODE *node, *child;
 
-  (*p)++;
-  child = parse_any(p);
-  if (child->t == NODE_ERROR) {
-    return child;
-  }
+  s_getc(s);
+  child = parse_any(s);
+  if (child == NULL) return NULL;
   node = new_node();
   node->t = NODE_QUOTE;
   node->car = child;
@@ -308,14 +333,12 @@ parse_quote(char **p) {
 }
 
 static NODE*
-parse_bquote(char **p) {
+parse_bquote(SCANNER *s) {
   NODE *node, *child;
 
-  (*p)++;
-  child = parse_any(p);
-  if (child->t == NODE_ERROR) {
-    return child;
-  }
+  s_getc(s);
+  child = parse_any(s);
+  if (child == NULL) return NULL;
   node = new_node();
   node->t = NODE_BQUOTE;
   node->car = child;
@@ -323,73 +346,62 @@ parse_bquote(char **p) {
 }
 
 static NODE*
-parse_string(char **p) {
-  NODE *node;
-  const char *t, *q;
-  char *sp;
+parse_string(SCANNER *s) {
+  char buf[BUFSIZ];
   int n = 0;
+  char c = 0;
+  NODE *node;
 
-  (*p)++;
-  t = q = *p;
-  while (**p) {
-    if (**p == '\\' && *(*p + 1)) (*p)++;
-    else if (**p == '"') break;
-    (*p)++;
-    n++;
-  }
-  node = new_node();
-  node->s = (char*)malloc(n + 1);
-  memset(node->s, 0, n + 1);
-  sp = node->s;
-  while (*t) {
-    if (*t == '\\' && *(t + 1)) {
-      switch (*(t+1)) {
-      case '\\': *sp++ = '\\'; break;
-      case 'b': *sp++ = '\b'; break;
-      case 'f': *sp++ = '\f'; break;
-      case 'n': *sp++ = '\n'; break;
-      case 'r': *sp++ = '\r'; break;
-      case 't': *sp++ = '\t'; break;
-      default: return raise(q); break;
+  s_getc(s);
+  while (!s_eof(s)) {
+    c = s_getc(s);
+    if (c == '\\' && !s_eof(s)) {
+      c = s_peek(s);
+      switch (c) {
+      case '\\': c = '\\'; break;
+      case 'b': c = '\b'; break;
+      case 'f': c = '\f'; break;
+      case 'n': c = '\n'; break;
+      case 'r': c = '\r'; break;
+      case 't': c = '\t'; break;
+      default: return invalid_token(s); break;
       }
-      t++;
-      t++;
-      continue;
-    } else if (*t == '"') break;
-    *sp++ = *t++;
+    } else if (c == '"') break;
+    buf[n++] = c;
   }
-  *sp = 0;
-  if (*t != '"') return raise(q);
+  buf[n] = 0;
+  if (c != '"') return invalid_token(s);
 
-  (*p)++;
+  node = new_node();
   node->t = NODE_STRING;
+  node->s = strdup(buf);
   return node;
 }
 
 static NODE*
-parse_any(char **p) {
-  NODE *c = NULL;
+parse_any(SCANNER *s) {
+  NODE *x = NULL;
+  char c;
 
-  if (!*p) return c;
-  skip_white(p);
-  if (!**p) return c;
+  skip_white(s);
+  if (s_eof(s)) return raise(s, "unexpected end of file");
 
-  if (**p == '(') {
-    (*p)++;
-    c = parse_paren(p);
-    if (c->t == NODE_ERROR) return c;
-    if (*p && **p == ')') {
-      (*p)++;
-      return c;
+  if (s_peek(s) == '(') {
+    s_getc(s);
+    x = parse_paren(s);
+    if (x == NULL) return NULL;
+    if (!s_eof(s) && s_peek(s) == ')') {
+      s_getc(s);
+      return x;
     }
-    return raisep("unexpected end of file");
+    return raise(s, "unexpected end of file");
   }
-  if (**p == '\'') return parse_quote(p);
-  if (**p == '`') return parse_bquote(p);
-  if (**p == '"') return parse_string(p);
-  if (isalnum(**p) || strchr(SYMBOL_CHARS, **p)) return parse_ident(p);
-  if (*p) return raise(*p);
-  return raise(*p);
+  c = s_peek(s);
+  if (c == '\'') return parse_quote(s);
+  if (c == '`') return parse_bquote(s);
+  if (c == '"') return parse_string(s);
+  if (isalnum((int)c) || strchr(SYMBOL_CHARS, c)) return parse_primitive(s);
+  return invalid_token(s);
 }
 
 static void
@@ -1885,11 +1897,86 @@ do_make_string(ENV *env, NODE *alist) {
   return c;
 }
 
+static char
+file_peek(SCANNER *s) {
+  int c = fgetc((FILE*)s->v);
+  ungetc(c, (FILE*)s->v);
+  return c;
+}
+
+static char
+file_getc(SCANNER *s) {
+  return fgetc((FILE*)s->v);
+}
+
+static char
+file_eof(SCANNER *s) {
+  return feof((FILE*)s->v);
+}
+
+static long
+file_pos(SCANNER *s) {
+  return ftell((FILE*)s->v);
+}
+
+static void
+file_reset(SCANNER *s) {
+  fseek((FILE*)s->v, 0, SEEK_SET);
+}
+
+static void
+s_file_init(SCANNER *s, FILE* v) {
+  s->v = (void*)v;
+  s->o = (void*)v;
+  s->peek  = file_peek;
+  s->getc  = file_getc;
+  s->eof   = file_eof;
+  s->pos   = file_pos;
+  s->reset = file_reset;
+}
+
+#if 0
+static char
+string_peek(SCANNER *s) {
+  return *((char*)s->v);
+}
+
+static char
+string_getc(SCANNER *s) {
+  char c = *((char*)s->v);
+  s->v = ((char*)s->v) + 1;
+  return c;
+}
+
+static char
+string_eof(SCANNER *s) {
+  return *((char*)s->v) == 0;
+}
+
+static long
+string_pos(SCANNER *s) {
+  return (long)((uintptr_t)s->v - (uintptr_t)s->o);
+}
+
+static void
+string_reset(SCANNER *s) {
+}
+
+static void
+s_string_init(SCANNER *s, char* v) {
+  s->v = (void*)v;
+  s->o = (void*)v;
+  s->peek  = string_peek;
+  s->getc  = string_getc;
+  s->eof   = string_eof;
+  s->pos   = string_pos;
+  s->reset = string_reset;
+}
+#endif
+
 static NODE*
 load_lisp(ENV *env, const char *fname) {
   NODE *ret, *top, *part;
-  char *p, *t;
-  long fsize;
   FILE *fp;
 
   fp = fopen(fname, "rb");
@@ -1897,35 +1984,26 @@ load_lisp(ENV *env, const char *fname) {
     return new_errorf("%s", strerror(errno));
   }
 
-  fseek(fp, 0, SEEK_END);
-  fsize = ftell(fp);
-  fseek(fp, 0, SEEK_SET);
-  t = p = (char*)malloc(fsize + 1);
-  memset(p, 0, fsize + 1);
-  if (!fread(p, fsize, 1, fp)) {
-    free((void*)t);
+  SCANNER sv, *s = &sv;
+  s_file_init(s, fp);
+
+  top = parse_paren(s);
+  if (top == NULL) {
+    NODE *e = new_node();
+    e->t = NODE_ERROR;
+    e->s = strdup(s->err);
+    s_reset(s);
     fclose(fp);
-    if (errno == 0) {
-      ret = new_node();
-      ret->t = NODE_T;
-      return ret;
-    }
-    return new_errorf("%s", strerror(errno));
+    return e;
+  }
+
+  skip_white(s);
+  if (!s_eof(s)) {
+    free_node(top);
+    fclose(fp);
+    return raise(s, "illegal token");
   }
   fclose(fp);
-
-  top = parse_paren(&p);
-  if (top->t == NODE_ERROR) {
-    free((char*)t);
-    return top;
-  }
-  skip_white(&p);
-  if (*p) {
-    free((char*)t);
-    free_node(top);
-    return raise(p);
-  }
-  free((char*)t);
 
   part = top;
   ret = NULL;
@@ -2102,10 +2180,8 @@ eval_node(ENV *env, NODE *node) {
 int
 main(int argc, char* argv[]) {
   ENV *env;
-  NODE *top, *ret;
-  char buf[BUFSIZ];
-  char *pp;
-  long fsize;
+  NODE *node, *ret;
+  SCANNER sv, *s = &sv;
 
   if (argc > 1) {
     int err = 0;
@@ -2121,38 +2197,28 @@ main(int argc, char* argv[]) {
     exit(err);
   }
 
+  s_file_init(s, stdin);
+
   env = new_env(NULL);
   add_defaults(env);
   while (1) {
-    if (isatty(fileno(stdin))) {
-      printf("> ");
-      if (!fgets(buf, sizeof(buf), stdin)) break;
-      fsize = (long)strlen(buf);
-      if (buf[fsize-1] == '\n') buf[fsize-1] = 0;
-    } else {
-      fsize = (long)fread(buf, 1, sizeof(buf), stdin);
-      if (fsize <= 0) break;
-      buf[fsize] = 0;
-    }
-    if (!strcmp(buf, "(exit)")) break;
-    pp = buf;
-    top = parse_any(&pp);
-    if (!pp) {
+    if (isatty(fileno(stdin))) printf("> ");
+
+    node = parse_any(s);
+    if (node == NULL) {
+      fprintf(stderr, "cisp: %s\n", s->err);
+      s_reset(s);
       continue;
     }
-    skip_white(&pp);
-    if (*pp) {
-      raise(pp);
-      continue;
-    }
-    ret = eval_node(env, top);
+
+    ret = eval_node(env, node);
     if (ret->t == NODE_ERROR) {
       fprintf(stderr, "cisp: %s\n", ret->s);
     } else if (isatty(fileno(stdin))) {
       dump_node(ret);
     }
     free_node(ret);
-    free_node(top);
+    free_node(node);
   }
   free_env(env);
   return 0;

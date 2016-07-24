@@ -3,7 +3,7 @@ SRCS = \
 
 OBJS = $(subst .c,.o,$(SRCS))
 
-CFLAGS = -g -O2 -funroll-loops -Wall -Werror -Werror=unused-result
+CFLAGS = -g -O2 -funroll-loops -Wall -Werror -Werror=unused-result -pedantic
 LIBS = -g -O2 -funroll-loops
 TARGET = cisp
 ifeq ($(OS),Windows_NT)
