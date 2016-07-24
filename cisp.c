@@ -1933,6 +1933,7 @@ s_file_init(SCANNER *s, FILE* v) {
   s->eof   = file_eof;
   s->pos   = file_pos;
   s->reset = file_reset;
+  s->err   = NULL;
 }
 
 #if 0
@@ -1971,6 +1972,7 @@ s_string_init(SCANNER *s, char* v) {
   s->eof   = string_eof;
   s->pos   = string_pos;
   s->reset = string_reset;
+  s->err   = NULL;
 }
 #endif
 
