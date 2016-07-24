@@ -76,11 +76,11 @@ typedef void (*f_reset)(struct _SCANNER*);
 
 typedef struct _SCANNER {
   void *v, *o;
-  f_peek  peek;
-  f_getc  getc;
-  f_eof   eof;
-  f_pos   pos;
-  f_reset reset;
+  f_peek  _peek;
+  f_getc  _getc;
+  f_eof   _eof;
+  f_pos   _pos;
+  f_reset _reset;
   char *err;
 } SCANNER;
 
@@ -95,27 +95,27 @@ static NODE* do_ident_global(ENV *env, NODE *node);
 
 static char
 s_peek(SCANNER *s) {
-  return s->peek(s);
+  return s->_peek(s);
 }
 
 static char
 s_getc(SCANNER *s) {
-  return s->getc(s);
+  return s->_getc(s);
 }
 
 static char
 s_eof(SCANNER *s) {
-  return s->eof(s);
+  return s->_eof(s);
 }
 
 static long
 s_pos(SCANNER *s) {
-  return s->pos(s);
+  return s->_pos(s);
 }
 
 static void
 s_reset(SCANNER *s) {
-  s->reset(s);
+  s->_reset(s);
   if (s->err) free(s->err);
   s->err = NULL;
 }
@@ -1936,11 +1936,11 @@ static void
 s_file_init(SCANNER *s, FILE* v) {
   s->v = (void*)v;
   s->o = (void*)v;
-  s->peek  = file_peek;
-  s->getc  = file_getc;
-  s->eof   = file_eof;
-  s->pos   = file_pos;
-  s->reset = file_reset;
+  s->_peek  = file_peek;
+  s->_getc  = file_getc;
+  s->_eof   = file_eof;
+  s->_pos   = file_pos;
+  s->_reset = file_reset;
   s->err   = NULL;
 }
 
@@ -1975,11 +1975,11 @@ static void
 s_string_init(SCANNER *s, char* v) {
   s->v = (void*)v;
   s->o = (void*)v;
-  s->peek  = string_peek;
-  s->getc  = string_getc;
-  s->eof   = string_eof;
-  s->pos   = string_pos;
-  s->reset = string_reset;
+  s->_peek  = string_peek;
+  s->_getc  = string_getc;
+  s->_eof   = string_eof;
+  s->_pos   = string_pos;
+  s->_reset = string_reset;
   s->err   = NULL;
 }
 #endif
