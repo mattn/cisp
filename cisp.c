@@ -932,22 +932,19 @@ do_minus1(ENV *env, NODE *alist) {
 
 static NODE*
 do_and(ENV *env, NODE *alist) {
-  NODE *c, *err = NULL;
-  int i = 0, n = 1;
+  NODE *c;
 
-  if (node_narg(alist) < 1) return new_errorn("malformed not: %s", alist);
-
+  c = NULL;
   while (alist) {
-    i = int_value(env, alist->car, &err);
-    if (err) return err;
-    n &= i;
-    if (n == 0)
-      alist = alist->cdr;
+    if (c) free_node(c);
+    c = eval_node(env, alist->car);
+    if (c->t == NODE_ERROR || c->t == NODE_NIL) break;
+    alist = alist->cdr;
   }
-  c = new_node();
-  c->t = NODE_INT;
-  c->i = i;
-  return c;
+  if (c) {
+    return c;
+  }
+  return new_node();
 }
 
 static NODE*
