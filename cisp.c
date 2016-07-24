@@ -1987,6 +1987,7 @@ s_string_init(SCANNER *s, char* v) {
 static NODE*
 load_lisp(ENV *env, const char *fname) {
   NODE *ret, *top, *part;
+  SCANNER sv, *s = &sv;
   FILE *fp;
 
   fp = fopen(fname, "rb");
@@ -1994,7 +1995,6 @@ load_lisp(ENV *env, const char *fname) {
     return new_errorf("%s", strerror(errno));
   }
 
-  SCANNER sv, *s = &sv;
   s_file_init(s, fp);
 
   top = parse_paren(s);
@@ -2011,7 +2011,7 @@ load_lisp(ENV *env, const char *fname) {
   if (!s_eof(s)) {
     free_node(top);
     fclose(fp);
-    return raise(s, "illegal token");
+    return invalid_token(s);
   }
   fclose(fp);
 
