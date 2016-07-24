@@ -1249,39 +1249,49 @@ do_exit(ENV *env, NODE *alist) {
 
 static NODE*
 do_setq(ENV *env, NODE *alist) {
-  NODE *x, *c;
+  NODE *x, *c, *last = NULL;
 
   if (node_narg(alist) < 2) return new_errorn("malformed setq: %s", alist);
 
-  x = alist->car;
-  if (x->t != NODE_IDENT) {
-    return new_errorn("invalid identifier: %s", x);
-  }
+  while (alist) {
+    if (last) free_node(last);
 
-  c = alist->cdr->car;
-  if (c->t == NODE_CELL && c->car && c->car->t == NODE_CELL) {
-    c = c->car;
-  }
-  c = eval_node(env, c);
-  if (c->t == NODE_ERROR) return c;
-  while (env) {
-    ITEM *ni = find_item(env->lv, env->nv, x->s);
-    if (!env->p) {
-      add_variable(env, x->s, c);
-      break;
+    x = alist->car;
+    if (x->t != NODE_IDENT) {
+      return new_errorn("invalid identifier: %s", x);
     }
-    if (ni) {
-      free_node(ni->v);
-      ni->v = c;
-      break;
+
+    c = alist->cdr->car;
+    if (!c) break;
+    if (c->t == NODE_CELL && c->car && c->car->t == NODE_CELL) {
+      c = c->car;
     }
-    env = env->p;
+    c = eval_node(env, c);
+    if (c->t == NODE_ERROR) return c;
+    while (env) {
+      ITEM *ni = find_item(env->lv, env->nv, x->s);
+      if (!env->p) {
+        add_variable(env, x->s, c);
+        break;
+      }
+      if (ni) {
+        free_node(ni->v);
+        ni->v = c;
+        break;
+      }
+      env = env->p;
+    }
+    last = c;
+    alist = alist->cdr->cdr;
   }
-  x = new_node();
-  x->t = NODE_QUOTE;
-  x->car = c;
-  c->r++;
-  return x;
+  last->r++;
+  if (last->t == NODE_LAMBDA) {
+    x = new_node();
+    x->t = NODE_QUOTE;
+    x->car = last;
+    last = x;
+  }
+  return last;
 }
 
 static INLINE NODE*
