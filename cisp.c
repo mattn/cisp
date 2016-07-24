@@ -347,11 +347,12 @@ parse_bquote(SCANNER *s) {
 
 static NODE*
 parse_string(SCANNER *s) {
-  char buf[BUFSIZ];
-  int n = 0;
+  char *buf = NULL;
+  int n = 0, l = 0;
   char c = 0;
   NODE *node;
 
+  buf = malloc(10);
   s_getc(s);
   while (!s_eof(s)) {
     c = s_getc(s);
@@ -364,17 +365,25 @@ parse_string(SCANNER *s) {
       case 'n': c = '\n'; break;
       case 'r': c = '\r'; break;
       case 't': c = '\t'; break;
-      default: return invalid_token(s); break;
+      default: free(buf); return invalid_token(s);
       }
     } else if (c == '"') break;
+    if (n == l) {
+      buf = realloc(buf, l+20);
+      l += 20;
+    }
     buf[n++] = c;
   }
   buf[n] = 0;
-  if (c != '"') return invalid_token(s);
+  if (c != '"') {
+    free(buf);
+    return invalid_token(s);
+  }
 
   node = new_node();
   node->t = NODE_STRING;
   node->s = strdup(buf);
+  free(buf);
   return node;
 }
 
@@ -1186,7 +1195,6 @@ do_let(ENV *env, NODE *alist) {
   x = alist->car;
   newenv = new_env(env);
 
-  /* TODO */
   while (x) {
     if (x->car->t != NODE_CELL) {
       free_env(newenv);
