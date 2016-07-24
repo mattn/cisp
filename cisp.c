@@ -26,7 +26,7 @@
 
 enum NODE_TYPE {
   NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_BQUOTE, NODE_IDENT,
-  NODE_LAMBDA, NODE_CELL, NODE_ENV, NODE_ERROR
+  NODE_LAMBDA, NODE_CELL, NODE_AREF, NODE_ENV, NODE_ERROR
 };
 
 struct _ENV;
@@ -417,7 +417,7 @@ static void
 print_args(size_t nbuf, char *buf, NODE *node, int mode) {
   while (node) {
     strncat(buf, " ", nbuf);
-    print_node(nbuf, buf, node, mode);
+    print_node(nbuf, buf, node->car, mode);
     node = node->cdr;
   }
 }
@@ -503,7 +503,8 @@ print_node(size_t nbuf, char* buf, NODE *node, int mode) {
   case NODE_T: strncat(buf, "t", nbuf); break;
   case NODE_QUOTE: strncat(buf, "'", nbuf); print_node(nbuf, buf, node->car, mode); break;
   case NODE_CELL: print_cell(nbuf, buf, node, mode); break;
-  case NODE_LAMBDA: strncat(buf, "(lambda", nbuf); print_args(nbuf, buf, node->cdr->cdr->cdr, mode); strncat(buf, ")", nbuf); break;
+  case NODE_AREF: strncat(buf, "(aref ", nbuf); print_cell(nbuf, buf, node->car, mode); print_args(nbuf, buf, node->cdr, mode); strncat(buf, ")", nbuf); break;
+  case NODE_LAMBDA: strncat(buf, "(lambda", nbuf); print_args(nbuf, buf, node->cdr, mode); strncat(buf, ")", nbuf); break;
   default: strncat(buf, "()", nbuf); break;
   }
 }
@@ -1145,6 +1146,11 @@ do_print(ENV *env, NODE *alist) {
 
   c = eval_node(env, alist->car);
   if (c->t == NODE_ERROR) return c;
+  if (c->t == NODE_AREF) {
+    NODE *x = eval_node(env, c);
+    free_node(c);
+    c = x;
+  }
   buf[0] = 0;
   print_node(sizeof(buf), buf, c, 0);
   puts(buf);
@@ -1292,6 +1298,45 @@ do_setq(ENV *env, NODE *alist) {
     last = x;
   }
   return last;
+}
+
+static NODE*
+do_setf(ENV *env, NODE *alist) {
+  NODE *x, *y, *c;
+  int i, n;
+
+  if (node_narg(alist) != 2) return new_errorn("malformed setf: %s", alist);
+
+  x = eval_node(env, alist->car);
+  if (x->t == NODE_ERROR) return x;
+  if (x->t != NODE_AREF) {
+    free_node(x);
+    return new_errorn("malformed setf: %s", alist);
+  }
+  y = eval_node(env, alist->cdr->car);
+  if (y->t == NODE_ERROR) {
+    free_node(x);
+    return y;
+  }
+
+  n = x->cdr->i;
+  free_node(y);
+
+  c = x;
+  for (i = 0; i < n; i++) {
+    if (!c) break;
+    c = c->cdr;
+  }
+  if (!c || !c->car) {
+    free_node(x);
+    return new_node();
+  }
+
+  free_node(c->car);
+  c->car = y;
+  y->r++;
+
+  return y;
 }
 
 static INLINE NODE*
@@ -1659,6 +1704,7 @@ do_type_of(ENV *env, NODE *alist) {
   case NODE_QUOTE: p = "cons"; break;
   case NODE_BQUOTE: p = "cons"; break;
   case NODE_CELL: p = "cons"; break;
+  case NODE_AREF: p = "aref"; break;
   case NODE_LAMBDA: p = "function"; break;
   case NODE_IDENT: p = "symbol"; break;
   case NODE_ENV: p = "environment"; break;
@@ -1967,11 +2013,9 @@ do_make_array(ENV *env, NODE *alist) {
   return c;
 }
 
-#if 0
 static NODE*
 do_aref(ENV *env, NODE *alist) {
-  NODE *x, *y;
-  int i, n;
+  NODE *x, *y, *c;
 
   if (node_narg(alist) != 2) return new_errorn("malformed aref: %s", alist);
 
@@ -1991,19 +2035,15 @@ do_aref(ENV *env, NODE *alist) {
     free_node(y);
     return new_errorn("malformed aref: %s", alist);
   }
-  n = y->i;
-  free_node(y);
 
-  for (i = 0; i < n; i++) {
-    x = x->cdr;
-    if (x == NULL) return new_node();
-  }
-  x = x->car;
   x->r++;
-  /* TODO: should return reference not value */
-  return x;
+  y->r++;
+  c = new_node();
+  c->t = NODE_AREF;
+  c->car = x;
+  c->cdr = y;
+  return c;
 }
-#endif
 
 static char
 file_peek(SCANNER *s) {
@@ -2223,7 +2263,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "load", do_load);
   add_sym(env, NODE_IDENT, "make-string", do_make_string);
   add_sym(env, NODE_IDENT, "make-array", do_make_array);
-  /* add_sym(env, NODE_IDENT, "aref", do_aref); */
+  add_sym(env, NODE_IDENT, "aref", do_aref);
   add_sym(env, NODE_IDENT, "mod", do_mod);
   add_sym(env, NODE_IDENT, "not", do_not);
   add_sym(env, NODE_IDENT, "evenp", do_evenp);
@@ -2236,6 +2276,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "rplaca", do_rplaca);
   add_sym(env, NODE_IDENT, "rplacd", do_rplacd);
   add_sym(env, NODE_IDENT, "setq", do_setq);
+  add_sym(env, NODE_IDENT, "setf", do_setf);
   add_sym(env, NODE_IDENT, "exit", do_exit);
   add_sym(env, NODE_IDENT, "type-of", do_type_of);
   add_sym(env, NODE_IDENT, "getenv", do_getenv);
@@ -2286,6 +2327,20 @@ eval_node(ENV *env, NODE *node) {
     }
     if (c) return c;
     return new_errorn("illegal function call: %s", node);
+  case NODE_AREF:
+    {
+      NODE *x = node->car;
+      int i;
+      for (i = 0; i < node->cdr->i; i++) {
+        if (!x) break;
+        x = x->cdr;
+      }
+      if (!x) return new_node();
+      x = x->car;
+      x->r++;
+      return x;
+    }
+    break;
   }
 
   return new_error("unknown node");
