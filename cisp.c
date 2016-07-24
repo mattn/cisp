@@ -931,6 +931,26 @@ do_minus1(ENV *env, NODE *alist) {
 }
 
 static NODE*
+do_and(ENV *env, NODE *alist) {
+  NODE *c, *err = NULL;
+  int i = 0, n = 1;
+
+  if (node_narg(alist) < 1) return new_errorn("malformed not: %s", alist);
+
+  while (alist) {
+    i = int_value(env, alist->car, &err);
+    if (err) return err;
+    n &= i;
+    if (n == 0)
+      alist = alist->cdr;
+  }
+  c = new_node();
+  c->t = NODE_INT;
+  c->i = i;
+  return c;
+}
+
+static NODE*
 do_not(ENV *env, NODE *alist) {
   NODE *c, *err = NULL;
 
@@ -1146,11 +1166,6 @@ do_print(ENV *env, NODE *alist) {
 
   c = eval_node(env, alist->car);
   if (c->t == NODE_ERROR) return c;
-  if (c->t == NODE_AREF) {
-    NODE *x = eval_node(env, c);
-    free_node(c);
-    c = x;
-  }
   buf[0] = 0;
   print_node(sizeof(buf), buf, c, 0);
   puts(buf);
@@ -1896,6 +1911,18 @@ do_cons(ENV *env, NODE *alist) {
 }
 
 static NODE*
+do_consp(ENV *env, NODE *alist) {
+  NODE *x, *c;
+  if (node_narg(alist) != 1) return new_errorn("malformed consp: %s", alist);
+  x = eval_node(env, alist->car);
+  if (x->t == NODE_ERROR) return x;
+
+  c = new_node();
+  if (x->t == NODE_CELL) c->t = NODE_T;
+  return c;
+}
+
+static NODE*
 do_length(ENV *env, NODE *alist) {
   NODE *x, *c;
 
@@ -2250,6 +2277,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "concatenate", do_concatenate);
   add_sym(env, NODE_IDENT, "cond", do_cond);
   add_sym(env, NODE_IDENT, "cons", do_cons);
+  add_sym(env, NODE_IDENT, "consp", do_consp);
   add_sym(env, NODE_IDENT, "defun", do_defun);
   add_sym(env, NODE_IDENT, "defmacro", do_defmacro);
   add_sym(env, NODE_IDENT, "dotimes", do_dotimes);
@@ -2265,6 +2293,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "make-array", do_make_array);
   add_sym(env, NODE_IDENT, "aref", do_aref);
   add_sym(env, NODE_IDENT, "mod", do_mod);
+  add_sym(env, NODE_IDENT, "and", do_and);
   add_sym(env, NODE_IDENT, "not", do_not);
   add_sym(env, NODE_IDENT, "evenp", do_evenp);
   add_sym(env, NODE_IDENT, "oddp", do_oddp);
