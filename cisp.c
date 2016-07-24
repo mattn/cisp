@@ -24,7 +24,7 @@
 
 #define SYMBOL_CHARS "+-*/<>=&%?."
 
-enum T {
+enum NODE_TYPE {
   NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_BQUOTE, NODE_IDENT,
   NODE_LAMBDA, NODE_CELL, NODE_ENV, NODE_ERROR
 };
@@ -35,7 +35,7 @@ struct _NODE;
 typedef struct _NODE* (*f_do)(struct _ENV*, struct _NODE*);
 
 typedef struct _NODE {
-  int t;
+  enum NODE_TYPE t;
   union {
     long i;
     double d;
@@ -529,6 +529,8 @@ free_node(NODE *node) {
   case NODE_ENV:
     free_env((ENV*) node->p);
     break;
+  default:
+    break;
   }
   free((void*)node);
 }
@@ -683,6 +685,9 @@ do_plus(ENV *env, NODE *alist) {
   case NODE_STRING:
     nn->s = strdup(c->s);
     break;
+  default:
+    free_node(nn);
+    return new_errorf("malformed number");
   }
   free_node(c);
 
@@ -738,6 +743,9 @@ do_minus(ENV *env, NODE *alist) {
   case NODE_STRING:
     nn->s = strdup(c->s);
     break;
+  default:
+    free_node(nn);
+    return new_errorf("malformed number");
   }
   free_node(c);
 
@@ -790,6 +798,9 @@ do_mul(ENV *env, NODE *alist) {
   case NODE_STRING:
     nn->s = strdup(c->s);
     break;
+  default:
+    free_node(nn);
+    return new_errorf("malformed number");
   }
   free_node(c);
 
@@ -842,6 +853,9 @@ do_div(ENV *env, NODE *alist) {
   case NODE_STRING:
     nn->s = strdup(c->s);
     break;
+  default:
+    free_node(nn);
+    return new_errorf("malformed number");
   }
   free_node(c);
 
@@ -1107,6 +1121,9 @@ do_eq(ENV *env, NODE *alist) {
     if (rhs->t == NODE_STRING && !strcmp(lhs->s, rhs->s)) {
       nn->t = NODE_T;
     }
+    break;
+  default:
+    err = new_errorf("illegal comparing");
     break;
   }
   free_node(lhs);
@@ -1379,6 +1396,8 @@ copy_node(ENV *env, NODE *lhs) {
     rhs->car = copy_node(env, lhs->car);
     rhs->cdr = copy_node(env, lhs->cdr);
     break;
+  default:
+    break;
   }
   return rhs;
 }
@@ -1627,6 +1646,7 @@ do_type_of(ENV *env, NODE *alist) {
   case NODE_DOUBLE: p = "float"; break;
   case NODE_STRING: p = "string"; break;
   case NODE_QUOTE: p = "cons"; break;
+  case NODE_BQUOTE: p = "cons"; break;
   case NODE_CELL: p = "cons"; break;
   case NODE_LAMBDA: p = "function"; break;
   case NODE_IDENT: p = "symbol"; break;
@@ -1768,6 +1788,10 @@ do_rplaca(ENV *env, NODE *alist) {
     break;
   case NODE_STRING:
     lhs->car->s = strdup(rhs->s);
+    break;
+  default:
+    free_node(lhs);
+    lhs = new_errorn("malformed rplaca: %s", alist);
     break;
   }
   free_node(rhs);
@@ -2073,7 +2097,7 @@ do_apply(ENV *env, NODE *alist) {
 }
 
 static void
-add_sym(ENV *env, enum T t, const char* n, f_do f) {
+add_sym(ENV *env, enum NODE_TYPE t, const char* n, f_do f) {
   ITEM *ni;
   NODE *node;
   node = new_node();
@@ -2150,9 +2174,11 @@ eval_node(ENV *env, NODE *node) {
   case NODE_T:
   case NODE_STRING:
   case NODE_ENV:
+  case NODE_ERROR:
     node->r++;
     return node;
   case NODE_QUOTE:
+  case NODE_BQUOTE:
     c = node->car;
     c->r++;
     return c;
