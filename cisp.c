@@ -398,9 +398,10 @@ parse_any(SCANNER *s) {
     s_getc(s);
     x = parse_paren(s);
     if (x == NULL) return NULL;
-    if (!s_eof(s) && s_peek(s) == ')') {
-      s_getc(s);
-      return x;
+    if (!s_eof(s)) {
+      if (s_getc(s) == ')') {
+        return x;
+      }
     }
     return raise(s, "unexpected end of file");
   }
@@ -2236,8 +2237,11 @@ main(int argc, char* argv[]) {
 
   env = new_env(NULL);
   add_defaults(env);
-  while (1) {
+  while (!s_eof(s)) {
     if (isatty(fileno(stdin))) printf("> ");
+
+    skip_white(s);
+    if (s_eof(s)) break;
 
     node = parse_any(s);
     if (node == NULL) {
