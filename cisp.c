@@ -1939,6 +1939,34 @@ do_make_string(ENV *env, NODE *alist) {
   return c;
 }
 
+static NODE*
+do_make_array(ENV *env, NODE *alist) {
+  NODE *x, *c;
+  int i, n;
+
+  if (node_narg(alist) != 1) return new_errorn("malformed make-array: %s", alist);
+
+  x = eval_node(env, alist->car);
+  if (x->t == NODE_ERROR) return x;
+  if (x->t != NODE_INT || x->i < 0) {
+    free_node(x);
+    return new_errorn("malformed make-array: %s", alist);
+  }
+  n = x->i;
+  free_node(x);
+
+  c = new_node();
+  c->t = NODE_CELL;
+  x = c;
+  for (i = 0; i < n-1; i++) {
+    x->cdr = new_node();
+    x->cdr->t = NODE_CELL;
+    x->cdr->car = new_node();
+    x = x->cdr;
+  }
+  return c;
+}
+
 static char
 file_peek(SCANNER *s) {
   int c = fgetc((FILE*)s->v);
@@ -2156,6 +2184,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "let", do_let);
   add_sym(env, NODE_IDENT, "load", do_load);
   add_sym(env, NODE_IDENT, "make-string", do_make_string);
+  add_sym(env, NODE_IDENT, "make-array", do_make_array);
   add_sym(env, NODE_IDENT, "mod", do_mod);
   add_sym(env, NODE_IDENT, "not", do_not);
   add_sym(env, NODE_IDENT, "evenp", do_evenp);
