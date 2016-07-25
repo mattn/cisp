@@ -972,6 +972,23 @@ do_and(ENV *env, NODE *alist) {
 }
 
 static NODE*
+do_or(ENV *env, NODE *alist) {
+  NODE *c;
+
+  c = NULL;
+  while (alist) {
+    if (c) free_node(c);
+    c = eval_node(env, alist->car);
+    if (c->t == NODE_ERROR || c->t != NODE_NIL) break;
+    alist = alist->cdr;
+  }
+  if (c) {
+    return c;
+  }
+  return new_node();
+}
+
+static NODE*
 do_not(ENV *env, NODE *alist) {
   NODE *c, *err = NULL;
 
@@ -2314,6 +2331,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "aref", do_aref);
   add_sym(env, NODE_IDENT, "mod", do_mod);
   add_sym(env, NODE_IDENT, "and", do_and);
+  add_sym(env, NODE_IDENT, "or", do_or);
   add_sym(env, NODE_IDENT, "not", do_not);
   add_sym(env, NODE_IDENT, "evenp", do_evenp);
   add_sym(env, NODE_IDENT, "oddp", do_oddp);
