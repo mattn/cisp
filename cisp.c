@@ -68,9 +68,9 @@ typedef struct _ENV {
 
 struct _SCANNER;
 
-typedef char (*f_getc)(struct _SCANNER*);
-typedef char (*f_peek)(struct _SCANNER*);
-typedef char (*f_eof)(struct _SCANNER*);
+typedef int (*f_getc)(struct _SCANNER*);
+typedef int (*f_peek)(struct _SCANNER*);
+typedef int (*f_eof)(struct _SCANNER*);
 typedef long (*f_pos)(struct _SCANNER*);
 typedef int (*f_reset)(struct _SCANNER*);
 
@@ -93,17 +93,17 @@ static void free_node(NODE *node);
 static void free_env(ENV *env);
 static NODE* do_ident_global(ENV *env, NODE *node);
 
-static char
+static int
 s_peek(SCANNER *s) {
   return s->_peek(s);
 }
 
-static char
+static int
 s_getc(SCANNER *s) {
   return s->_getc(s);
 }
 
-static char
+static int
 s_eof(SCANNER *s) {
   return s->_eof(s);
 }
@@ -279,7 +279,6 @@ parse_paren(SCANNER *s) {
       }
       free_node(child);
 
-      skip_white(s);
       child = parse_any(s);
       if (child == NULL) return NULL;
       node->cdr = child;
@@ -300,7 +299,6 @@ parse_paren(SCANNER *s) {
   if (!head->car && !head->cdr)
     head->t = NODE_NIL;
 
-  skip_white(s);
   return head;
 }
 
@@ -308,36 +306,40 @@ static NODE*
 parse_primitive(SCANNER *s) {
   char buf[BUFSIZ];
   size_t n = 0;
-  char *e;
-  NODE *c;
+  char *e, c;
+  NODE *x;
 
-  c = new_node();
-  while (!s_eof(s) && (isalnum(s_peek(s)) || strchr(SYMBOL_CHARS, s_peek(s)))) {
-    buf[n++] = s_getc(s);
+  while (n < sizeof(buf) && !s_eof(s)) {
+    c = s_peek(s);
+    if (c == -1) return NULL;
+    if (isalnum(c) || strchr(SYMBOL_CHARS, c)) buf[n++] = s_getc(s);
+    else break;
   }
   buf[n] = 0;
+
+  x = new_node();
   if (match(buf, "nil", n)) {
-    return c;
+    return x;
   }
   if (match(buf, "t", n)) {
-    c->t = NODE_T;
-    return c;
+    x->t = NODE_T;
+    return x;
   }
-  c->i = strtol(buf, &e, 10);
+  x->i = strtol(buf, &e, 10);
   if (e == buf+n) {
-    c->t = NODE_INT;
-    return c;
+    x->t = NODE_INT;
+    return x;
   }
-  c->d = strtod(buf, &e);
+  x->d = strtod(buf, &e);
   if (e == buf+n) {
-    c->t = NODE_DOUBLE;
-    return c;
+    x->t = NODE_DOUBLE;
+    return x;
   }
-  c->t = NODE_IDENT;
-  c->s = (char*)malloc(n + 1);
-  memset(c->s, 0, n + 1);
-  memcpy(c->s, buf, n);
-  return c;
+  x->t = NODE_IDENT;
+  x->s = (char*)malloc(n + 1);
+  memset(x->s, 0, n + 1);
+  memcpy(x->s, buf, n);
+  return x;
 }
 
 static NODE*
@@ -415,18 +417,19 @@ parse_any(SCANNER *s) {
   skip_white(s);
   if (s_eof(s)) return raise(s, "unexpected end of file");
 
-  if (s_peek(s) == '(') {
+  c = s_peek(s);
+  if (c == '(') {
     s_getc(s);
     x = parse_paren(s);
     if (x == NULL) return NULL;
     if (!s_eof(s)) {
+      skip_white(s);
       if (s_getc(s) == ')') {
         return x;
       }
     }
     return raise(s, "unexpected end of file");
   }
-  c = s_peek(s);
   if (c == '\'') return parse_quote(s);
   if (c == '`') return parse_bquote(s);
   if (c == '"') return parse_string(s);
@@ -2090,7 +2093,7 @@ do_aref(ENV *env, NODE *alist) {
   return c;
 }
 
-static char
+static int
 file_peek(SCANNER *s) {
   int c = fgetc((FILE*)s->v);
   if (c == -1) return c;
@@ -2098,12 +2101,12 @@ file_peek(SCANNER *s) {
   return c;
 }
 
-static char
+static int
 file_getc(SCANNER *s) {
   return fgetc((FILE*)s->v);
 }
 
-static char
+static int
 file_eof(SCANNER *s) {
   return feof((FILE*)s->v);
 }
@@ -2422,12 +2425,9 @@ main(int argc, char* argv[]) {
   while (!s_eof(s)) {
     if (isatty(fileno(stdin))) printf("> ");
 
-    skip_white(s);
-    if (s_eof(s)) break;
-
     node = parse_any(s);
     if (node == NULL) {
-      fprintf(stderr, "cisp: %s\n", s->err);
+      if (s->err) fprintf(stderr, "cisp: %s\n", s->err);
       s_reset(s);
       continue;
     }
@@ -2436,6 +2436,7 @@ main(int argc, char* argv[]) {
     if (ret->t == NODE_ERROR) {
       fprintf(stderr, "cisp: %s\n", ret->s);
     } else if (isatty(fileno(stdin))) {
+      if (s_peek(s) != '\n') puts("");
       dump_node(ret);
     }
     free_node(ret);
