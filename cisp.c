@@ -22,7 +22,7 @@
 # define INLINE inline
 #endif
 
-#define SYMBOL_CHARS "+-*/<>=&%?."
+#define SYMBOL_CHARS "+-*/<>=&%?.@_#$:*"
 
 enum NODE_TYPE {
   NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_BQUOTE, NODE_IDENT,
@@ -72,7 +72,7 @@ typedef char (*f_getc)(struct _SCANNER*);
 typedef char (*f_peek)(struct _SCANNER*);
 typedef char (*f_eof)(struct _SCANNER*);
 typedef long (*f_pos)(struct _SCANNER*);
-typedef void (*f_reset)(struct _SCANNER*);
+typedef int (*f_reset)(struct _SCANNER*);
 
 typedef struct _SCANNER {
   void *v, *o;
@@ -113,11 +113,12 @@ s_pos(SCANNER *s) {
   return s->_pos(s);
 }
 
-static void
+static int
 s_reset(SCANNER *s) {
-  s->_reset(s);
+  int r = s->_reset(s);
   if (s->err) free(s->err);
   s->err = NULL;
+  return r;
 }
 
 static NODE*
@@ -128,8 +129,25 @@ raise(SCANNER *s, const char *p) {
 
 static NODE*
 invalid_token(SCANNER *s) {
-  char buf[BUFSIZ];
-  snprintf(buf, sizeof(buf), "invalid token at offset %ld", (long)s_pos(s));
+  char buf[BUFSIZ], c;
+  long i, l, o, pos = (long)s_pos(s);
+  snprintf(buf, sizeof(buf), "invalid token at offset %ld", pos);
+  l = strlen(buf);
+  if (s_reset(s) != -1)  {
+    buf[l++] = '\n';
+    o = l;
+    for (i = 0; /*i < pos &&*/ l < sizeof(buf)-1; i++) {
+      c = s_getc(s);
+      if (s_eof(s)) break;
+      if (c == '\n') {
+        if (i >= pos) break;
+        l = o;
+        continue;
+      }
+      buf[l++] = c;
+    }
+    buf[l] = 0;
+  }
   s->err = strdup(buf);
   return NULL;
 }
@@ -2091,9 +2109,9 @@ file_pos(SCANNER *s) {
   return ftell((FILE*)s->v);
 }
 
-static void
+static int
 file_reset(SCANNER *s) {
-  fseek((FILE*)s->v, 0, SEEK_SET);
+  return fseek((FILE*)s->v, 0, SEEK_SET);
 }
 
 static void
@@ -2131,8 +2149,9 @@ string_pos(SCANNER *s) {
   return (long)((uintptr_t)s->v - (uintptr_t)s->o);
 }
 
-static void
+static int
 string_reset(SCANNER *s) {
+  return 0;
 }
 
 static void
