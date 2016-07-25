@@ -372,7 +372,7 @@ static NODE*
 parse_string(SCANNER *s) {
   char *buf = NULL;
   int n = 0, l = 0;
-  char c = 0;
+  int c = 0;
   NODE *node;
 
   buf = malloc(10);
@@ -412,7 +412,7 @@ parse_string(SCANNER *s) {
 static NODE*
 parse_any(SCANNER *s) {
   NODE *x = NULL;
-  char c;
+  int c;
 
   skip_white(s);
   if (s_eof(s)) return raise(s, "unexpected end of file");
@@ -2134,19 +2134,19 @@ s_file_init(SCANNER *s, FILE* v) {
 }
 
 #if 0
-static char
+static int
 string_peek(SCANNER *s) {
   return *((char*)s->v);
 }
 
-static char
+static int
 string_getc(SCANNER *s) {
-  char c = *((char*)s->v);
+  int c = *((char*)s->v);
   s->v = ((char*)s->v) + 1;
   return c;
 }
 
-static char
+static int
 string_eof(SCANNER *s) {
   return *((char*)s->v) == 0;
 }
@@ -2436,7 +2436,6 @@ main(int argc, char* argv[]) {
     if (ret->t == NODE_ERROR) {
       fprintf(stderr, "cisp: %s\n", ret->s);
     } else if (isatty(fileno(stdin))) {
-      if (s_peek(s) != '\n') puts("");
       dump_node(ret);
     }
     free_node(ret);
