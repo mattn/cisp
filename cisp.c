@@ -1400,7 +1400,7 @@ do_ident_global(ENV *env, NODE *node) {
     global = env;
   }
 
-  ni = find_item(global->lv, global->nv, node->s);
+  ni = find_item(global->lf, global->nf, node->s);
   if (ni) {
     ni->v->r++;
     return ni->v;
@@ -2243,7 +2243,7 @@ do_load(ENV *env, NODE *alist) {
 
 static NODE*
 do_apply(ENV *env, NODE *alist) {
-  NODE *x, *nn;
+  NODE *x, *f, *nn;
 
   if (node_narg(alist) < 2) return new_errorn("malformed apply: %s", alist);
 
@@ -2252,11 +2252,8 @@ do_apply(ENV *env, NODE *alist) {
     free_node(x);
     return new_errorn("second argument should be list: %s", alist);
   }
-  if (alist->car->t == NODE_QUOTE)
-    nn = call_node(env, alist->car->car, x);
-  else
-    nn = call_node(env, alist->car, x);
-  free_node(x);
+  f = eval_node(env, alist->car);
+  nn = call_node(env, f, x);
   if (nn->t == NODE_ERROR) {
     return nn;
   }
@@ -2275,9 +2272,9 @@ add_sym(ENV *env, enum NODE_TYPE t, const char* n, f_do f) {
   memset(ni, 0, sizeof(ITEM));
   ni->k = strdup(n);
   ni->v = node;
-  env->lv = (ITEM**)realloc(env->lv, sizeof(ITEM*) * (env->nv + 1));
-  env->lv[env->nv] = ni;
-  env->nv++;
+  env->lf = (ITEM**)realloc(env->lf, sizeof(ITEM*) * (env->nf + 1));
+  env->lf[env->nf] = ni;
+  env->nf++;
 }
 
 static void
@@ -2332,7 +2329,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "exit", do_exit);
   add_sym(env, NODE_IDENT, "type-of", do_type_of);
   add_sym(env, NODE_IDENT, "getenv", do_getenv);
-  qsort(env->lv, env->nv, sizeof(ITEM*), compare_item);
+  qsort(env->lf, env->nf, sizeof(ITEM*), compare_item);
 }
 
 static INLINE NODE*
