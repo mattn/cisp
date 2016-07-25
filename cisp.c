@@ -162,12 +162,15 @@ dump_node(NODE *node) {
 
 static void
 skip_white(SCANNER *s) {
+  int c;
   while (!s_eof(s)) {
-    if (s_peek(s) == ';') {
+    c = s_peek(s);
+    if (c == -1) break;
+    else if (isspace(c)) s_getc(s);
+    else if (c == ';') {
       s_getc(s);
       while (!s_eof(s) && s_peek(s) != '\n') s_getc(s);
-    } else if (isspace((int)s_peek(s))) s_getc(s);
-    else break;
+    } else break;
   }
 }
 
@@ -2090,6 +2093,7 @@ do_aref(ENV *env, NODE *alist) {
 static char
 file_peek(SCANNER *s) {
   int c = fgetc((FILE*)s->v);
+  if (c == -1) return c;
   ungetc(c, (FILE*)s->v);
   return c;
 }
