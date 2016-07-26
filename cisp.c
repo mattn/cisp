@@ -2234,7 +2234,7 @@ s_string_init(SCANNER *s, char* v) {
 
 static NODE*
 load_lisp(ENV *env, const char *fname) {
-  NODE *ret, *top, *part;
+  NODE *ret, *top;
   SCANNER sv, *s = &sv;
   FILE *fp;
 
@@ -2263,14 +2263,7 @@ load_lisp(ENV *env, const char *fname) {
   }
   fclose(fp);
 
-  part = top;
-  ret = NULL;
-  while (part) {
-    if (ret) free_node(ret);
-    ret = eval_node(env, part);
-    if (ret->t == NODE_ERROR) break;
-    part = part->cdr;
-  }
+  ret = do_progn(env, top);
 
   free_node(top);
   return ret;
