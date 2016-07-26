@@ -84,9 +84,15 @@ typedef struct _SCANNER {
   char *err;
 } SCANNER;
 
+typedef struct _BUFFER {
+  char *ptr;
+  size_t pos;
+  size_t len;
+} BUFFER;
+
 static NODE* parse_any(SCANNER *s);
 static NODE* eval_node(ENV *env, NODE *node);
-static void print_node(size_t nbuf, char *buf, NODE *node, int mode);
+static void print_node(BUFFER *buf, NODE *node, int mode);
 
 static NODE* new_node();
 static void free_node(NODE *node);
@@ -153,11 +159,38 @@ invalid_token(SCANNER *s) {
 }
 
 static void
+buf_init(BUFFER *b) {
+  b->ptr = NULL;
+  b->len = 0;
+  b->pos = 0;
+}
+
+static void
+buf_append(BUFFER *b, char *s) {
+  size_t len = strlen(s);
+  if (b->pos + len + 1 > b->len) {
+    b->ptr = realloc(b->ptr, b->len + len + 100);
+    *(b->ptr + b->pos) = 0;
+    b->len += len + 100;
+  }
+  while (*s) {
+    *(b->ptr + b->pos++) = *s++;
+  }
+  *(b->ptr + b->pos) = 0;
+}
+
+static void
+buf_free(BUFFER *b) {
+  free(b->ptr);
+}
+
+static void
 dump_node(NODE *node) {
-  char buf[BUFSIZ];
-  buf[0] = 0;
-  print_node(sizeof(buf), buf, node, 1);
-  puts(buf);
+  BUFFER buf;
+  buf_init(&buf);
+  print_node(&buf, node, 0);
+  puts(buf.ptr);
+  buf_free(&buf);
 }
 
 static void
@@ -194,10 +227,12 @@ new_error(const char* msg) {
 static NODE*
 new_errorn(const char* fmt, NODE *n) {
   NODE* node;
-  char buf[BUFSIZ], tmp[BUFSIZ];
-  tmp[0] = 0;
-  print_node(sizeof(tmp), tmp, n, 0);
-  snprintf(buf, sizeof(buf), fmt, tmp);
+  BUFFER tmp;
+  char buf[BUFSIZ];
+  buf_init(&tmp);
+  print_node(&tmp, n, 0);
+  snprintf(buf, sizeof(buf)-1, fmt, tmp.ptr);
+  buf_free(&tmp);
   node = new_node();
   node->t = NODE_ERROR;
   node->s = strdup(buf);
@@ -438,98 +473,98 @@ parse_any(SCANNER *s) {
 }
 
 static void
-print_args(size_t nbuf, char *buf, NODE *node, int mode) {
+print_args(BUFFER *buf, NODE *node, int mode) {
   while (node) {
-    strncat(buf, " ", nbuf);
-    print_node(nbuf, buf, node->car, mode);
+    buf_append(buf, " ");
+    print_node(buf, node->car, mode);
     node = node->cdr;
   }
 }
 
 static void
-print_cell(size_t nbuf, char *buf, NODE *node, int mode) {
-  strncat(buf, "(", nbuf);
+print_cell(BUFFER *buf, NODE *node, int mode) {
+  buf_append(buf, "(");
 
   while (node) {
     if (node->car)
-      print_node(nbuf, buf, node->car, mode);
+      print_node(buf, node->car, mode);
     else
-      strncat(buf, "nil", nbuf);
+      buf_append(buf, "nil");
     if (!node->cdr || node->cdr->t == NODE_NIL)
       break;
     if (node->cdr->t != NODE_CELL) {
-      strncat(buf, " . ", nbuf);
-      print_node(nbuf, buf, node->cdr, mode);
+      buf_append(buf, " . ");
+      print_node(buf, node->cdr, mode);
       break;
     }
-    strncat(buf, " ", nbuf);
+    buf_append(buf, " ");
     node = node->cdr;
   }
 
-  strncat(buf, ")", nbuf);
+  buf_append(buf, ")");
 }
 
 static void
-print_str(size_t nbuf, char *buf, NODE *node, int mode) {
+print_str(BUFFER *buf, NODE *node, int mode) {
   char tmp[2];
   const char* p;
   if (mode) {
-    strncat(buf, node->s, nbuf);
+    buf_append(buf, node->s);
     return;
   }
   p = node->s;
   if (!p) {
-    strncat(buf, "nil", nbuf);
+    buf_append(buf, "nil");
     return;
   }
   tmp[1] = 0;
-  strncat(buf, "\"", nbuf);
+  buf_append(buf, "\"");
   while (*p) {
     switch (*p) {
-    case '\\': strncat(buf, "\\\\", nbuf); p++; continue; break;
-    case '\n': strncat(buf, "\\n", nbuf); p++; continue; break;
-    case '\b': strncat(buf, "\\b", nbuf); p++; continue; break;
-    case '\f': strncat(buf, "\\f", nbuf); p++; continue; break;
-    case '\r': strncat(buf, "\\r", nbuf); p++; continue; break;
-    case '\t': strncat(buf, "\\t", nbuf); p++; continue; break;
+    case '\\': buf_append(buf, "\\\\"); p++; continue; break;
+    case '\n': buf_append(buf, "\\n"); p++; continue; break;
+    case '\b': buf_append(buf, "\\b"); p++; continue; break;
+    case '\f': buf_append(buf, "\\f"); p++; continue; break;
+    case '\r': buf_append(buf, "\\r"); p++; continue; break;
+    case '\t': buf_append(buf, "\\t"); p++; continue; break;
     }
     tmp[0] = *p;
-    strncat(buf, tmp, nbuf);
+    buf_append(buf, tmp);
     p++;
   }
-  strncat(buf, "\"", nbuf);
+  buf_append(buf, "\"");
 }
 
 static void
-print_float(size_t nbuf, char *buf, NODE *node) {
+print_float(BUFFER *buf, NODE *node) {
   char tmp[BUFSIZ];
   snprintf(tmp, sizeof(tmp), "%lf", node->d);
   if (node->d == (double)(int)(node->d)) {
     char *p = tmp + strlen(tmp) - 1;
     while (p > tmp && *(p - 1) == '0') *p-- = 0;
   }
-  strncat(buf, tmp, nbuf);
+  buf_append(buf, tmp);
 }
 
 static void
-print_node(size_t nbuf, char* buf, NODE *node, int mode) {
+print_node(BUFFER* buf, NODE *node, int mode) {
   char tmp[BUFSIZ];
   if (!node) {
-    strncat(buf, "nil", nbuf);
+    buf_append(buf, "nil");
     return;
   }
   switch (node->t) {
-  case NODE_INT: snprintf(tmp, sizeof(tmp), "%ld", node->i); strncat(buf, tmp, nbuf); break;
-  case NODE_DOUBLE: print_float(nbuf, buf, node); break;
-  case NODE_STRING: print_str(nbuf, buf, node, mode); break;
-  case NODE_IDENT: snprintf(tmp, sizeof(tmp), "%s", node->s); strncat(buf, tmp, nbuf); break;
-  case NODE_NIL: strncat(buf, "nil", nbuf); break;
-  case NODE_T: strncat(buf, "t", nbuf); break;
-  case NODE_QUOTE: strncat(buf, "'", nbuf); print_node(nbuf, buf, node->car, mode); break;
-  case NODE_CELL: print_cell(nbuf, buf, node, mode); break;
-  case NODE_AREF: strncat(buf, "(aref ", nbuf); print_cell(nbuf, buf, node->car, mode); print_args(nbuf, buf, node->cdr, mode); strncat(buf, ")", nbuf); break;
-  case NODE_LAMBDA: strncat(buf, "(lambda", nbuf); print_args(nbuf, buf, node->cdr, mode); strncat(buf, ")", nbuf); break;
-  default: strncat(buf, "()", nbuf); break;
+  case NODE_INT: snprintf(tmp, sizeof(tmp)-1, "%ld", node->i); buf_append(buf, tmp); break;
+  case NODE_DOUBLE: print_float(buf, node); break;
+  case NODE_STRING: print_str(buf, node, mode); break;
+  case NODE_IDENT: snprintf(tmp, sizeof(tmp)-1, "%s", node->s); buf_append(buf, tmp); break;
+  case NODE_NIL: buf_append(buf, "nil"); break;
+  case NODE_T: buf_append(buf, "t"); break;
+  case NODE_QUOTE: buf_append(buf, "'"); print_node(buf, node->car, mode); break;
+  case NODE_CELL: print_cell(buf, node, mode); break;
+  case NODE_AREF: buf_append(buf, "(aref "); print_cell(buf, node->car, mode); print_args(buf, node->cdr, mode); buf_append(buf, ")"); break;
+  case NODE_LAMBDA: buf_append(buf, "(lambda"); print_args(buf, node->cdr, mode); buf_append(buf, ")"); break;
+  default: buf_append(buf, "()"); break;
   }
 }
 
@@ -1198,57 +1233,57 @@ do_eq(ENV *env, NODE *alist) {
 static NODE*
 do_print(ENV *env, NODE *alist) {
   NODE *c;
-  char buf[BUFSIZ];
+  BUFFER buf;
 
   if (node_narg(alist) != 1) return new_errorn("malformed print: %s", alist);
 
   c = eval_node(env, alist->car);
   if (c->t == NODE_ERROR) return c;
-  buf[0] = 0;
-  print_node(sizeof(buf), buf, c, 0);
-  puts(buf);
+  buf_init(&buf);
+  print_node(&buf, c, 0);
+  puts(buf.ptr);
   free_node(c);
   c = new_node();
   c->t = NODE_STRING;
-  c->s = strdup(buf);
+  c->s = buf.ptr;
   return c;
 }
 
 static NODE*
 do_println(ENV *env, NODE *alist) {
   NODE *c;
-  char buf[BUFSIZ];
+  BUFFER buf;
 
   if (node_narg(alist) != 1) return new_errorn("malformed println: %s", alist);
 
   c = eval_node(env, alist);
   if (c->t == NODE_ERROR) return c;
-  buf[0] = 0;
-  print_node(sizeof(buf), buf, c, 0);
-  puts(buf);
+  buf_init(&buf);
+  print_node(&buf, c, 0);
+  puts(buf.ptr);
   free_node(c);
   c = new_node();
   c->t = NODE_STRING;
-  c->s = strdup(buf);
+  c->s = buf.ptr;
   return c;
 }
 
 static NODE*
 do_princ(ENV *env, NODE *alist) {
   NODE *c;
-  char buf[BUFSIZ];
+  BUFFER buf;
 
   if (node_narg(alist) != 1) return new_errorn("malformed printc: %s", alist);
 
   c = eval_node(env, alist);
   if (c->t == NODE_ERROR) return c;
-  buf[0] = 0;
-  print_node(sizeof(buf), buf, c, 1);
-  printf("%s", buf);
+  buf_init(&buf);
+  print_node(&buf, c, 0);
+  printf("%s", buf.ptr);
   free_node(c);
   c = new_node();
   c->t = NODE_STRING;
-  c->s = strdup(buf);
+  c->s = buf.ptr;
   return c;
 }
 
