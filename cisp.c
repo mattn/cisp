@@ -268,24 +268,14 @@ new_env(ENV *p) {
   return env;
 }
 
-static int
-node_length(NODE *node) {
-  int i = 0;
-  if (!node) return 0;
-  i++;
-  while (node->cdr) {
-    node = node->cdr;
-    i++;
-  }
-  return i;
-}
+#define node_isnull(x) (!x || x->t == NODE_NIL)
 
 static int
 node_narg(NODE *node) {
   int i = 0;
-  if (!node || node->t == NODE_NIL) return 0;
+  if (node_isnull(node)) return 0;
   i++;
-  while (node->cdr && node->cdr->t != NODE_NIL) {
+  while (!node_isnull(node->cdr)) {
     node = node->cdr;
     i++;
   }
@@ -983,9 +973,7 @@ do_and(ENV *env, NODE *alist) {
     if (c->t == NODE_ERROR || c->t == NODE_NIL) break;
     alist = alist->cdr;
   }
-  if (c) {
-    return c;
-  }
+  if (c) return c;
   return new_node();
 }
 
@@ -1000,9 +988,7 @@ do_or(ENV *env, NODE *alist) {
     if (c->t == NODE_ERROR || c->t != NODE_NIL) break;
     alist = alist->cdr;
   }
-  if (c) {
-    return c;
-  }
+  if (c) return c;
   return new_node();
 }
 
@@ -1312,9 +1298,7 @@ do_let_(ENV *env, NODE *alist, int star) {
     alist = alist->cdr;
   }
   free_env(newenv);
-  if (c) {
-    return c;
-  }
+  if (c) return c;
   return new_node();
 }
 
@@ -2029,7 +2013,7 @@ do_length(ENV *env, NODE *alist) {
   }
   c = new_node();
   c->t = NODE_INT;
-  c->i = x->t == NODE_NIL ? 0 : x->t == NODE_STRING ? (long)strlen(x->s) : node_length(x);
+  c->i = x->t == NODE_NIL ? 0 : x->t == NODE_STRING ? (long)strlen(x->s) : node_narg(x);
   free_node(x);
   return c;
 }
