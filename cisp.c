@@ -1253,11 +1253,11 @@ do_quote(ENV *env, NODE *alist) {
 }
 
 static NODE*
-do_let(ENV *env, NODE *alist) {
+do_let_(ENV *env, NODE *alist, int star) {
   ENV *newenv;
   NODE *x, *c;
 
-  if (node_narg(alist) < 1) return new_errorn("malformed let: %s", alist);
+  if (node_narg(alist) < 1) return new_errorn(star ? "malformed let*: %s" : "malformed let: %s", alist);
 
   x = alist->car;
   newenv = new_env(env);
@@ -1265,9 +1265,9 @@ do_let(ENV *env, NODE *alist) {
   while (x) {
     if (x->car->t != NODE_CELL) {
       free_env(newenv);
-      return new_errorn("malformed let: %s", alist);
+      return new_errorn(star ? "malformed let*: %s" : "malformed let: %s", alist);
     }
-    c = eval_node(env, x->car->cdr->car);
+    c = eval_node(star ? newenv : env, x->car->cdr->car);
     if (x->t == NODE_ERROR) {
       free_env(newenv);
       return c;
@@ -1287,6 +1287,16 @@ do_let(ENV *env, NODE *alist) {
     return c;
   }
   return new_node();
+}
+
+static NODE*
+do_let(ENV *env, NODE *alist) {
+  return do_let_(env, alist, 0);
+}
+
+static NODE*
+do_let_s(ENV *env, NODE *alist) {
+  return do_let_(env, alist, 1);
 }
 
 static NODE*
@@ -2309,6 +2319,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "lambda", do_lambda);
   add_sym(env, NODE_IDENT, "length", do_length);
   add_sym(env, NODE_IDENT, "let", do_let);
+  add_sym(env, NODE_IDENT, "let*", do_let_s);
   add_sym(env, NODE_IDENT, "load", do_load);
   add_sym(env, NODE_IDENT, "make-string", do_make_string);
   add_sym(env, NODE_IDENT, "make-array", do_make_array);

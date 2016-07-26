@@ -10,3 +10,8 @@
 (print a)
 (let ((x 1)))
 (let ((x 1) (y 2)) (print x) (print y))
+(setq foo 1)
+(let* ((foo 2) (bar foo))
+  (print bar) (print foo))
+(let ((foo 3) (bar foo))
+  (print bar) (print foo))
