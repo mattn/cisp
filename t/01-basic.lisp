@@ -20,3 +20,6 @@
 (print (+))
 (print (+ 2))
 (print (+ 3.0))
+(print (*))
+(print (* 2))
+(print (* 3.0))
