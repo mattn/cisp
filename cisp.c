@@ -1860,29 +1860,21 @@ do_getenv(ENV *env, NODE *alist) {
 
 static NODE*
 do_cond(ENV *env, NODE *alist) {
-  NODE *c, *err = NULL;
-  int r;
+  NODE *c, *n;
 
-  if (node_narg(alist) < 1) return new_errorn("malformed cond: %s", alist);
-
-  c = NULL;
-  while (alist) {
-    if (c) free_node(c);
-    c = eval_node(env, alist->car);
-    if (c->t == NODE_ERROR) break;
-    r = int_value(env, c, &err);
-    if (err) {
+  n = alist;
+  while (!node_isnull(n)) {
+    if (!n->car || n->car->t != NODE_CELL)
+      return new_errorn("malformed cond: %s", alist);
+    c = eval_node(env, n->car->car);
+    if (!node_isnull(c)) {
+      if (node_narg(n->car->cdr) == 0)
+        return c;
       free_node(c);
-      return err;
+      return do_progn(env, n->car->cdr);
     }
-    if (r != 0) {
-      free_node(c);
-      return eval_node(env, alist->car->cdr->car);
-    }
-    alist = alist->cdr;
-  }
-  if (c) {
-    return c;
+    free_node(c);
+    n = n->cdr;
   }
   return new_node();
 }
