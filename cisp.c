@@ -1681,10 +1681,12 @@ do_lambda(ENV *env, NODE *alist) {
 
 static NODE*
 do_eval(ENV *env, NODE *alist) {
+  NODE *c, *x;
   if (node_narg(alist) != 1) return new_errorf("malformed eval: %s", alist);
-  if (alist->car->t == NODE_QUOTE)
-    return eval_node(env, alist->car->car);
-  return eval_node(env, alist->car);
+  c = eval_node(env, alist->car);
+  x = eval_node(env, c);
+  free_node(c);
+  return x;
 }
 
 static NODE*
