@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <memory.h>
 #include <ctype.h>
+#include <inttypes.h>
 #ifndef _MSC_VER
 # include <unistd.h>
 #else
@@ -139,7 +140,7 @@ static NODE*
 invalid_token(SCANNER *s) {
   char buf[BUFSIZ], c;
   size_t i, l, o, pos = s_pos(s);
-  snprintf(buf, sizeof(buf), "invalid token at offset %zu", pos);
+  snprintf(buf, sizeof(buf), "invalid token at offset %"PRIu64, pos);
   l = strlen(buf);
   if (s_reset(s) != -1)  {
     buf[l++] = '\n';
