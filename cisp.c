@@ -283,9 +283,9 @@ node_length(NODE *node) {
 static int
 node_narg(NODE *node) {
   int i = 0;
-  if (!node) return 0;
+  if (!node || node->t == NODE_NIL) return 0;
   i++;
-  while (node->cdr) {
+  while (node->cdr && node->cdr->t != NODE_NIL) {
     node = node->cdr;
     i++;
   }
