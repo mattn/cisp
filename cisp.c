@@ -193,6 +193,17 @@ dump_node(NODE *node) {
   buf_free(&buf);
 }
 
+static ENV*
+global_env(ENV *env) {
+  static ENV *global;
+
+  if (global == NULL) {
+    while (env->p) env = env->p;
+    global = env;
+  }
+  return global;
+}
+
 static void
 skip_white(SCANNER *s) {
   int c;
@@ -1444,13 +1455,8 @@ do_ident(ENV *env, NODE *alist) {
 
 static INLINE NODE*
 do_ident_global(ENV *env, NODE *node) {
-  static ENV *global;
+  ENV *global = global_env(env);
   ITEM *ni;
-
-  if (global == NULL) {
-    while (env->p) env = env->p;
-    global = env;
-  }
 
   ni = find_item(global->lf, global->nf, node->s);
   if (ni) {
@@ -1463,15 +1469,12 @@ do_ident_global(ENV *env, NODE *node) {
 
 static NODE*
 look_func(ENV *env, const char *k) {
-  static ENV *global;
+  ENV *global;
   ITEM *ni;
 
   if (!k) return NULL;
-  if (global == NULL) {
-    while (env->p) env = env->p;
-    global = env;
-  }
 
+  global = global_env(env);
   ni = find_item(global->lf, global->nf, k);
   if (ni) {
     ni->v->r++;
@@ -1483,15 +1486,12 @@ look_func(ENV *env, const char *k) {
 
 static NODE*
 look_macro(ENV *env, const char *k) {
-  static ENV *global;
+  ENV *global;
   ITEM *ni;
 
   if (!k) return NULL;
-  if (global == NULL) {
-    while (env->p) env = env->p;
-    global = env;
-  }
 
+  global = global_env(env);
   ni = find_item(global->lm, global->nm, k);
   if (ni) {
     ni->v->r++;
@@ -1572,6 +1572,9 @@ call_node(ENV *env, NODE *node, NODE *alist) {
     }
     if (x->t == NODE_LAMBDA) {
       newenv = (ENV*) x->car->p;
+      newenv->r++;
+    } else if (x->t == NODE_CELL) {
+      newenv = (ENV*) x->car->cdr->p;
       newenv->r++;
     }
     c = x->cdr->car;
@@ -1693,7 +1696,8 @@ do_funcall(ENV *env, NODE *alist) {
 
 static NODE*
 do_defun(ENV *env, NODE *alist) {
-  NODE *x;
+  ENV *global;
+  NODE *x, *e;
 
   if (node_narg(alist) < 3) return new_errorn("malformed defun: %s", alist);
 
@@ -1704,7 +1708,15 @@ do_defun(ENV *env, NODE *alist) {
   if (alist->cdr->car->t != NODE_CELL && alist->cdr->car->t != NODE_NIL) {
     return new_errorn("argument is not a list: %s", alist);
   }
-  add_function(env, x->s, alist);
+
+  e = new_node();
+  e->t = NODE_ENV;
+  e->p = env;
+  env->r++;
+  x->cdr = e;
+
+  global = global_env(env);
+  add_function(global, x->s, alist);
   alist->r++;
   x->r++;
   return x;
