@@ -17,3 +17,6 @@
 (print .5e+10)
 (print +.5e-10)
 (print -.5e-10)
+(print (+))
+(print (+ 2))
+(print (+ 3.0))
