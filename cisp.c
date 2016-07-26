@@ -1750,7 +1750,7 @@ do_progn(ENV *env, NODE *alist) {
   NODE *c;
 
   c = NULL;
-  while (alist) {
+  while (!node_isnull(alist)) {
     if (c) free_node(c);
     c = eval_node(env, alist->car);
     if (c->t == NODE_ERROR) break;
