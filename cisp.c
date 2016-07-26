@@ -774,7 +774,7 @@ static NODE*
 do_minus(ENV *env, NODE *alist) {
   NODE *nn, *c, *err = NULL;
 
-  if (node_narg(alist) < 2) return new_errorn("malformed -: %s", alist);
+  if (node_narg(alist) < 1) return new_errorn("malformed -: %s", alist);
 
   c = eval_node(env, alist->car);
   if (c->t == NODE_ERROR) return c;
@@ -787,9 +787,6 @@ do_minus(ENV *env, NODE *alist) {
   case NODE_DOUBLE:
     nn->d = c->d;
     break;
-  case NODE_STRING:
-    nn->s = strdup(c->s);
-    break;
   default:
     free_node(nn);
     return new_errorf("malformed number");
@@ -797,23 +794,25 @@ do_minus(ENV *env, NODE *alist) {
   free_node(c);
 
   alist = alist->cdr;
+  if (!alist || alist->t == NODE_NIL) {
+    if (nn->t == NODE_INT)
+      nn->i = -nn->i;
+    else
+      nn->d = -nn->d;
+    return nn;
+  }
+
   while (alist && alist->t != NODE_NIL) {
     c = eval_node(env, alist->car);
     if (c->t == NODE_ERROR) return c;
-    switch (nn->t) {
-    case NODE_INT:
+    if (nn->t == NODE_INT) {
       if (c->t == NODE_DOUBLE) {
         nn->d = double_value(env, nn, &err) - double_value(env, c, &err);
         nn->t = c->t;
       } else
         nn->i -= int_value(env, c, &err);
-      break;
-    case NODE_DOUBLE:
+    } else {
       nn->d -= double_value(env, c, &err);
-      break;
-    default:
-      err = new_errorf("malformed number");
-      break;
     }
     free_node(c);
     if (err) {
