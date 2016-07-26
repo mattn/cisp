@@ -486,7 +486,7 @@ print_cell(BUFFER *buf, NODE *node, int mode) {
       print_node(buf, node->car, mode);
     else
       buf_append(buf, "nil");
-    if (!node->cdr || node->cdr->t == NODE_NIL)
+    if (node_isnull(node->cdr))
       break;
     if (node->cdr->t != NODE_CELL) {
       buf_append(buf, " . ");
@@ -759,7 +759,7 @@ do_plus(ENV *env, NODE *alist) {
   nn->t = NODE_INT;
   nn->i = 0;
 
-  while (alist && alist->t != NODE_NIL) {
+  while (!node_isnull(alist)) {
     c = eval_node(env, alist->car);
     if (c->t == NODE_ERROR) {
       free_node(nn);
@@ -808,7 +808,7 @@ do_minus(ENV *env, NODE *alist) {
   free_node(c);
 
   alist = alist->cdr;
-  if (!alist || alist->t == NODE_NIL) {
+  if (node_isnull(alist)) {
     if (nn->t == NODE_INT)
       nn->i = -nn->i;
     else
@@ -816,7 +816,7 @@ do_minus(ENV *env, NODE *alist) {
     return nn;
   }
 
-  while (alist && alist->t != NODE_NIL) {
+  while (!node_isnull(alist)) {
     c = eval_node(env, alist->car);
     if (c->t == NODE_ERROR) return c;
     if (nn->t == NODE_INT) {
@@ -846,7 +846,7 @@ do_mul(ENV *env, NODE *alist) {
   nn->t = NODE_INT;
   nn->i = 1;
 
-  while (alist && alist->t != NODE_NIL) {
+  while (!node_isnull(alist)) {
     c = eval_node(env, alist->car);
     if (c->t == NODE_ERROR) return c;
     if (nn->t == NODE_INT) {
@@ -892,7 +892,7 @@ do_div(ENV *env, NODE *alist) {
   free_node(c);
 
   alist = alist->cdr;
-  if (!alist || alist->t == NODE_NIL) {
+  if (node_isnull(alist)) {
     if (nn->t == NODE_INT)
       nn->i = 1 / nn->i;
     else
@@ -900,7 +900,7 @@ do_div(ENV *env, NODE *alist) {
     return nn;
   }
 
-  while (alist && alist->t != NODE_NIL) {
+  while (!node_isnull(alist)) {
     c = eval_node(env, alist->car);
     if (c->t == NODE_ERROR) return c;
     if (nn->t == NODE_INT) {
@@ -967,7 +967,7 @@ do_and(ENV *env, NODE *alist) {
   NODE *c;
 
   c = NULL;
-  while (alist && alist->t != NODE_NIL) {
+  while (!node_isnull(alist)) {
     if (c) free_node(c);
     c = eval_node(env, alist->car);
     if (c->t == NODE_ERROR || c->t == NODE_NIL) break;
@@ -982,7 +982,7 @@ do_or(ENV *env, NODE *alist) {
   NODE *c;
 
   c = NULL;
-  while (alist && alist->t != NODE_NIL) {
+  while (!node_isnull(alist)) {
     if (c) free_node(c);
     c = eval_node(env, alist->car);
     if (c->t == NODE_ERROR || c->t != NODE_NIL) break;
