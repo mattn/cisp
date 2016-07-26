@@ -101,6 +101,7 @@ static NODE* new_node();
 static void free_node(NODE *node);
 static void free_env(ENV *env);
 static NODE* do_ident_global(ENV *env, NODE *node);
+static NODE* do_progn(ENV *env, NODE *alist);
 
 static int
 s_peek(SCANNER *s) {
@@ -1270,36 +1271,47 @@ do_quote(ENV *env, NODE *alist) {
 static NODE*
 do_let_(ENV *env, NODE *alist, int star) {
   ENV *newenv;
-  NODE *x, *c;
+  NODE *x, *c, *n;
+  long l;
 
   if (node_narg(alist) < 1) return new_errorn(star ? "malformed let*: %s" : "malformed let: %s", alist);
 
   x = alist->car;
   newenv = new_env(env);
 
-  while (x) {
-    if (x->car->t != NODE_CELL) {
+  while (!node_isnull(x)) {
+    n = x->car;
+    if (!n) {
       free_env(newenv);
       return new_errorn(star ? "malformed let*: %s" : "malformed let: %s", alist);
     }
-    c = eval_node(star ? newenv : env, x->car->cdr->car);
-    if (x->t == NODE_ERROR) {
+    if (n->t == NODE_IDENT)
+      add_variable(newenv, n->s, new_node());
+    else if (n->t != NODE_CELL) {
       free_env(newenv);
-      return c;
+      return new_errorn(star ? "malformed let*: %s" : "malformed let: %s", alist);
+    } else {
+      l = node_narg(n);
+      if ((l != 1 && l != 2) || !n->car || n->car->t != NODE_IDENT) {
+        free_env(newenv);
+        return new_errorn(star ? "malformed let*: %s" : "malformed let: %s", alist);
+      }
+      if (l == 1)
+        add_variable(newenv, n->car->s, new_node());
+      else {
+        c = eval_node(star ? newenv : env, n->cdr->car);
+        if (c->t == NODE_ERROR) {
+          free_env(newenv);
+          return c;
+        }
+        add_variable(newenv, n->car->s, c);
+      }
     }
-    add_variable(newenv, x->car->car->s, c);
     x = x->cdr;
   }
-  alist = alist->cdr;
-  c = NULL;
-  while (alist) {
-    if (c) free_node(c);
-    c = eval_node(newenv, alist->car);
-    alist = alist->cdr;
-  }
+  c = do_progn(newenv, alist->cdr);
   free_env(newenv);
-  if (c) return c;
-  return new_node();
+  return c;
 }
 
 static NODE*
