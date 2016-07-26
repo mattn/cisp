@@ -22,6 +22,8 @@
 # define INLINE inline
 #endif
 
+#define UNUSED(x) (void)(x)
+
 #define SYMBOL_CHARS "+-*/<>=&%?.@_#$:*"
 
 enum NODE_TYPE {
@@ -136,8 +138,8 @@ raise(SCANNER *s, const char *p) {
 static NODE*
 invalid_token(SCANNER *s) {
   char buf[BUFSIZ], c;
-  long i, l, o, pos = (long)s_pos(s);
-  snprintf(buf, sizeof(buf), "invalid token at offset %ld", pos);
+  size_t i, l, o, pos = s_pos(s);
+  snprintf(buf, sizeof(buf), "invalid token at offset %zu", pos);
   l = strlen(buf);
   if (s_reset(s) != -1)  {
     buf[l++] = '\n';
@@ -166,7 +168,7 @@ buf_init(BUFFER *b) {
 }
 
 static void
-buf_append(BUFFER *b, char *s) {
+buf_append(BUFFER *b, const char *s) {
   size_t len = strlen(s);
   if (b->pos + len + 1 > b->len) {
     b->ptr = (char*)realloc(b->ptr, b->len + len + 100);
@@ -236,31 +238,23 @@ new_error(const char* msg) {
 }
 
 static NODE*
-new_errorn(const char* fmt, NODE *n) {
-  NODE* node;
-  BUFFER tmp;
-  char buf[BUFSIZ];
-  buf_init(&tmp);
-  print_node(&tmp, n, 0);
-  snprintf(buf, sizeof(buf)-1, fmt, tmp.ptr);
-  buf_free(&tmp);
-  node = new_node();
-  node->t = NODE_ERROR;
-  node->s = strdup(buf);
-  return node;
-}
-
-static NODE*
 new_errorf(const char* fmt, ...) {
   char buf[BUFSIZ];
-  NODE* node;
   va_list list;
   va_start(list, fmt);
   vsnprintf(buf, sizeof(buf), fmt, list);
   va_end(list);
-  node = new_node();
-  node->t = NODE_ERROR;
-  node->s = strdup(buf);
+  return new_error(buf);
+}
+
+static NODE*
+new_errorn(const char* fmt, NODE *n) {
+  NODE* node;
+  BUFFER tmp;
+  buf_init(&tmp);
+  print_node(&tmp, n, 0);
+  node = new_errorf(fmt, tmp.ptr);
+  buf_free(&tmp);
   return node;
 }
 
@@ -1250,6 +1244,8 @@ do_princ(ENV *env, NODE *alist) {
 
 static NODE*
 do_quote(ENV *env, NODE *alist) {
+  UNUSED(env);
+
   if (node_narg(alist) != 1) return new_errorn("malformed quote: %s", alist);
 
   alist = alist->car;
@@ -1296,6 +1292,8 @@ do_let(ENV *env, NODE *alist) {
 
 static NODE*
 do_exit(ENV *env, NODE *alist) {
+  UNUSED(env);
+
   if (node_narg(alist)) return new_errorn("malformed exit: %s", alist);
 
   exit(0);

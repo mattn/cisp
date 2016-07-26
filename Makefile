@@ -3,7 +3,8 @@ SRCS = \
 
 OBJS = $(subst .c,.o,$(SRCS))
 
-CFLAGS = -g -O2 -funroll-loops -Wall -Werror -Werror=unused-result
+CC=gcc
+CFLAGS = -g -O2 -funroll-loops -Wall -Wextra -Wwrite-strings -Wformat=2 -Werror
 LIBS = -g -O2 -funroll-loops
 TARGET = cisp
 ifeq ($(OS),Windows_NT)
@@ -15,27 +16,27 @@ endif
 all : $(TARGET)
 
 $(TARGET) : $(OBJS)
-	gcc -o $@ $(OBJS) $(LIBS)
+	$(CC) -o $@ $(OBJS) $(LIBS)
 
 .c.o :
-	gcc -c $(CFLAGS) -I. $< -o $@
+	$(CC) -c $(CFLAGS) -I. $< -o $@
 
 clean :
 	rm -f *.o $(TARGET)
 
 debug :
-	gcc -g -o cisp -pg cisp.c
+	$(CC) -g -o cisp -pg cisp.c
 
 test : $(TARGET)
 	@./t/run-test.sh
 
 prof1 : $(TARGET)
-	gcc -o $(TARGET) -pg cisp.c
+	$(CC) -o $(TARGET) -pg cisp.c
 	./$(TARGET) example/tak.lisp
 	gprof $(TARGET) gmon.out -p | less
 
 prof2 : $(TARGET)
-	gcc -o $(TARGET) -pg cisp.c
+	$(CC) -o $(TARGET) -pg cisp.c
 	./$(TARGET) example/fib.lisp
 	gprof $(TARGET) gmon.out -p | less
 
