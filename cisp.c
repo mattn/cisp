@@ -169,7 +169,7 @@ static void
 buf_append(BUFFER *b, char *s) {
   size_t len = strlen(s);
   if (b->pos + len + 1 > b->len) {
-    b->ptr = realloc(b->ptr, b->len + len + 100);
+    b->ptr = (char*)realloc(b->ptr, b->len + len + 100);
     *(b->ptr + b->pos) = 0;
     b->len += len + 100;
   }
@@ -421,7 +421,7 @@ parse_string(SCANNER *s) {
   int c = 0;
   NODE *node;
 
-  buf = malloc(10);
+  buf = (char*)malloc(10);
   s_getc(s);
   while (!s_eof(s)) {
     c = s_getc(s);
@@ -438,7 +438,7 @@ parse_string(SCANNER *s) {
       }
     } else if (c == '"') break;
     if (n == l) {
-      buf = realloc(buf, l+20);
+      buf = (char*)realloc(buf, l+20);
       l += 20;
     }
     buf[n++] = c;
@@ -451,7 +451,7 @@ parse_string(SCANNER *s) {
 
   node = new_node();
   node->t = NODE_STRING;
-  node->s = realloc(buf, n+1);
+  node->s = (char*)realloc(buf, n+1);
   return node;
 }
 
