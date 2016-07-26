@@ -4,3 +4,4 @@
 (print (length nil))
 (print (length ()))
 (print (length "Hello, World"))
+(print (length (cons 1 nil)))
