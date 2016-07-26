@@ -1882,29 +1882,15 @@ do_rplaca(ENV *env, NODE *alist) {
 
   lhs = eval_node(env, alist->car);
   if (lhs->t == NODE_ERROR) return lhs;
-  if (lhs->t != NODE_CELL || !lhs->cdr->cdr)
+  if (lhs->t != NODE_CELL)
     return new_errorn("malformed rplaca: %s", alist);
   rhs = eval_node(env, alist->cdr->car);
   if (rhs->t == NODE_ERROR) {
     free_node(lhs);
     return rhs;
   }
-  switch (lhs->car->t) {
-  case NODE_INT:
-    lhs->car->i = rhs->i;
-    break;
-  case NODE_DOUBLE:
-    lhs->car->d = rhs->d;
-    break;
-  case NODE_STRING:
-    lhs->car->s = strdup(rhs->s);
-    break;
-  default:
-    free_node(lhs);
-    lhs = new_errorn("malformed rplaca: %s", alist);
-    break;
-  }
-  free_node(rhs);
+  free_node(lhs->car);
+  lhs->car = rhs;
   return lhs;
 }
 
