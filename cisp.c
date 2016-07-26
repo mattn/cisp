@@ -764,7 +764,7 @@ do_plus(ENV *env, NODE *alist) {
   free_node(c);
 
   alist = alist->cdr;
-  while (alist) {
+  while (alist && alist->t != NODE_NIL) {
     c = eval_node(env, alist->car);
     if (c->t == NODE_ERROR) {
       free_node(nn);
@@ -822,7 +822,7 @@ do_minus(ENV *env, NODE *alist) {
   free_node(c);
 
   alist = alist->cdr;
-  while (alist) {
+  while (alist && alist->t != NODE_NIL) {
     c = eval_node(env, alist->car);
     if (c->t == NODE_ERROR) return c;
     switch (nn->t) {
@@ -877,7 +877,7 @@ do_mul(ENV *env, NODE *alist) {
   free_node(c);
 
   alist = alist->cdr;
-  while (alist) {
+  while (alist && alist->t != NODE_NIL) {
     c = eval_node(env, alist->car);
     if (c->t == NODE_ERROR) return c;
     switch (nn->t) {
@@ -932,7 +932,7 @@ do_div(ENV *env, NODE *alist) {
   free_node(c);
 
   alist = alist->cdr;
-  while (alist) {
+  while (alist && alist->t != NODE_NIL) {
     c = eval_node(env, alist->car);
     if (c->t == NODE_ERROR) return c;
     switch (nn->t) {
@@ -1005,7 +1005,7 @@ do_and(ENV *env, NODE *alist) {
   NODE *c;
 
   c = NULL;
-  while (alist) {
+  while (alist && alist->t != NODE_NIL) {
     if (c) free_node(c);
     c = eval_node(env, alist->car);
     if (c->t == NODE_ERROR || c->t == NODE_NIL) break;
@@ -1022,7 +1022,7 @@ do_or(ENV *env, NODE *alist) {
   NODE *c;
 
   c = NULL;
-  while (alist) {
+  while (alist && alist->t != NODE_NIL) {
     if (c) free_node(c);
     c = eval_node(env, alist->car);
     if (c->t == NODE_ERROR || c->t != NODE_NIL) break;
@@ -1573,9 +1573,11 @@ call_node(ENV *env, NODE *node, NODE *alist) {
     if (x->t == NODE_LAMBDA) {
       newenv = (ENV*) x->car->p;
       newenv->r++;
+#if 0
     } else if (x->t == NODE_CELL) {
       newenv = (ENV*) x->car->cdr->p;
       newenv->r++;
+#endif
     }
     c = x->cdr->car;
     p = x->cdr->cdr;
