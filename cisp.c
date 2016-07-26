@@ -1937,7 +1937,7 @@ do_rplacd(ENV *env, NODE *alist) {
 
   lhs = eval_node(env, alist->car);
   if (lhs->t == NODE_ERROR) return lhs;
-  if (lhs->t != NODE_CELL || !lhs->cdr->cdr)
+  if (lhs->t != NODE_CELL)
     return new_errorn("malformed rplacd: %s", alist);
   rhs = eval_node(env, alist->cdr->car);
   if (rhs->t == NODE_ERROR) {
