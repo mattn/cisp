@@ -1364,7 +1364,7 @@ do_flet(ENV *env, NODE *alist) {
   }
   alist = alist->cdr;
   c = NULL;
-  while (alist) {
+  while (!node_isnull(alist)) {
     if (c) free_node(c);
     c = eval_node(newenv, alist->car);
     alist = alist->cdr;
