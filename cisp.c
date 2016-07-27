@@ -6,8 +6,8 @@
 #include <errno.h>
 #include <memory.h>
 #include <ctype.h>
-#include <inttypes.h>
 #ifndef _MSC_VER
+# include <inttypes.h>
 # include <unistd.h>
 #else
 # include <io.h>
@@ -545,7 +545,7 @@ print_float(BUFFER *buf, NODE *node) {
 }
 
 static void
-print_node(BUFFER* buf, NODE *node, int mode) {
+print_node(BUFFER *buf, NODE *node, int mode) {
   char tmp[BUFSIZ];
   if (!node) {
     buf_append(buf, "nil");
