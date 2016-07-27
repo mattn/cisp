@@ -7,19 +7,23 @@
 #include <memory.h>
 #include <ctype.h>
 #include <sys/stat.h>
-#include <dirent.h>
 #ifdef _WIN32
 # include <windows.h>
 #endif
 #ifndef _MSC_VER
+# include <dirent.h>
 # include <inttypes.h>
 # include <unistd.h>
+# define _printf_(a,b) __attribute__ ((format (printf, a, b)))
 #else
+# include <direct.h>
 # include <io.h>
 # define strdup(x) _strdup(x)
 # define isatty(f) _isatty(f)
 # define fileno(f) _fileno(f)
 # define snprintf(b,n,f,...) _snprintf(b,n,f,__VA_ARGS__)
+# define _printf_(a,b)
+# define PATH_MAX MAX_PATH
 #endif
 
 #ifdef _MSC_VER
@@ -251,7 +255,7 @@ new_error(const char* msg) {
   return node;
 }
 
-__attribute__((format(printf, 1, 0)))
+_printf_(1, 0)
 static NODE*
 new_errorf(const char* fmt, ...) {
   char buf[BUFSIZ];
@@ -2343,6 +2347,79 @@ add_sym(ENV *env, enum NODE_TYPE t, const char* n, f_do f) {
   env->lf[env->nf] = ni;
   env->nf++;
 }
+
+#ifdef _MSC_VER
+struct DIR {
+  intptr_t h;
+  struct _finddata_t fi;
+  struct dirent       result;
+  char                *name;
+};
+
+static DIR*
+opendir(const char *name) {
+  DIR *dir = NULL;
+  size_t len;
+  const char *mask;
+
+  if (name && *name) {
+    errno = EINVAL;
+    return NULL;
+  }
+  len = strlen(name);
+  mask = strchr("/\\", name[len - 1]) ? "*" : "/*";
+  dir = (DIR *) malloc(sizeof *dir);
+  if (!dir) {
+    errno = ENOMEM;
+    return NULL;
+  }
+  dir->name = (char*) malloc(len + strlen(mask) + 1);
+  if (!dir) {
+    errno = ENOMEM;
+    free(dir);
+    return NULL;
+  }
+  strcpy(dir->name, name);
+  strcat(dir->name, mask);
+  if ((dir->h = _findfirst(dir->name, &dir->fi)) != -1) {
+    dir->result.d_name = NULL;
+  } else {
+    free(dir->name);
+    free(dir);
+    dir = NULL;
+  }
+  return dir;
+}
+
+static int
+closedir(DIR *dir) {
+  int r = -1;
+  if (!dir) {
+    errno = EBADF;
+    return -1;
+  }
+  if (dir->h != -1)
+    r = _findclose(dir->h);
+  free(dir->name);
+  free(dir);
+  if (r == -1) errno = EBADF;
+  return r;
+}
+
+struct dirent*
+readdir(DIR *dir) {
+  struct dirent *ent = NULL;
+  if (!dir || dir->handle == -1) {
+    errno = EBADF;
+    return NULL;
+  }
+  if (!dir->ent.d_name || _findnext(dir->handle, &dir->fi) != -1) {
+    ent = &dir->ent;
+    ent->d_name = dir->fi.name;
+  }
+  return ent;
+}
+#endif
 
 static void
 walk(ENV *env, char *base) {
