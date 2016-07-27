@@ -34,12 +34,15 @@
 
 #define UNUSED(x) (void)(x)
 
-#define SYMBOL_CHARS "+-*/<>=&%?.@_#$:*"
+#define SYMBOL_CHARS "+-*/<>=&%?.@_#$:*,"
 
 enum NODE_TYPE {
   NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_BQUOTE, NODE_IDENT,
   NODE_LAMBDA, NODE_CELL, NODE_AREF, NODE_ENV, NODE_ERROR
 };
+
+#define PARSE_ANY 0
+#define PARSE_BQUOTE 1
 
 struct _ENV;
 struct _NODE;
@@ -102,7 +105,7 @@ typedef struct _BUFFER {
   size_t len;
 } BUFFER;
 
-static NODE* parse_any(SCANNER *s);
+static NODE* parse_any(SCANNER *s, int mode);
 static NODE* eval_node(ENV *env, NODE *node);
 static void print_node(BUFFER *buf, NODE *node, int mode);
 
@@ -319,7 +322,7 @@ parse_paren(SCANNER *s) {
   head = node = new_node();
   node->t = NODE_CELL;
   while (!s_eof(s) && s_peek(s) != ')') {
-    NODE *child = parse_any(s);
+    NODE *child = parse_any(s, PARSE_ANY);
     if (child == NULL) return NULL;
 
     if (child->t == NODE_IDENT && !strcmp(".", child->s)) {
@@ -329,7 +332,7 @@ parse_paren(SCANNER *s) {
       }
       free_node(child);
 
-      child = parse_any(s);
+      child = parse_any(s, PARSE_ANY);
       if (child == NULL) return NULL;
       node->cdr = child;
       break;
@@ -357,7 +360,7 @@ parse_primitive(SCANNER *s) {
   char buf[BUFSIZ];
   size_t n = 0;
   char *e, c;
-  NODE *x;
+  NODE *x;/*, *q;*/
 
   while (n < sizeof(buf) && !s_eof(s)) {
     c = s_peek(s);
@@ -397,7 +400,7 @@ parse_quote(SCANNER *s) {
   NODE *node, *child;
 
   s_getc(s);
-  child = parse_any(s);
+  child = parse_any(s, PARSE_ANY);
   if (child == NULL) return NULL;
   node = new_node();
   node->t = NODE_QUOTE;
@@ -410,7 +413,7 @@ parse_bquote(SCANNER *s) {
   NODE *node, *child;
 
   s_getc(s);
-  child = parse_any(s);
+  child = parse_any(s, PARSE_BQUOTE);
   if (child == NULL) return NULL;
   node = new_node();
   node->t = NODE_BQUOTE;
@@ -460,31 +463,49 @@ parse_string(SCANNER *s) {
 }
 
 static NODE*
-parse_any(SCANNER *s) {
+parse_any(SCANNER *s, int mode) {
   NODE *x = NULL;
-  int c;
+  int c, q = 0;
 
   skip_white(s);
   if (s_eof(s)) return raise(s, "unexpected end of file");
 
   c = s_peek(s);
+  if (c == ',') {
+    s_getc(s);
+    c = s_peek(s);
+    q = 1;
+  }
+
   if (c == '(') {
     s_getc(s);
     x = parse_paren(s);
     if (x == NULL) return NULL;
-    if (!s_eof(s)) {
-      skip_white(s);
-      if (s_getc(s) == ')') {
-        return x;
-      }
+    if (s_eof(s)) {
+      return raise(s, "unexpected end of file");
     }
-    return raise(s, "unexpected end of file");
+    skip_white(s);
+    if (s_getc(s) != ')') {
+      return invalid_token(s);
+    }
+  } else if (c == '\'')
+    x = parse_quote(s);
+  else if (c == '`')
+    x = parse_bquote(s);
+  else if (c == '"')
+    x = parse_string(s);
+  else if (isalnum((int)c) || strchr(SYMBOL_CHARS, c))
+    x = parse_primitive(s);
+  else
+    return invalid_token(s);
+
+  if ((mode & PARSE_BQUOTE) != 0 && !q) {
+    NODE *r = new_node();
+    r->t = NODE_QUOTE;
+    r->car = x;
+    return r;
   }
-  if (c == '\'') return parse_quote(s);
-  if (c == '`') return parse_bquote(s);
-  if (c == '"') return parse_string(s);
-  if (isalnum((int)c) || strchr(SYMBOL_CHARS, c)) return parse_primitive(s);
-  return invalid_token(s);
+  return x;
 }
 
 static void
@@ -593,6 +614,10 @@ print_node(BUFFER *buf, NODE *node, int mode) {
     buf_append(buf, "'");
     print_node(buf, node->car, mode);
     break;
+  case NODE_BQUOTE:
+    buf_append(buf, "`");
+    print_node(buf, node->car, mode);
+    break;
   case NODE_CELL:
     print_cell(buf, node, mode);
     break;
@@ -620,6 +645,7 @@ free_node(NODE *node) {
   switch (node->t) {
   case NODE_LAMBDA:
   case NODE_QUOTE:
+  case NODE_BQUOTE:
   case NODE_CELL:
     if (node->cdr) free_node(node->cdr);
     if (node->car) free_node(node->car);
@@ -703,6 +729,57 @@ find_item(ITEM **ll, int nl, const char *k) {
   return NULL;
 }
 
+static NODE*
+look_ident(ENV *env, const char *k) {
+  ITEM *ni;
+
+  if (!k) return NULL;
+
+  ni = find_item(env->lv, env->nv, k);
+  if (ni) {
+    ni->v->r++;
+    return ni->v;
+  }
+
+  if (env->p) return look_ident(env->p, k);
+
+  return NULL;
+}
+
+static NODE*
+look_func(ENV *env, const char *k) {
+  ITEM *ni;
+
+  if (!k) return NULL;
+
+  ni = find_item(env->lf, env->nf, k);
+  if (ni) {
+    ni->v->r++;
+    return ni->v;
+  }
+
+  if (env->p) return look_func(env->p, k);
+
+  return NULL;
+}
+
+static NODE*
+look_macro(ENV *env, const char *k) {
+  ENV *global;
+  ITEM *ni;
+
+  if (!k) return NULL;
+
+  global = global_env(env);
+  ni = find_item(global->lm, global->nm, k);
+  if (ni) {
+    ni->v->r++;
+    return ni->v;
+  }
+
+  return NULL;
+}
+
 static void
 add_variable(ENV *env, const char *k, NODE *node) {
   ITEM *ni = find_item(env->lv, env->nv, k);
@@ -748,6 +825,7 @@ int_value(ENV *env, NODE *node, NODE **err) {
   case NODE_INT: r = node->i; break;
   case NODE_DOUBLE: r = (long)node->d; break;
   case NODE_QUOTE: r = int_value(env, node->car, err); break;
+  case NODE_BQUOTE: r = int_value(env, node->car, err); break;
   default: *err = new_error("malformed number"); break;
   }
   free_node(node);
@@ -764,6 +842,7 @@ double_value(ENV *env, NODE *node, NODE **err) {
   case NODE_INT: r = (double)node->i; break;
   case NODE_DOUBLE: r = node->d; break;
   case NODE_QUOTE: r = double_value(env, node->car, err); break;
+  case NODE_BQUOTE: r = double_value(env, node->car, err); break;
   default: *err = new_error("malformed number"); break;
   }
   free_node(node);
@@ -1333,6 +1412,84 @@ do_let_(ENV *env, NODE *alist, int star) {
 }
 
 static NODE*
+do_list(ENV *env, NODE *alist) {
+  int bq;
+  NODE *c, *v, *nc, *l = NULL, *rr = NULL;
+  UNUSED(env);
+
+  dump_node(alist);
+  if (alist->t == NODE_BQUOTE) {
+    alist = alist->car;
+    bq = 1;
+  }
+
+  while (!node_isnull(alist)) {
+    int expand = 0;
+    v = alist->car;
+    if (bq && v->t == NODE_IDENT && *v->s == ',') {
+      if (*(v->s+1) == '@') {
+        expand = 2;
+        c = look_ident(env, v->s+2);
+      } else {
+        expand = 1;
+        c = look_ident(env, v->s+1);
+      }
+    } else {
+      c = eval_node(env, v);
+    }
+    if (c->t == NODE_ERROR) {
+      if (rr) free_node(rr);
+      return c;
+    }
+    if (l == NULL) {
+      switch (expand) {
+      case 0:
+        nc = new_node();
+        nc->t = NODE_CELL;
+        nc->car = c;
+        rr = l = nc;
+        break;
+      case 1:
+        nc = new_node();
+        nc->t = NODE_CELL;
+        nc->car = c;
+        rr = l = nc;
+        break;
+      case 2:
+        rr = l = c->car;
+        rr->r++;
+        free_node(c);
+      }
+    } else {
+      switch (expand) {
+      case 0:
+        nc = new_node();
+        nc->t = NODE_CELL;
+        nc->car = c;
+        l->cdr = nc;
+        l = l->cdr;
+        break;
+      case 1:
+        nc = new_node();
+        nc->t = NODE_CELL;
+        nc->car = c;
+        l->cdr = nc;
+        l = l->cdr;
+        break;
+      case 2:
+        l->cdr = c;
+        while (l->cdr)
+          l = l->cdr;
+        break;
+      }
+    }
+    alist = alist->cdr;
+  }
+  if (rr) return rr;
+  return new_node();
+}
+
+static NODE*
 do_let(ENV *env, NODE *alist) {
   return do_let_(env, alist, 0);
 }
@@ -1553,7 +1710,7 @@ do_ident(ENV *env, NODE *alist) {
 
   if (env->p) return do_ident(env->p, alist);
 
-  return new_errorf("unknown identity", alist->s);
+  return new_errorf("unknown identity: %s", alist->s);
 }
 
 static INLINE NODE*
@@ -1567,41 +1724,7 @@ do_ident_global(ENV *env, NODE *node) {
     return ni->v;
   }
 
-  return new_errorf("unknown identify", node->s);
-}
-
-static NODE*
-look_func(ENV *env, const char *k) {
-  ITEM *ni;
-
-  if (!k) return NULL;
-
-  ni = find_item(env->lf, env->nf, k);
-  if (ni) {
-    ni->v->r++;
-    return ni->v;
-  }
-
-  if (env->p) return look_func(env->p, k);
-
-  return NULL;
-}
-
-static NODE*
-look_macro(ENV *env, const char *k) {
-  ENV *global;
-  ITEM *ni;
-
-  if (!k) return NULL;
-
-  global = global_env(env);
-  ni = find_item(global->lm, global->nm, k);
-  if (ni) {
-    ni->v->r++;
-    return ni->v;
-  }
-
-  return NULL;
+  return new_errorf("unknown identify: %s", node->s);
 }
 
 #if 0
@@ -1654,7 +1777,7 @@ copy_node(ENV *env, NODE *lhs) {
 static NODE*
 call_node(ENV *env, NODE *node, NODE *alist) {
   ENV *newenv = NULL;
-  NODE *x = NULL, *p = NULL, *c = NULL, *nn = NULL;
+  NODE *x = NULL, *p = NULL, *q = NULL, *c = NULL, *nn = NULL;
   int macro = 0;
 
   if (node->t == NODE_IDENT) {
@@ -1676,7 +1799,6 @@ call_node(ENV *env, NODE *node, NODE *alist) {
       }
     }
     if (x->t == NODE_LAMBDA) {
-      puts("macro");
       newenv = (ENV*) x->car->p;
       newenv->r++;
     } else if (x->t == NODE_CELL && x->car->cdr) {
@@ -1741,8 +1863,13 @@ call_node(ENV *env, NODE *node, NODE *alist) {
     c = c->cdr;
   }
   if (macro) {
-    nn = eval_node(newenv, x->cdr->cdr->car);
-    c = eval_node(newenv, nn);
+    nn = eval_node(newenv, x->cdr->cdr);
+    if (nn->t == NODE_BQUOTE) {
+      q = eval_node(newenv, nn);
+      c = eval_node(newenv, q);
+      free_node(q);
+    } else
+      c = eval_node(newenv, nn);
     free_node(nn);
     free_env(newenv);
     free_node(x);
@@ -2598,6 +2725,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "length", do_length);
   add_sym(env, NODE_IDENT, "let", do_let);
   add_sym(env, NODE_IDENT, "let*", do_let_s);
+  add_sym(env, NODE_IDENT, "list", do_list);
   add_sym(env, NODE_IDENT, "flet", do_flet);
   add_sym(env, NODE_IDENT, "labels", do_labels);
   add_sym(env, NODE_IDENT, "load", do_load);
@@ -2642,10 +2770,16 @@ eval_node(ENV *env, NODE *node) {
     node->r++;
     return node;
   case NODE_QUOTE:
-  case NODE_BQUOTE:
     c = node->car;
     c->r++;
     return c;
+  case NODE_BQUOTE:
+    if (node->car->t != NODE_CELL) {
+      c = node->car;
+      c->r++;
+      return c;
+    }
+    return do_list(env, node);
   case NODE_IDENT:
     return do_ident(env, node);
   case NODE_CELL:
@@ -2717,7 +2851,7 @@ main(int argc, char* argv[]) {
   while (!s_eof(s)) {
     if (isatty(fileno(stdin))) printf("> ");
 
-    node = parse_any(s);
+    node = parse_any(s, PARSE_ANY);
     if (node == NULL) {
       if (s->err) fprintf(stderr, "cisp: %s\n", s->err);
       s_reset(s);
