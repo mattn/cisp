@@ -1343,20 +1343,20 @@ do_let_s(ENV *env, NODE *alist) {
 }
 
 static NODE*
-do_flet(ENV *env, NODE *alist) {
+do_labels(ENV *env, NODE *alist) {
   ENV *newenv;
   NODE *x, *c;
 
-  if (node_narg(alist) < 1) return new_errorn("malformed flet: %s", alist);
+  if (node_narg(alist) < 1) return new_errorn("malformed labels: %s", alist);
 
   x = alist->car;
   newenv = new_env(env);
 
   while (x) {
-    if (node_narg(x->car->cdr) != 2) return new_errorn("malformed flet: %s", alist);
+    if (node_narg(x->car->cdr) != 2) return new_errorn("malformed labels: %s", alist);
     if (x->car->t != NODE_CELL || x->car->cdr->car->t != NODE_CELL) {
       free_env(newenv);
-      return new_errorn("malformed flet: %s", alist);
+      return new_errorn("malformed labels: %s", alist);
     }
     add_function(newenv, x->car->car->s, x->car);
     x->car->r++;
@@ -2556,7 +2556,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "length", do_length);
   add_sym(env, NODE_IDENT, "let", do_let);
   add_sym(env, NODE_IDENT, "let*", do_let_s);
-  add_sym(env, NODE_IDENT, "flet", do_flet);
+  add_sym(env, NODE_IDENT, "labels", do_labels);
   add_sym(env, NODE_IDENT, "load", do_load);
   add_sym(env, NODE_IDENT, "make-string", do_make_string);
   add_sym(env, NODE_IDENT, "make-array", do_make_array);
