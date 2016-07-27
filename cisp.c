@@ -147,7 +147,7 @@ invalid_token(SCANNER *s) {
   if (s_reset(s) != -1)  {
     buf[l++] = '\n';
     o = l;
-    for (i = 0; /*i < pos &&*/ l < sizeof(buf)-1; i++) {
+    for (i = 0; l < sizeof(buf)-1; i++) {
       c = s_getc(s);
       if (s_eof(s)) break;
       if (c == '\n') {
@@ -2039,6 +2039,7 @@ do_length(ENV *env, NODE *alist) {
 static NODE*
 do_concatenate(ENV *env, NODE *alist) {
   NODE *x, *c, *l, *nn;
+  BUFFER buf;
 
   if (node_narg(alist) < 3) return new_errorn("malformed concatenate", alist);
 
@@ -2055,12 +2056,15 @@ do_concatenate(ENV *env, NODE *alist) {
   c = new_node();
   c->t = !strcmp(x->s, "string") ? NODE_STRING : NODE_CELL;
 
+  buf_init(&buf);
+
   alist = alist->cdr;
-  while (alist) {
+  while (!node_isnull(alist)) {
     if (c->t == NODE_STRING) {
       nn = eval_node(env, alist->car);
       if (nn->t == NODE_ERROR) {
         free_node(c);
+        buf_free(&buf);
         c = nn;
         break;
       }
@@ -2068,20 +2072,15 @@ do_concatenate(ENV *env, NODE *alist) {
         free_node(c);
         c = new_errorn("argument is not string", nn);
         free_node(nn);
+        buf_free(&buf);
         break;
       }
-      /* TODO: slow growing-up */
-      if (c->s) {
-        c->s = (char*)realloc(c->s, strlen(c->s) + strlen(nn->s) + 1);
-        strcat(c->s, nn->s);
-      } else {
-        c->s = (char*)malloc(strlen(nn->s) + 1);
-        strcpy(c->s, nn->s);
-      }
+      buf_append(&buf, nn->s);
       free_node(nn);
     }
     alist = alist->cdr;
   }
+  if (node_isnull(alist)) c->s = buf.ptr;
   free_node(x);
   free_node(l);
   return c;
@@ -2500,5 +2499,7 @@ main(int argc, char* argv[]) {
   free_env(env);
   return 0;
 }
+
+#undef node_isnull
 
 /* vim:set et sw=2 cino=>2,\:0: */
