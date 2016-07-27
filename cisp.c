@@ -1347,16 +1347,16 @@ do_flet(ENV *env, NODE *alist) {
   ENV *newenv;
   NODE *x, *c, *e;
 
-  if (node_narg(alist) < 1) return new_errorn("malformed labels: %s", alist);
+  if (node_narg(alist) < 1) return new_errorn("malformed flet", alist);
 
   x = alist->car;
   newenv = new_env(env);
 
   while (x) {
-    if (node_narg(x->car->cdr) != 2) return new_errorn("malformed labels: %s", alist);
+    if (node_narg(x->car->cdr) != 2) return new_errorn("malformed flet", alist);
     if (x->car->t != NODE_CELL || x->car->cdr->car->t != NODE_CELL) {
       free_env(newenv);
-      return new_errorn("malformed labels: %s", alist);
+      return new_errorn("malformed flet", alist);
     }
     e = new_node();
     e->t = NODE_ENV;
@@ -1385,16 +1385,16 @@ do_labels(ENV *env, NODE *alist) {
   ENV *newenv;
   NODE *x, *c;
 
-  if (node_narg(alist) < 1) return new_errorn("malformed labels: %s", alist);
+  if (node_narg(alist) < 1) return new_errorn("malformed labels", alist);
 
   x = alist->car;
   newenv = new_env(env);
 
   while (x) {
-    if (node_narg(x->car->cdr) != 2) return new_errorn("malformed labels: %s", alist);
+    if (node_narg(x->car->cdr) != 2) return new_errorn("malformed labels", alist);
     if (x->car->t != NODE_CELL || x->car->cdr->car->t != NODE_CELL) {
       free_env(newenv);
-      return new_errorn("malformed labels: %s", alist);
+      return new_errorn("malformed labels", alist);
     }
     add_function(newenv, x->car->car->s, x->car);
     x->car->r++;
