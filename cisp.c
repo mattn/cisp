@@ -2365,10 +2365,13 @@ walk(ENV *env, char *base) {
       if (S_ISDIR(st.st_mode))
         walk(env, path);
       else {
-        NODE *ret = load_lisp(env, path);
-        if (ret->t == NODE_ERROR)
-          fprintf(stderr, "cisp: %s\n", ret->s);
-        free_node(ret);
+        size_t len = strlen(path);
+        if (!strcmp(path + len - 5, ".lisp")) {
+          NODE *ret = load_lisp(env, path);
+          if (ret->t == NODE_ERROR)
+            fprintf(stderr, "cisp: %s\n", ret->s);
+          free_node(ret);
+        }
       }
     }
     ent = readdir(dir);
@@ -2462,9 +2465,9 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "exit", do_exit);
   add_sym(env, NODE_IDENT, "type-of", do_type_of);
   add_sym(env, NODE_IDENT, "getenv", do_getenv);
+  qsort(env->lf, env->nf, sizeof(ITEM*), compare_item);
 
   load_libs(env);
-  qsort(env->lf, env->nf, sizeof(ITEM*), compare_item);
 }
 
 static INLINE NODE*
