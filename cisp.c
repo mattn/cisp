@@ -1343,6 +1343,44 @@ do_let_s(ENV *env, NODE *alist) {
 }
 
 static NODE*
+do_flet(ENV *env, NODE *alist) {
+  ENV *newenv;
+  NODE *x, *c, *e;
+
+  if (node_narg(alist) < 1) return new_errorn("malformed labels: %s", alist);
+
+  x = alist->car;
+  newenv = new_env(env);
+
+  while (x) {
+    if (node_narg(x->car->cdr) != 2) return new_errorn("malformed labels: %s", alist);
+    if (x->car->t != NODE_CELL || x->car->cdr->car->t != NODE_CELL) {
+      free_env(newenv);
+      return new_errorn("malformed labels: %s", alist);
+    }
+    e = new_node();
+    e->t = NODE_ENV;
+    e->p = env;
+    env->r++;
+    x->car->car->cdr = e;
+
+    add_function(newenv, x->car->car->s, x->car);
+    x->car->r++;
+    x = x->cdr;
+  }
+  alist = alist->cdr;
+  c = NULL;
+  while (!node_isnull(alist)) {
+    if (c) free_node(c);
+    c = eval_node(newenv, alist->car);
+    alist = alist->cdr;
+  }
+  free_env(newenv);
+  if (c) return c;
+  return new_node();
+}
+
+static NODE*
 do_labels(ENV *env, NODE *alist) {
   ENV *newenv;
   NODE *x, *c;
@@ -1638,13 +1676,12 @@ call_node(ENV *env, NODE *node, NODE *alist) {
       }
     }
     if (x->t == NODE_LAMBDA) {
+      puts("macro");
       newenv = (ENV*) x->car->p;
       newenv->r++;
-#if 0
-    } else if (x->t == NODE_CELL) {
+    } else if (x->t == NODE_CELL && x->car->cdr) {
       newenv = (ENV*) x->car->cdr->p;
       newenv->r++;
-#endif
     }
     c = x->cdr->car;
     p = x->cdr->cdr;
@@ -1768,7 +1805,7 @@ do_funcall(ENV *env, NODE *alist) {
 static NODE*
 do_defun(ENV *env, NODE *alist) {
   ENV *global;
-  NODE *x, *e;
+  NODE *x;
 
   if (node_narg(alist) < 3) return new_errorn("malformed defun", alist);
 
@@ -1780,11 +1817,14 @@ do_defun(ENV *env, NODE *alist) {
     return new_errorn("argument is not a list", alist);
   }
 
+  /* TODO: nested function should have env */
+#if 0
   e = new_node();
   e->t = NODE_ENV;
   e->p = env;
   env->r++;
   x->cdr = e;
+#endif
 
   global = global_env(env);
   add_function(global, x->s, alist);
@@ -2558,6 +2598,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "length", do_length);
   add_sym(env, NODE_IDENT, "let", do_let);
   add_sym(env, NODE_IDENT, "let*", do_let_s);
+  add_sym(env, NODE_IDENT, "flet", do_flet);
   add_sym(env, NODE_IDENT, "labels", do_labels);
   add_sym(env, NODE_IDENT, "load", do_load);
   add_sym(env, NODE_IDENT, "make-string", do_make_string);
