@@ -1358,8 +1358,8 @@ do_flet(ENV *env, NODE *alist) {
       free_env(newenv);
       return new_errorn("malformed flet: %s", alist);
     }
-    add_function(newenv, x->car->car->s, x->car->cdr->cdr->car);
-    x->car->cdr->cdr->car->r++;
+    add_function(newenv, x->car->car->s, x->car);
+    x->car->r++;
     x = x->cdr;
   }
   alist = alist->cdr;
@@ -1534,17 +1534,17 @@ do_ident_global(ENV *env, NODE *node) {
 
 static NODE*
 look_func(ENV *env, const char *k) {
-  ENV *global;
   ITEM *ni;
 
   if (!k) return NULL;
 
-  global = global_env(env);
-  ni = find_item(global->lf, global->nf, k);
+  ni = find_item(env->lf, env->nf, k);
   if (ni) {
     ni->v->r++;
     return ni->v;
   }
+
+  if (env->p) return look_func(env->p, k);
 
   return NULL;
 }
