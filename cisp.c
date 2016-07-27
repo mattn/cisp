@@ -1566,6 +1566,7 @@ look_macro(ENV *env, const char *k) {
   return NULL;
 }
 
+#if 0
 static NODE*
 copy_node(ENV *env, NODE *lhs) {
   ITEM *ni;
@@ -1610,6 +1611,7 @@ copy_node(ENV *env, NODE *lhs) {
   }
   return rhs;
 }
+#endif
 
 static NODE*
 call_node(ENV *env, NODE *node, NODE *alist) {
@@ -1702,7 +1704,7 @@ call_node(ENV *env, NODE *node, NODE *alist) {
     c = c->cdr;
   }
   if (macro) {
-    nn = copy_node(newenv, x->cdr->cdr->car);
+    nn = eval_node(newenv, x->cdr->cdr->car);
     c = eval_node(newenv, nn);
     free_node(nn);
     free_env(newenv);
