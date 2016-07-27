@@ -1,1 +1,6 @@
-(dotimes (i 3) (print i))
+(print (dotimes (i 3) (print i)))
+(print (dotimes (i 3 i) (print i)))
+(print (dotimes (i 3 i) (print i) (print (* i i))))
+(print (dotimes (i 0)))
+(print (dotimes (i 0 i)))
+(dotimes (i (+ 2 3) (print i)) (print i))

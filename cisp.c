@@ -1778,32 +1778,43 @@ do_progn(ENV *env, NODE *alist) {
 static NODE*
 do_dotimes(ENV *env, NODE *alist) {
   ENV *newenv;
-  NODE *c, *nn, *err = NULL;
+  NODE *c, *x, *nn, *err = NULL;
   int i, r;
+  long l;
 
-  if (node_narg(alist) != 2) return new_errorn("malformed dotimes: %s", alist);
+  if (node_narg(alist) < 1) return new_errorn("malformed dotimes: %s", alist);
 
-  c = eval_node(env, alist->car->cdr->car);
-  if (c->t == NODE_ERROR) return c;
-  r = int_value(env, c, &err);
-  free_node(c);
+  x = alist->car;
+  l = node_narg(x);
+  if (!(l == 2 || l == 3) || !(x->car && x->car->t == NODE_IDENT))
+    return new_errorn("malformed dotimes: %s", alist);
+
+  r = int_value(env, x->cdr->car, &err);
   if (err) return err;
+
   newenv = new_env(env);
   nn = new_node();
   nn->t = NODE_INT;
-  add_variable(newenv, alist->car->car->s, nn);
-  c = NULL;
+  add_variable(newenv, x->car->s, nn);
+
   for (i = 0; i < r; i++) {
     nn->i = i;
-    if (c) free_node(c);
-    c = eval_node(newenv, alist->cdr->car);
-    if (c->t == NODE_ERROR) break;
+    c = do_progn(newenv, alist->cdr);
+    if (c->t == NODE_ERROR) {
+      free_env(newenv);
+      return c;
+    }
+    free_node(c);
   }
+
+  if (l == 3) {
+    nn->i = r;
+    c = eval_node(newenv, x->cdr->cdr->car);
+    if (!c) c = new_node();
+  } else
+    c = new_node();
   free_env(newenv);
-  if (c) {
-    return c;
-  }
-  return new_node();
+  return c;
 }
 
 static NODE*
