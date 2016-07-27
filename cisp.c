@@ -140,8 +140,9 @@ raise(SCANNER *s, const char *p) {
 static NODE*
 invalid_token(SCANNER *s) {
   char buf[BUFSIZ], c;
-  size_t i, l, o, pos = s_pos(s);
-  snprintf(buf, sizeof(buf), "invalid token at offset %"PRIu64, pos);
+  size_t i, l, o;
+  long pos = s_pos(s);
+  snprintf(buf, sizeof(buf), "invalid token at offset %ld", pos == -1 ? 0 : pos);
   l = strlen(buf);
   if (s_reset(s) != -1)  {
     buf[l++] = '\n';
@@ -150,7 +151,7 @@ invalid_token(SCANNER *s) {
       c = s_getc(s);
       if (s_eof(s)) break;
       if (c == '\n') {
-        if (i >= pos) break;
+        if (i >= (size_t)pos) break;
         l = o;
         continue;
       }
