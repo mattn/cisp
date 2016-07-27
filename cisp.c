@@ -2349,12 +2349,16 @@ add_sym(ENV *env, enum NODE_TYPE t, const char* n, f_do f) {
 }
 
 #ifdef _MSC_VER
-struct DIR {
+struct dirent {
+  char *d_name;
+};
+
+typedef struct _DIR {
   intptr_t h;
   struct _finddata_t fi;
-  struct dirent       result;
-  char                *name;
-};
+  struct dirent ent;
+  char *name;
+} DIR;
 
 static DIR*
 opendir(const char *name) {
@@ -2382,7 +2386,7 @@ opendir(const char *name) {
   strcpy(dir->name, name);
   strcat(dir->name, mask);
   if ((dir->h = _findfirst(dir->name, &dir->fi)) != -1) {
-    dir->result.d_name = NULL;
+    dir->ent.d_name = NULL;
   } else {
     free(dir->name);
     free(dir);
@@ -2409,11 +2413,11 @@ closedir(DIR *dir) {
 struct dirent*
 readdir(DIR *dir) {
   struct dirent *ent = NULL;
-  if (!dir || dir->handle == -1) {
+  if (!dir || dir->h == -1) {
     errno = EBADF;
     return NULL;
   }
-  if (!dir->ent.d_name || _findnext(dir->handle, &dir->fi) != -1) {
+  if (!dir->ent.d_name || _findnext(dir->h, &dir->fi) != -1) {
     ent = &dir->ent;
     ent->d_name = dir->fi.name;
   }
@@ -2439,7 +2443,7 @@ walk(ENV *env, char *base) {
         fprintf(stderr, "failed to get stat %s\n", path);
         break;
       }
-      if (S_ISDIR(st.st_mode))
+      if ((st.st_mode & S_IFMT) == S_IFDIR)
         walk(env, path);
       else {
         size_t len = strlen(path);
