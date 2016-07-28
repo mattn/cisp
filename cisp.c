@@ -747,6 +747,19 @@ do_not(ENV *env, NODE *alist) {
 }
 
 static NODE*
+do_null(ENV *env, NODE *alist) {
+  NODE *c;
+  UNUSED(env);
+
+  if (node_narg(alist) != 1) return new_errorn("malformed null", alist);
+
+  c = new_node();
+  if (node_isnull(alist->car))
+    c->t = NODE_T;
+  return c;
+}
+
+static NODE*
 do_evenp(ENV *env, NODE *alist) {
   NODE *c, *err = NULL;
 
@@ -2163,6 +2176,7 @@ add_defaults(ENV *env) {
   add_sym(env, "mod", do_mod);
   add_sym(env, "nconc", do_nconc);
   add_sym(env, "not", do_not);
+  add_sym(env, "null", do_null);
   add_sym(env, "oddp", do_oddp);
   add_sym(env, "or", do_or);
   add_sym(env, "princ", do_princ);
