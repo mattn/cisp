@@ -45,3 +45,6 @@ prof2 : $(TARGET)
 valgrind : $(TARGET)
 	ls t/*.lisp | grep -v error\. | xargs -n 1 valgrind --leak-check=full ./$(TARGET) > valgrind.log 2>&1
 
+cisp.o : cisp.h parser.h util.h
+parser.o : parser.h cisp.h
+util.o : util.h cisp.h
