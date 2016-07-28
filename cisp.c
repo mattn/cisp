@@ -44,12 +44,12 @@ enum NODE_TYPE {
 #define PARSE_ANY 0
 #define PARSE_BQUOTE 1
 
-struct _ENV;
-struct _NODE;
+typedef struct _ENV ENV;
+typedef struct _NODE NODE;
 
-typedef struct _NODE* (*f_do)(struct _ENV*, struct _NODE*);
+typedef NODE* (*f_do)(ENV*, NODE*);
 
-typedef struct _NODE {
+struct _NODE {
   enum NODE_TYPE t;
   union {
     long i;
@@ -57,39 +57,39 @@ typedef struct _NODE {
     char* s;
     void* p;
     struct {
-      struct _NODE *car;
-      struct _NODE *cdr;
+      NODE *car;
+      NODE *cdr;
     };
   };
   f_do f;
   int r;
-} NODE;
+};
 
 typedef struct {
   const char *k;
   NODE *v;
 } ITEM;
 
-typedef struct _ENV {
+struct _ENV {
   int nv;
   ITEM **lv;
   int nf;
   ITEM **lf;
   int nm;
   ITEM **lm;
-  struct _ENV *p;
+  ENV *p;
   int r;
-} ENV;
+};
 
-struct _SCANNER;
+typedef struct _SCANNER SCANNER;
 
-typedef int (*f_getc)(struct _SCANNER*);
-typedef int (*f_peek)(struct _SCANNER*);
-typedef int (*f_eof)(struct _SCANNER*);
-typedef long (*f_pos)(struct _SCANNER*);
-typedef int (*f_reset)(struct _SCANNER*);
+typedef int (*f_getc)(SCANNER*);
+typedef int (*f_peek)(SCANNER*);
+typedef int (*f_eof)(SCANNER*);
+typedef long (*f_pos)(SCANNER*);
+typedef int (*f_reset)(SCANNER*);
 
-typedef struct _SCANNER {
+struct _SCANNER {
   void *v, *o;
   f_peek  _peek;
   f_getc  _getc;
@@ -97,7 +97,7 @@ typedef struct _SCANNER {
   f_pos   _pos;
   f_reset _reset;
   char *err;
-} SCANNER;
+};
 
 typedef struct _BUFFER {
   char *ptr;
