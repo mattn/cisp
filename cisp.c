@@ -313,7 +313,7 @@ match(const char *lhs, const char *rhs, size_t n) {
 }
 
 static NODE*
-parse_paren(SCANNER *s) {
+parse_paren(SCANNER *s, int mode) {
   NODE *head, *node, *x;
 
   skip_white(s);
@@ -322,8 +322,22 @@ parse_paren(SCANNER *s) {
   head = node = new_node();
   node->t = NODE_CELL;
   while (!s_eof(s) && s_peek(s) != ')') {
+    char c = s_peek(s), q = 0;
+    if (c == ',') {
+      s_getc(s);
+      c = s_peek(s);
+      q = 1;
+    }
+
     NODE *child = parse_any(s, PARSE_ANY);
     if (child == NULL) return NULL;
+
+    if ((mode & PARSE_BQUOTE) != 0 && !q) {
+      NODE *r = new_node();
+      r->t = NODE_QUOTE;
+      r->car = child;
+      child = r;
+    }
 
     if (child->t == NODE_IDENT && !strcmp(".", child->s)) {
       if (!head->car) {
@@ -465,21 +479,16 @@ parse_string(SCANNER *s) {
 static NODE*
 parse_any(SCANNER *s, int mode) {
   NODE *x = NULL;
-  int c, q = 0;
+  int c;
 
   skip_white(s);
   if (s_eof(s)) return raise(s, "unexpected end of file");
 
   c = s_peek(s);
-  if (c == ',') {
-    s_getc(s);
-    c = s_peek(s);
-    q = 1;
-  }
 
   if (c == '(') {
     s_getc(s);
-    x = parse_paren(s);
+    x = parse_paren(s, mode);
     if (x == NULL) return NULL;
     if (s_eof(s)) {
       return raise(s, "unexpected end of file");
@@ -491,7 +500,7 @@ parse_any(SCANNER *s, int mode) {
   } else if (c == '\'')
     x = parse_quote(s);
   else if (c == '`')
-    x = parse_bquote(s);
+    return parse_bquote(s);
   else if (c == '"')
     x = parse_string(s);
   else if (isalnum((int)c) || strchr(SYMBOL_CHARS, c))
@@ -499,12 +508,6 @@ parse_any(SCANNER *s, int mode) {
   else
     return invalid_token(s);
 
-  if ((mode & PARSE_BQUOTE) != 0 && !q) {
-    NODE *r = new_node();
-    r->t = NODE_QUOTE;
-    r->car = x;
-    return r;
-  }
   return x;
 }
 
@@ -1417,7 +1420,6 @@ do_list(ENV *env, NODE *alist) {
   NODE *c, *v, *nc, *l = NULL, *rr = NULL;
   UNUSED(env);
 
-  dump_node(alist);
   if (alist->t == NODE_BQUOTE) {
     alist = alist->car;
     bq = 1;
@@ -1865,8 +1867,11 @@ call_node(ENV *env, NODE *node, NODE *alist) {
   if (macro) {
     nn = eval_node(newenv, x->cdr->cdr);
     if (nn->t == NODE_BQUOTE) {
-      q = eval_node(newenv, nn);
-      c = eval_node(newenv, q);
+    dump_node(nn);
+      q = eval_node(newenv, nn->car);
+    dump_node(q);
+      c = eval_node(newenv, q->car);
+    dump_node(c);
       free_node(q);
     } else
       c = eval_node(newenv, nn);
@@ -2466,7 +2471,7 @@ load_lisp(ENV *env, const char *fname) {
 
   s_file_init(s, fp);
 
-  top = parse_paren(s);
+  top = parse_paren(s, PARSE_ANY);
   if (top == NULL) {
     NODE *e = new_node();
     e->t = NODE_ERROR;
@@ -2774,11 +2779,13 @@ eval_node(ENV *env, NODE *node) {
     c->r++;
     return c;
   case NODE_BQUOTE:
+    /*
     if (node->car->t != NODE_CELL) {
       c = node->car;
       c->r++;
       return c;
     }
+    */
     return do_list(env, node);
   case NODE_IDENT:
     return do_ident(env, node);
