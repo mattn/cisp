@@ -13,5 +13,6 @@ int s_eof(SCANNER *s);
 int s_peek(SCANNER *s);
 int s_getc(SCANNER *s);
 void skip_white(SCANNER *s);
+void s_file_init(SCANNER *s, FILE* v);
 
 #endif /* _PARSER_H_ */

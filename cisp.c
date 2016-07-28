@@ -136,7 +136,7 @@ new_env(ENV *p) {
   return env;
 }
 
-static int
+int
 node_narg(NODE *node) {
   int i = 0;
   if (node_isnull(node)) return 0;
@@ -420,7 +420,7 @@ look_macro(ENV *env, const char *k) {
   return NULL;
 }
 
-static void
+void
 add_variable(ENV *env, const char *k, NODE *node) {
   ITEM *ni = find_item(env->lv, env->nv, k);
   if (ni) {
@@ -431,7 +431,7 @@ add_variable(ENV *env, const char *k, NODE *node) {
   add_item(&env->lv, &env->nv, k, node);
 }
 
-static void
+void
 add_function(ENV *env, const char *k, NODE *node) {
   ITEM *ni = find_item(env->lf, env->nf, k);
   if (ni) {
@@ -442,7 +442,7 @@ add_function(ENV *env, const char *k, NODE *node) {
   add_item(&env->lf, &env->nf, k, node);
 }
 
-static void
+void
 add_macro(ENV *env, const char *k, NODE *node) {
   ITEM *ni = find_item(env->lm, env->nm, k);
   if (ni) {
@@ -1983,87 +1983,6 @@ do_aref(ENV *env, NODE *alist) {
   alist->r++;
   return c;
 }
-
-static int
-file_peek(SCANNER *s) {
-  int c = fgetc((FILE*)s->v);
-  if (c == -1) return c;
-  ungetc(c, (FILE*)s->v);
-  return c;
-}
-
-static int
-file_getc(SCANNER *s) {
-  return fgetc((FILE*)s->v);
-}
-
-static int
-file_eof(SCANNER *s) {
-  return feof((FILE*)s->v);
-}
-
-static long
-file_pos(SCANNER *s) {
-  return ftell((FILE*)s->v);
-}
-
-static int
-file_reset(SCANNER *s) {
-  return fseek((FILE*)s->v, 0, SEEK_SET);
-}
-
-static void
-s_file_init(SCANNER *s, FILE* v) {
-  s->v = (void*)v;
-  s->o = (void*)v;
-  s->_peek  = file_peek;
-  s->_getc  = file_getc;
-  s->_eof   = file_eof;
-  s->_pos   = file_pos;
-  s->_reset = file_reset;
-  s->err   = NULL;
-}
-
-#if 0
-static int
-string_peek(SCANNER *s) {
-  return *((char*)s->v);
-}
-
-static int
-string_getc(SCANNER *s) {
-  int c = *((char*)s->v);
-  s->v = ((char*)s->v) + 1;
-  return c;
-}
-
-static int
-string_eof(SCANNER *s) {
-  return *((char*)s->v) == 0;
-}
-
-static long
-string_pos(SCANNER *s) {
-  return (long)((uintptr_t)s->v - (uintptr_t)s->o);
-}
-
-static int
-string_reset(SCANNER *s) {
-  return 0;
-}
-
-static void
-s_string_init(SCANNER *s, char* v) {
-  s->v = (void*)v;
-  s->o = (void*)v;
-  s->_peek  = string_peek;
-  s->_getc  = string_getc;
-  s->_eof   = string_eof;
-  s->_pos   = string_pos;
-  s->_reset = string_reset;
-  s->err   = NULL;
-}
-#endif
 
 NODE*
 load_lisp(ENV *env, const char *fname) {

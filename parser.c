@@ -79,6 +79,87 @@ s_reset(SCANNER *s) {
   return r;
 }
 
+static int
+file_peek(SCANNER *s) {
+  int c = fgetc((FILE*)s->v);
+  if (c == -1) return c;
+  ungetc(c, (FILE*)s->v);
+  return c;
+}
+
+static int
+file_getc(SCANNER *s) {
+  return fgetc((FILE*)s->v);
+}
+
+static int
+file_eof(SCANNER *s) {
+  return feof((FILE*)s->v);
+}
+
+static long
+file_pos(SCANNER *s) {
+  return ftell((FILE*)s->v);
+}
+
+static int
+file_reset(SCANNER *s) {
+  return fseek((FILE*)s->v, 0, SEEK_SET);
+}
+
+void
+s_file_init(SCANNER *s, FILE* v) {
+  s->v = (void*)v;
+  s->o = (void*)v;
+  s->_peek  = file_peek;
+  s->_getc  = file_getc;
+  s->_eof   = file_eof;
+  s->_pos   = file_pos;
+  s->_reset = file_reset;
+  s->err   = NULL;
+}
+
+#if 0
+static int
+string_peek(SCANNER *s) {
+  return *((char*)s->v);
+}
+
+static int
+string_getc(SCANNER *s) {
+  int c = *((char*)s->v);
+  s->v = ((char*)s->v) + 1;
+  return c;
+}
+
+static int
+string_eof(SCANNER *s) {
+  return *((char*)s->v) == 0;
+}
+
+static long
+string_pos(SCANNER *s) {
+  return (long)((uintptr_t)s->v - (uintptr_t)s->o);
+}
+
+static int
+string_reset(SCANNER *s) {
+  return 0;
+}
+
+static void
+s_string_init(SCANNER *s, char* v) {
+  s->v = (void*)v;
+  s->o = (void*)v;
+  s->_peek  = string_peek;
+  s->_getc  = string_getc;
+  s->_eof   = string_eof;
+  s->_pos   = string_pos;
+  s->_reset = string_reset;
+  s->err   = NULL;
+}
+#endif
+
 static INLINE int
 match(const char *lhs, const char *rhs, size_t n) {
   const char *p = lhs, *e = lhs + n;
