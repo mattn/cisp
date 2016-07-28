@@ -2080,6 +2080,11 @@ add_sym(ENV *env, const char* n, f_do f) {
   env->nf++;
 }
 
+void
+sort_syms(ENV *env) {
+  qsort(env->lf, env->nf, sizeof(ITEM*), compare_item);
+}
+
 static void
 add_defaults(ENV *env) {
   add_sym(env, "%", do_mod);
@@ -2137,7 +2142,7 @@ add_defaults(ENV *env) {
   add_sym(env, "exit", do_exit);
   add_sym(env, "type-of", do_type_of);
   add_sym(env, "getenv", do_getenv);
-  qsort(env->lf, env->nf, sizeof(ITEM*), compare_item);
+  sort_syms(env);
 
   load_libs(env);
 }

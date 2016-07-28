@@ -105,6 +105,7 @@ walk(ENV *env, char *base) {
   DIR *dir;
   struct dirent *ent;
   struct stat st;
+  int sym_add = 0;
 
   dir = opendir(base);
   if (!dir) return ;
@@ -133,11 +134,12 @@ walk(ENV *env, char *base) {
             typedef int (*f_cisp_init)(ENV*);
             f_cisp_init fcn = (f_cisp_init) dlsym(handle, "cisp_init");
             if (fcn) {
-              if (fcn(env) != 0) {
+              if (fcn(env) == 0) {
+                sym_add++;
+              } else {
                 fprintf(stderr, "failed to load library: %s\n", path);
               }
             }
-            dlclose(handle);
           }
 #else
           fprintf(stderr, "failed to load library: %s\n", path);
@@ -148,6 +150,7 @@ walk(ENV *env, char *base) {
     ent = readdir(dir);
   }
   closedir(dir);
+  if (sym_add) sort_syms(env);
 }
 
 void
