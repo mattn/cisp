@@ -1611,12 +1611,13 @@ do_dotimes(ENV *env, NODE *alist) {
   if (err) return err;
 
   newenv = new_env(env);
-  nn = new_node();
-  nn->t = NODE_INT;
-  add_variable(newenv, x->car->s, nn);
+  add_variable(newenv, x->car->s, NULL);
 
   for (i = 0; i < r; i++) {
+    nn = new_node();
+    nn->t = NODE_INT;
     nn->i = i;
+    add_variable(newenv, x->car->s, nn);
     c = do_progn(newenv, alist->cdr);
     if (c->t == NODE_ERROR) {
       free_env(newenv);
@@ -1626,7 +1627,10 @@ do_dotimes(ENV *env, NODE *alist) {
   }
 
   if (l == 3) {
+    nn = new_node();
+    nn->t = NODE_INT;
     nn->i = r;
+    add_variable(newenv, x->car->s, nn);
     c = eval_node(newenv, x->cdr->cdr->car);
     if (!c) c = new_node();
   } else
