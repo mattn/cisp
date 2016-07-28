@@ -1952,6 +1952,44 @@ do_make_array(ENV *env, NODE *alist) {
 }
 
 static NODE*
+do_nconc(ENV *env, NODE *alist) {
+  NODE *x, *y, *c;
+
+  if (node_narg(alist) != 2) return new_errorn("malformed nconc", alist);
+
+  x = eval_node(env, alist->car);
+  if (x->t == NODE_ERROR) return x;
+  if (x->t != NODE_CELL) {
+    free_node(x);
+    return new_errorn("malformed nconc", alist);
+  }
+
+  y = eval_node(env, alist->cdr->car);
+  if (y->t == NODE_ERROR) {
+    free_node(x);
+    return y;
+  }
+  if (y->t != NODE_CELL) {
+    free_node(x);
+    free_node(y);
+    return new_errorn("malformed nconc", alist);
+  }
+
+  c = x;
+  while (c->cdr)
+    c = c->cdr;
+
+  while (y) {
+    c->cdr = new_node();
+    c->cdr->t = NODE_CELL;
+    c = c->cdr;
+    c->car = y->car;
+    y = y->cdr;
+  }
+  return x;
+}
+
+static NODE*
 do_aref(ENV *env, NODE *alist) {
   NODE *x, *c;
 
@@ -2111,6 +2149,7 @@ add_defaults(ENV *env) {
   add_sym(env, "load", do_load);
   add_sym(env, "make-string", do_make_string);
   add_sym(env, "make-array", do_make_array);
+  add_sym(env, "nconc", do_nconc);
   add_sym(env, "aref", do_aref);
   add_sym(env, "mod", do_mod);
   add_sym(env, "and", do_and);
