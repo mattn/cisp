@@ -1984,6 +1984,7 @@ do_nconc(ENV *env, NODE *alist) {
     c->cdr->t = NODE_CELL;
     c = c->cdr;
     c->car = y->car;
+    c->car->r++;
     y = y->cdr;
   }
   return x;
