@@ -2,3 +2,5 @@
 (defun second (x) (car (cdr x)))
 (defun third (x) (car (cdr (cdr x))))
 (defun fourth (x) (car (cdr (cdr (cdr x)))))
+(defun nth (l x) (dotimes (i x) (setq l (cdr l))) (car l))
+
