@@ -322,14 +322,11 @@ parse_paren(SCANNER *s, int mode) {
   head = node = new_node();
   node->t = NODE_CELL;
   while (!s_eof(s) && s_peek(s) != ')') {
-    char c = s_peek(s), q = 0;
-    if (c == ',') {
-      s_getc(s);
-      c = s_peek(s);
-      q = 1;
-    }
+    NODE *child;
+    char q = s_peek(s) == ',';
+    if (q) s_getc(s);
 
-    NODE *child = parse_any(s, PARSE_ANY);
+    child = parse_any(s, PARSE_ANY);
     if (child == NULL) return NULL;
 
     if ((mode & PARSE_BQUOTE) != 0 && !q) {
@@ -374,7 +371,7 @@ parse_primitive(SCANNER *s) {
   char buf[BUFSIZ];
   size_t n = 0;
   char *e, c;
-  NODE *x;/*, *q;*/
+  NODE *x;
 
   while (n < sizeof(buf) && !s_eof(s)) {
     c = s_peek(s);
@@ -1428,13 +1425,13 @@ do_list(ENV *env, NODE *alist) {
   while (!node_isnull(alist)) {
     int expand = 0;
     v = alist->car;
-    if (bq && v->t == NODE_IDENT && *v->s == ',') {
-      if (*(v->s+1) == '@') {
+    if (bq && v->t == NODE_IDENT) {
+      if (*v->s == '@') {
         expand = 2;
-        c = look_ident(env, v->s+2);
+        c = look_ident(env, v->s+1);
       } else {
         expand = 1;
-        c = look_ident(env, v->s+1);
+        c = look_ident(env, v->s);
       }
     } else {
       c = eval_node(env, v);
@@ -1867,11 +1864,8 @@ call_node(ENV *env, NODE *node, NODE *alist) {
   if (macro) {
     nn = eval_node(newenv, x->cdr->cdr);
     if (nn->t == NODE_BQUOTE) {
-    dump_node(nn);
-      q = eval_node(newenv, nn->car);
-    dump_node(q);
-      c = eval_node(newenv, q->car);
-    dump_node(c);
+      q = eval_node(newenv, nn);
+      c = eval_node(newenv, q);
       free_node(q);
     } else
       c = eval_node(newenv, nn);
@@ -2572,7 +2566,7 @@ opendir(const char *name) {
   size_t len;
   const char *mask;
 
-  if (name && *name) {
+  if (!name || !*name) {
     errno = EINVAL;
     return NULL;
   }
