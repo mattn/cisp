@@ -92,3 +92,5 @@ NODE* load_lisp(ENV *env, const char *fname);
 void fatal(const char *msg);
 
 #endif /* _CISP_H_ */
+
+/* vim:set et sw=2 cino=>2,\:0: */

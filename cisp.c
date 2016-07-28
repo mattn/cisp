@@ -2161,13 +2161,6 @@ eval_node(ENV *env, NODE *node) {
     c->r++;
     return c;
   case NODE_BQUOTE:
-    /*
-    if (node->car->t != NODE_CELL) {
-      c = node->car;
-      c->r++;
-      return c;
-    }
-    */
     return do_list(env, node);
   case NODE_IDENT:
     return do_ident(env, node);

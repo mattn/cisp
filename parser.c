@@ -363,3 +363,5 @@ parse_any(SCANNER *s, int mode) {
 
   return x;
 }
+
+/* vim:set et sw=2 cino=>2,\:0: */

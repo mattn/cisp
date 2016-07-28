@@ -125,6 +125,13 @@ walk(ENV *env, char *base) {
           if (ret->t == NODE_ERROR)
             fprintf(stderr, "cisp: %s\n", ret->s);
           free_node(ret);
+#if 0 /* TODO: load so */
+        } else if (!strcmp(path + len - 3, ".so")) {
+          void *handle = dlopen(path, RTLD_LAZY);
+          if (handle) {
+              void *ptr = dlsym(handle, "cisp_init");
+          }
+#endif
         }
       }
     }
@@ -164,3 +171,5 @@ load_libs(ENV *env) {
 
   walk(env, path);
 }
+
+/* vim:set et sw=2 cino=>2,\:0: */

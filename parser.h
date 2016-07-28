@@ -16,3 +16,5 @@ void skip_white(SCANNER *s);
 void s_file_init(SCANNER *s, FILE* v);
 
 #endif /* _PARSER_H_ */
+
+/* vim:set et sw=2 cino=>2,\:0: */
