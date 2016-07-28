@@ -1,3 +1,6 @@
+/*
+ * gcc -rdynamic -fPIC -I. -shared -o lib/hello.so ./example/hello.c *.c
+ */
 #include <stdio.h>
 #include <cisp.h>
 
