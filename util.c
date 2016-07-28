@@ -7,6 +7,7 @@
 # include <windows.h>
 #endif
 #ifndef _MSC_VER
+# include <dlfcn.h>
 # include <unistd.h>
 # include <dirent.h>
 #else
@@ -113,7 +114,7 @@ walk(ENV *env, char *base) {
     if (*(ent->d_name) != '.') {
       snprintf(path, sizeof(path)-1, "%s/%s", base, ent->d_name);
       if (stat(path, &st)) {
-        fprintf(stderr, "failed to get stat %s\n", path);
+        fprintf(stderr, "failed to get stat: %s\n", path);
         break;
       }
       if ((st.st_mode & S_IFMT) == S_IFDIR)
@@ -125,12 +126,21 @@ walk(ENV *env, char *base) {
           if (ret->t == NODE_ERROR)
             fprintf(stderr, "cisp: %s\n", ret->s);
           free_node(ret);
-#if 0 /* TODO: load so */
         } else if (!strcmp(path + len - 3, ".so")) {
+#ifndef _MSC_VER
           void *handle = dlopen(path, RTLD_LAZY);
           if (handle) {
-              void *ptr = dlsym(handle, "cisp_init");
+            typedef int (*f_cisp_init)(ENV*);
+            f_cisp_init fcn = (f_cisp_init) dlsym(handle, "cisp_init");
+            if (fcn) {
+              if (fcn(env) != 0) {
+                fprintf(stderr, "failed to load library: %s\n", path);
+              }
+            }
+            dlclose(handle);
           }
+#else
+          fprintf(stderr, "failed to load library: %s\n", path);
 #endif
         }
       }

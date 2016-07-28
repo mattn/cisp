@@ -7,7 +7,7 @@ OBJS = $(subst .c,.o,$(SRCS))
 
 CC=gcc
 CFLAGS = -g -O2 -funroll-loops -Wall -Wextra -Wwrite-strings -Wformat=2 -Werror
-LIBS = -g -O2 -funroll-loops
+LIBS = -g -O2 -funroll-loops -ldl
 TARGET = cisp
 ifeq ($(OS),Windows_NT)
 TARGET := $(TARGET).exe
