@@ -1421,7 +1421,7 @@ call_node(ENV *env, NODE *node, NODE *alist) {
 
   if (!newenv) newenv = new_env(env);
 
-  while (alist) {
+  while (alist && c) {
     if (c && (c->t == NODE_IDENT || (c->car && !strcmp("&rest", c->car->s)))) {
       NODE *l = NULL, *rr = NULL, *nc;
       while (alist) {
@@ -1701,6 +1701,7 @@ do_cond(ENV *env, NODE *alist) {
     if (!n->car || n->car->t != NODE_CELL)
       return new_errorn("malformed cond", alist);
     c = eval_node(env, n->car->car);
+    if (c->t == NODE_ERROR) return c;
     if (!node_isnull(c)) {
       if (node_narg(n->car->cdr) == 0)
         return c;
