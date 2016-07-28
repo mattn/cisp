@@ -85,6 +85,7 @@ void free_env(ENV *env);
 void add_variable(ENV *env, const char *k, NODE *node);
 void add_function(ENV *env, const char *k, NODE *node);
 void add_macro(ENV *env, const char *k, NODE *node);
+void add_sym(ENV *env, enum NODE_TYPE t, const char* n, f_do f);
 
 int node_narg(NODE *node);
 NODE* eval_node(ENV *env, NODE *node);

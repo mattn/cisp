@@ -2063,7 +2063,7 @@ do_apply(ENV *env, NODE *alist) {
   return nn;
 }
 
-static void
+void
 add_sym(ENV *env, enum NODE_TYPE t, const char* n, f_do f) {
   ITEM *ni;
   NODE *node;
