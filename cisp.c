@@ -1139,73 +1139,46 @@ do_let_s(ENV *env, NODE *alist) {
 }
 
 static NODE*
-do_flet(ENV *env, NODE *alist) {
+do_flet_labels(ENV *env, NODE *alist, int mode) {
   ENV *newenv;
-  NODE *x, *c, *e;
+  NODE *x, *c, *n, *e;
 
-  if (node_narg(alist) < 1) return new_errorn("malformed flet", alist);
+  if (node_narg(alist) < 1) return new_errorn(mode ? "malformed labels" : "malformed flet", alist);
 
   x = alist->car;
   newenv = new_env(env);
 
-  while (x) {
-    if (node_narg(x->car->cdr) != 2) return new_errorn("malformed flet", alist);
-    if (x->car->t != NODE_CELL || x->car->cdr->car->t != NODE_CELL) {
+  while (!node_isnull(x)) {
+    n = x->car;
+    if (node_narg(n) < 2) return new_errorn(mode ? "malformed labels" : "malformed flet", alist);
+    if (!n->car || n->car->t != NODE_IDENT || (!node_isnull(n->cdr->car) && n->cdr->car->t != NODE_CELL)) {
       free_env(newenv);
-      return new_errorn("malformed flet", alist);
+      return new_errorn(mode ? "malformed labels" : "malformed flet", alist);
     }
     e = new_node();
     e->t = NODE_ENV;
-    e->p = env;
+    e->p = mode ? newenv : env;
     env->r++;
-    x->car->car->cdr = e;
+    n->car->cdr = e;
 
-    add_function(newenv, x->car->car->s, x->car);
-    x->car->r++;
+    add_function(newenv, n->car->s, n);
+    n->r++;
     x = x->cdr;
   }
-  alist = alist->cdr;
-  c = NULL;
-  while (!node_isnull(alist)) {
-    if (c) free_node(c);
-    c = eval_node(newenv, alist->car);
-    alist = alist->cdr;
-  }
+  c = do_progn(newenv, alist->cdr);
   free_env(newenv);
   if (c) return c;
   return new_node();
 }
 
 static NODE*
+do_flet(ENV *env, NODE *alist) {
+  return do_flet_labels(env, alist, 0);
+}
+
+static NODE*
 do_labels(ENV *env, NODE *alist) {
-  ENV *newenv;
-  NODE *x, *c;
-
-  if (node_narg(alist) < 1) return new_errorn("malformed labels", alist);
-
-  x = alist->car;
-  newenv = new_env(env);
-
-  while (x) {
-    if (node_narg(x->car->cdr) != 2) return new_errorn("malformed labels", alist);
-    if (x->car->t != NODE_CELL || x->car->cdr->car->t != NODE_CELL) {
-      free_env(newenv);
-      return new_errorn("malformed labels", alist);
-    }
-    add_function(newenv, x->car->car->s, x->car);
-    x->car->r++;
-    x = x->cdr;
-  }
-  alist = alist->cdr;
-  c = NULL;
-  while (!node_isnull(alist)) {
-    if (c) free_node(c);
-    c = eval_node(newenv, alist->car);
-    alist = alist->cdr;
-  }
-  free_env(newenv);
-  if (c) return c;
-  return new_node();
+  return do_flet_labels(env, alist, 1);
 }
 
 static NODE*
