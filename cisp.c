@@ -34,7 +34,7 @@
 
 #define UNUSED(x) (void)(x)
 
-#define SYMBOL_CHARS "+-*/<>=&%?.@_#$:*,"
+#define SYMBOL_CHARS "+-*/<>=&%?.@_#$:*"
 
 enum NODE_TYPE {
   NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_BQUOTE, NODE_IDENT,
