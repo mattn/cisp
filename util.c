@@ -21,6 +21,83 @@
 #include "cisp.h"
 #include "util.h"
 
+#ifdef _MSC_VER
+struct dirent {
+  char *d_name;
+};
+
+typedef struct _DIR {
+  intptr_t h;
+  struct _finddata_t fi;
+  struct dirent ent;
+  char *name;
+} DIR;
+
+static DIR*
+opendir(const char *name) {
+  DIR *dir = NULL;
+  size_t len;
+  const char *mask;
+
+  if (!name || !*name) {
+    errno = EINVAL;
+    return NULL;
+  }
+  len = strlen(name);
+  mask = strchr("/\\", name[len - 1]) ? "*" : "/*";
+  dir = (DIR *) malloc(sizeof *dir);
+  if (!dir) {
+    errno = ENOMEM;
+    return NULL;
+  }
+  dir->name = (char*) malloc(len + strlen(mask) + 1);
+  if (!dir) {
+    errno = ENOMEM;
+    free(dir);
+    return NULL;
+  }
+  strcpy(dir->name, name);
+  strcat(dir->name, mask);
+  if ((dir->h = _findfirst(dir->name, &dir->fi)) != -1) {
+    dir->ent.d_name = NULL;
+  } else {
+    free(dir->name);
+    free(dir);
+    dir = NULL;
+  }
+  return dir;
+}
+
+static int
+closedir(DIR *dir) {
+  int r = -1;
+  if (!dir) {
+    errno = EBADF;
+    return -1;
+  }
+  if (dir->h != -1)
+    r = _findclose(dir->h);
+  free(dir->name);
+  free(dir);
+  if (r == -1) errno = EBADF;
+  return r;
+}
+
+struct dirent*
+readdir(DIR *dir) {
+  struct dirent *ent = NULL;
+  if (!dir || dir->h == -1) {
+    errno = EBADF;
+    return NULL;
+  }
+  if (!dir->ent.d_name || _findnext(dir->h, &dir->fi) != -1) {
+    ent = &dir->ent;
+    ent->d_name = dir->fi.name;
+  }
+  return ent;
+}
+#endif
+
 static void
 walk(ENV *env, char *base) {
   char path[PATH_MAX];
