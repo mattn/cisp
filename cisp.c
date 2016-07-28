@@ -748,14 +748,16 @@ do_not(ENV *env, NODE *alist) {
 
 static NODE*
 do_null(ENV *env, NODE *alist) {
-  NODE *c;
+  NODE *x, *c;
   UNUSED(env);
 
   if (node_narg(alist) != 1) return new_errorn("malformed null", alist);
 
+  x = eval_node(env, alist->car);
   c = new_node();
-  if (node_isnull(alist->car))
+  if (node_isnull(x))
     c->t = NODE_T;
+  free_node(x);
   return c;
 }
 
