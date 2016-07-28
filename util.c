@@ -1,11 +1,13 @@
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <stdio.h>
 #include <stdarg.h>
+#include <string.h>
 #include <sys/stat.h>
 #ifdef _WIN32
 # include <windows.h>
 #endif
 #ifndef _MSC_VER
+# include <unistd.h>
 # include <dirent.h>
 #else
 # include <direct.h>
