@@ -27,3 +27,9 @@
 (funcall y 200)
 (funcall z 2000)
 (print a)
+
+(print (setq))
+
+(print (setq x1 (+ 10 20) x2 (* 30 40)))
+(print x1)
+(print x2)
