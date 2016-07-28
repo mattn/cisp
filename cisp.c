@@ -6,180 +6,26 @@
 #include <errno.h>
 #include <memory.h>
 #include <ctype.h>
-#include <sys/stat.h>
-#ifdef _WIN32
-# include <windows.h>
-#endif
 #ifndef _MSC_VER
-# include <dirent.h>
 # include <inttypes.h>
 # include <unistd.h>
 # define _printf_(a,b) __attribute__ ((format (printf, a, b)))
 #else
-# include <direct.h>
 # include <io.h>
 # define strdup(x) _strdup(x)
 # define isatty(f) _isatty(f)
 # define fileno(f) _fileno(f)
 # define snprintf(b,n,f,...) _snprintf(b,n,f,__VA_ARGS__)
 # define _printf_(a,b)
-# define PATH_MAX MAX_PATH
 #endif
 
-#ifdef _MSC_VER
-# define INLINE
-#else
-# define INLINE inline
-#endif
+#include "cisp.h"
+#include "parser.h"
+#include "util.h"
 
-#define UNUSED(x) (void)(x)
-
-#define SYMBOL_CHARS "+-*/<>=&%?.@_#$:*"
-
-enum NODE_TYPE {
-  NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_BQUOTE, NODE_IDENT,
-  NODE_LAMBDA, NODE_CELL, NODE_AREF, NODE_ENV, NODE_ERROR
-};
-
-#define PARSE_ANY 0
-#define PARSE_BQUOTE 1
-
-typedef struct _ENV ENV;
-typedef struct _NODE NODE;
-
-typedef NODE* (*f_do)(ENV*, NODE*);
-
-struct _NODE {
-  enum NODE_TYPE t;
-  union {
-    long i;
-    double d;
-    char* s;
-    void* p;
-    struct {
-      NODE *car;
-      NODE *cdr;
-    };
-  };
-  f_do f;
-  int r;
-};
-
-typedef struct {
-  const char *k;
-  NODE *v;
-} ITEM;
-
-struct _ENV {
-  int nv;
-  ITEM **lv;
-  int nf;
-  ITEM **lf;
-  int nm;
-  ITEM **lm;
-  ENV *p;
-  int r;
-};
-
-typedef struct _SCANNER SCANNER;
-
-typedef int (*f_getc)(SCANNER*);
-typedef int (*f_peek)(SCANNER*);
-typedef int (*f_eof)(SCANNER*);
-typedef long (*f_pos)(SCANNER*);
-typedef int (*f_reset)(SCANNER*);
-
-struct _SCANNER {
-  void *v, *o;
-  f_peek  _peek;
-  f_getc  _getc;
-  f_eof   _eof;
-  f_pos   _pos;
-  f_reset _reset;
-  char *err;
-};
-
-typedef struct _BUFFER {
-  char *ptr;
-  size_t pos;
-  size_t len;
-} BUFFER;
-
-static NODE* parse_any(SCANNER *s, int mode);
-static NODE* eval_node(ENV *env, NODE *node);
 static void print_node(BUFFER *buf, NODE *node, int mode);
-
-static NODE* new_node();
-static void free_node(NODE *node);
-static void free_env(ENV *env);
 static NODE* do_ident_global(ENV *env, NODE *node);
 static NODE* do_progn(ENV *env, NODE *alist);
-
-static int
-s_peek(SCANNER *s) {
-  return s->_peek(s);
-}
-
-static int
-s_getc(SCANNER *s) {
-  return s->_getc(s);
-}
-
-static int
-s_eof(SCANNER *s) {
-  return s->_eof(s);
-}
-
-static long
-s_pos(SCANNER *s) {
-  return s->_pos(s);
-}
-
-static int
-s_reset(SCANNER *s) {
-  int r = s->_reset(s);
-  if (s->err) free(s->err);
-  s->err = NULL;
-  return r;
-}
-
-static NODE*
-raise(SCANNER *s, const char *p) {
-  s->err = strdup(p);
-  return NULL;
-}
-
-static void
-fatal(const char *msg) {
-  fputs(msg, stderr);
-  exit(1);
-}
-
-static NODE*
-invalid_token(SCANNER *s) {
-  char buf[BUFSIZ], c;
-  size_t i, l, o;
-  long pos = s_pos(s);
-  snprintf(buf, sizeof(buf), "invalid token at offset %ld", pos == -1 ? 0 : pos);
-  l = strlen(buf);
-  if (s_reset(s) != -1)  {
-    buf[l++] = '\n';
-    o = l;
-    for (i = 0; l < sizeof(buf)-1; i++) {
-      c = s_getc(s);
-      if (s_eof(s)) break;
-      if (c == '\n') {
-        if (i >= (size_t)pos) break;
-        l = o;
-        continue;
-      }
-      buf[l++] = c;
-    }
-    buf[l] = 0;
-  }
-  s->err = strdup(buf);
-  return NULL;
-}
 
 static void
 buf_init(BUFFER *b) {
@@ -227,7 +73,7 @@ global_env(ENV *env) {
   return global;
 }
 
-static void
+void
 skip_white(SCANNER *s) {
   int c;
   while (!s_eof(s)) {
@@ -241,7 +87,7 @@ skip_white(SCANNER *s) {
   }
 }
 
-static NODE*
+NODE*
 new_node() {
   NODE* node = (NODE*)malloc(sizeof(NODE));
   memset(node, 0, sizeof(NODE));
@@ -281,7 +127,7 @@ new_errorn(const char* msg, NODE *n) {
   return node;
 }
 
-static ENV*
+ENV*
 new_env(ENV *p) {
   ENV* env = (ENV*)malloc(sizeof(ENV));
   memset(env, 0, sizeof(ENV));
@@ -289,8 +135,6 @@ new_env(ENV *p) {
   env->r++;
   return env;
 }
-
-#define node_isnull(x) (!x || x->t == NODE_NIL)
 
 static int
 node_narg(NODE *node) {
@@ -302,210 +146,6 @@ node_narg(NODE *node) {
     i++;
   }
   return i;
-}
-
-static INLINE int
-match(const char *lhs, const char *rhs, size_t n) {
-  const char *p = lhs, *e = lhs + n;
-  while (p < e) if (!*rhs || *p++ != *rhs++) return 0;
-  if (*rhs) return 0;
-  return 1;
-}
-
-static NODE*
-parse_paren(SCANNER *s, int mode) {
-  NODE *head, *node, *x;
-
-  skip_white(s);
-  if (s_eof(s)) return raise(s, "unexpected end of file");
-
-  head = node = new_node();
-  node->t = NODE_CELL;
-  while (!s_eof(s) && s_peek(s) != ')') {
-    NODE *child;
-    char q = s_peek(s) == ',';
-    if (q) s_getc(s);
-
-    child = parse_any(s, PARSE_ANY);
-    if (child == NULL) return NULL;
-
-    if ((mode & PARSE_BQUOTE) != 0 && !q) {
-      NODE *r = new_node();
-      r->t = NODE_QUOTE;
-      r->car = child;
-      child = r;
-    }
-
-    if (child->t == NODE_IDENT && !strcmp(".", child->s)) {
-      if (!head->car) {
-        free_node(child);
-        return raise(s, "illegal dot operation");
-      }
-      free_node(child);
-
-      child = parse_any(s, PARSE_ANY);
-      if (child == NULL) return NULL;
-      node->cdr = child;
-      break;
-    } else {
-      if (head->car) {
-        x = new_node();
-        x->t = NODE_CELL;
-        node->cdr = x;
-        node = x;
-      }
-      node->car = child;
-    }
-
-    skip_white(s);
-  }
-
-  if (!head->car && !head->cdr)
-    head->t = NODE_NIL;
-
-  return head;
-}
-
-static NODE*
-parse_primitive(SCANNER *s) {
-  char buf[BUFSIZ];
-  size_t n = 0;
-  char *e, c;
-  NODE *x;
-
-  while (n < sizeof(buf) && !s_eof(s)) {
-    c = s_peek(s);
-    if (c == -1) return NULL;
-    if (isalnum(c) || strchr(SYMBOL_CHARS, c)) buf[n++] = s_getc(s);
-    else break;
-  }
-  buf[n] = 0;
-
-  x = new_node();
-  if (match(buf, "nil", n)) {
-    return x;
-  }
-  if (match(buf, "t", n)) {
-    x->t = NODE_T;
-    return x;
-  }
-  x->i = strtol(buf, &e, 10);
-  if (e == buf+n) {
-    x->t = NODE_INT;
-    return x;
-  }
-  x->d = strtod(buf, &e);
-  if (e == buf+n) {
-    x->t = NODE_DOUBLE;
-    return x;
-  }
-  x->t = NODE_IDENT;
-  x->s = (char*)malloc(n + 1);
-  memset(x->s, 0, n + 1);
-  memcpy(x->s, buf, n);
-  return x;
-}
-
-static NODE*
-parse_quote(SCANNER *s) {
-  NODE *node, *child;
-
-  s_getc(s);
-  child = parse_any(s, PARSE_ANY);
-  if (child == NULL) return NULL;
-  node = new_node();
-  node->t = NODE_QUOTE;
-  node->car = child;
-  return node;
-}
-
-static NODE*
-parse_bquote(SCANNER *s) {
-  NODE *node, *child;
-
-  s_getc(s);
-  child = parse_any(s, PARSE_BQUOTE);
-  if (child == NULL) return NULL;
-  node = new_node();
-  node->t = NODE_BQUOTE;
-  node->car = child;
-  return node;
-}
-
-static NODE*
-parse_string(SCANNER *s) {
-  char *buf = NULL;
-  int n = 0, l = 0;
-  int c = 0;
-  NODE *node;
-
-  buf = (char*)malloc(10);
-  s_getc(s);
-  while (!s_eof(s)) {
-    c = s_getc(s);
-    if (c == '\\' && !s_eof(s)) {
-      c = s_peek(s);
-      switch (c) {
-      case '\\': c = '\\'; break;
-      case 'b': c = '\b'; break;
-      case 'f': c = '\f'; break;
-      case 'n': c = '\n'; break;
-      case 'r': c = '\r'; break;
-      case 't': c = '\t'; break;
-      default: free(buf); return invalid_token(s);
-      }
-    } else if (c == '"') break;
-    if (n == l) {
-      buf = (char*)realloc(buf, l+20);
-      l += 20;
-    }
-    buf[n++] = c;
-  }
-  buf[n] = 0;
-  if (c != '"') {
-    free(buf);
-    return invalid_token(s);
-  }
-
-  node = new_node();
-  node->t = NODE_STRING;
-  node->s = (char*)realloc(buf, n+1);
-  return node;
-}
-
-static NODE*
-parse_any(SCANNER *s, int mode) {
-  NODE *x = NULL;
-  int c;
-
-  skip_white(s);
-  if (s_eof(s)) return raise(s, "unexpected end of file");
-
-  c = s_peek(s);
-
-  if (c == '(') {
-    s_getc(s);
-    x = parse_paren(s, mode);
-    if (x == NULL) return NULL;
-    if (s_eof(s)) {
-      return raise(s, "unexpected end of file");
-    }
-    skip_white(s);
-    if (s_getc(s) != ')') {
-      return invalid_token(s);
-    }
-  } else if (c == '\'')
-    x = parse_quote(s);
-  else if (c == '`')
-    return parse_bquote(s);
-  else if (c == '"')
-    x = parse_string(s);
-  else if (isalnum((int)c) || strchr(SYMBOL_CHARS, c))
-    x = parse_primitive(s);
-  else
-    return invalid_token(s);
-
-  return x;
 }
 
 static void
@@ -637,7 +277,7 @@ print_node(BUFFER *buf, NODE *node, int mode) {
   }
 }
 
-static INLINE void
+void
 free_node(NODE *node) {
   if (!node) return;
   node->r--;
@@ -666,7 +306,7 @@ free_node(NODE *node) {
   free((void*)node);
 }
 
-static void
+void
 free_env(ENV *env) {
   int i;
   env->r--;
@@ -2452,7 +2092,7 @@ s_string_init(SCANNER *s, char* v) {
 }
 #endif
 
-static NODE*
+NODE*
 load_lisp(ENV *env, const char *fname) {
   NODE *ret, *top;
   SCANNER sv, *s = &sv;
@@ -2626,73 +2266,6 @@ readdir(DIR *dir) {
 #endif
 
 static void
-walk(ENV *env, char *base) {
-  char path[PATH_MAX];
-  DIR *dir;
-  struct dirent *ent;
-  struct stat st;
-
-  dir = opendir(base);
-  if (!dir) return ;
-
-  ent = readdir(dir);
-  while (ent) {
-    if (*(ent->d_name) != '.') {
-      snprintf(path, sizeof(path)-1, "%s/%s", base, ent->d_name);
-      if (stat(path, &st)) {
-        fprintf(stderr, "failed to get stat %s\n", path);
-        break;
-      }
-      if ((st.st_mode & S_IFMT) == S_IFDIR)
-        walk(env, path);
-      else {
-        size_t len = strlen(path);
-        if (!strcmp(path + len - 5, ".lisp")) {
-          NODE *ret = load_lisp(env, path);
-          if (ret->t == NODE_ERROR)
-            fprintf(stderr, "cisp: %s\n", ret->s);
-          free_node(ret);
-        }
-      }
-    }
-    ent = readdir(dir);
-  }
-  closedir(dir);
-}
-
-static void
-load_libs(ENV *env) {
-  char path[PATH_MAX], *top = path, *ptr;
-
-#if defined(__APPLE__)
-  uint32_t size = sizeof(path);
-  if (_NSGetExecutablePath(path, &size) == 0)
-    fatal("cound't get module information");
-#elif defined(__linux__)
-  ssize_t len = readlink("/proc/self/exe", path, sizeof(path)-1);
-  if (len == -1)
-    fatal("cound't get module information");
-  path[len] = '\0';
-#elif defined(_WIN32)
-  if (GetModuleFileName(NULL, path, sizeof(path)) == 0)
-    fatal("cound't get module information");
-  ptr = path;
-  while (*ptr) { if (*ptr == '\\') *ptr = '/'; ptr++; }
-#else
-  fatal("cound't get module information");
-#endif
-  ptr = top + strlen(top) - 1;
-  while (*ptr != '/') ptr--;
-  *ptr = 0;
-  ptr = top + strlen(top) - 4;
-  if (strcmp("/bin", ptr))
-    ptr += 4;
-  strcpy(ptr, "/lib");
-
-  walk(env, path);
-}
-
-static void
 add_defaults(ENV *env) {
   add_sym(env, NODE_IDENT, "%", do_mod);
   add_sym(env, NODE_IDENT, "*", do_mul);
@@ -2754,7 +2327,7 @@ add_defaults(ENV *env) {
   load_libs(env);
 }
 
-static INLINE NODE*
+NODE*
 eval_node(ENV *env, NODE *node) {
   NODE *c = NULL;
   switch (node->t) {
@@ -2871,7 +2444,5 @@ main(int argc, char* argv[]) {
   free_env(env);
   return 0;
 }
-
-#undef node_isnull
 
 /* vim:set et sw=2 cino=>2,\:0: */

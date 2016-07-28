@@ -1,5 +1,7 @@
 SRCS = \
-	cisp.c
+	cisp.c \
+	parser.c \
+	util.c
 
 OBJS = $(subst .c,.o,$(SRCS))
 
