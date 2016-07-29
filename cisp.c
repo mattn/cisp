@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <memory.h>
 #include <ctype.h>
+#include <float.h>
 #ifndef _MSC_VER
 # include <inttypes.h>
 # include <unistd.h>
@@ -186,20 +187,9 @@ print_str(BUFFER *buf, NODE *node, int mode) {
   buf_append(buf, "\"");
 }
 
-static void
-print_float(BUFFER *buf, NODE *node) {
-  char tmp[32];
-  snprintf(tmp, sizeof(tmp)-1, "%lf", node->d);
-  if (node->d == (double)(int)(node->d)) {
-    char *p = tmp + strlen(tmp) - 1;
-    while (p > tmp && *(p - 1) == '0') *p-- = 0;
-  }
-  buf_append(buf, tmp);
-}
-
 void
 print_node(BUFFER *buf, NODE *node, PRINT_MODE mode) {
-  char tmp[BUFSIZ];
+  char tmp[DBL_MAX_10_EXP];
   if (!node) {
     buf_append(buf, "nil");
     return;
@@ -210,14 +200,14 @@ print_node(BUFFER *buf, NODE *node, PRINT_MODE mode) {
     buf_append(buf, tmp);
     break;
   case NODE_DOUBLE:
-    print_float(buf, node);
+    snprintf(tmp, sizeof(tmp)-1, "%lf", node->d);
+    buf_append(buf, tmp);
     break;
   case NODE_STRING:
     print_str(buf, node, mode);
     break;
   case NODE_IDENT:
-    snprintf(tmp, sizeof(tmp)-1, "%s", node->s);
-    buf_append(buf, tmp);
+    buf_append(buf, node->s);
     break;
   case NODE_NIL:
     buf_append(buf, "nil");
