@@ -131,7 +131,9 @@ walk(ENV *env, char *base) {
           free_node(ret);
         } else if (!strcmp(path + len - 3, ".so")) {
 #ifndef _MSC_VER
-          void *handle = dlopen(path, RTLD_LAZY|RTLD_GLOBAL);
+          void *handle;
+          dlerror();
+          handle = dlopen(path, RTLD_GLOBAL|RTLD_NOW);
           if (handle) {
             typedef int (*f_cisp_init)(ENV*);
             f_cisp_init fcn = (f_cisp_init) dlsym(handle, "cisp_init");
@@ -142,6 +144,8 @@ walk(ENV *env, char *base) {
                 fprintf(stderr, "failed to load library: %s\n", path);
               }
             }
+          } else {
+            fprintf(stderr, "failed to load library: %s\n", dlerror());
           }
 #else
           fprintf(stderr, "failed to load library: %s\n", path);

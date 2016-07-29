@@ -9,7 +9,7 @@ OBJS = $(subst .c,.o,$(SRCS))
 
 CC=gcc
 CFLAGS = -g -O2 -funroll-loops -Wall -Wextra -Wwrite-strings -Wformat=2 -Werror
-LIBS = -g -O2 -funroll-loops -ldl
+LIBS = -g -O2 -funroll-loops -ldl -Wl,--export-dynamic
 BIN = $(TARGET)
 ifeq ($(OS),Windows_NT)
 BIN := $(BIN).exe
