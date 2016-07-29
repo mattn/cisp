@@ -29,32 +29,6 @@ static NODE* do_ident_global(ENV *env, NODE *node);
 static NODE* do_progn(ENV *env, NODE *alist);
 
 static void
-buf_init(BUFFER *b) {
-  b->ptr = NULL;
-  b->len = 0;
-  b->pos = 0;
-}
-
-static void
-buf_append(BUFFER *b, const char *s) {
-  size_t len = strlen(s);
-  if (b->pos + len + 1 > b->len) {
-    b->ptr = (char*)realloc(b->ptr, b->len + len + 100);
-    *(b->ptr + b->pos) = 0;
-    b->len += len + 100;
-  }
-  while (*s) {
-    *(b->ptr + b->pos++) = *s++;
-  }
-  *(b->ptr + b->pos) = 0;
-}
-
-static void
-buf_free(BUFFER *b) {
-  free(b->ptr);
-}
-
-static void
 dump_node(NODE *node) {
   BUFFER buf;
   buf_init(&buf);

@@ -1,5 +1,6 @@
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -189,6 +190,32 @@ load_libs(ENV *env) {
   strcpy(ptr, "/lib");
 
   walk(env, path);
+}
+
+void
+buf_init(BUFFER *b) {
+  b->ptr = NULL;
+  b->len = 0;
+  b->pos = 0;
+}
+
+void
+buf_append(BUFFER *b, const char *s) {
+  size_t len = strlen(s);
+  if (b->pos + len + 1 > b->len) {
+    b->ptr = (char*)realloc(b->ptr, b->len + len + 100);
+    *(b->ptr + b->pos) = 0;
+    b->len += len + 100;
+  }
+  while (*s) {
+    *(b->ptr + b->pos++) = *s++;
+  }
+  *(b->ptr + b->pos) = 0;
+}
+
+void
+buf_free(BUFFER *b) {
+  free(b->ptr);
 }
 
 /* vim:set et sw=2 cino=>2,\:0: */
