@@ -19,6 +19,8 @@
 # define _printf_(a,b)
 #endif
 
+#define CISP_MAIN
+
 #include "cisp.h"
 #include "parser.h"
 #include "util.h"

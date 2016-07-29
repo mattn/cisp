@@ -7,6 +7,16 @@
 # define INLINE inline
 #endif
 
+#ifdef _WIN32
+# ifdef CISP_MAIN
+#  define EXPORT __declspec(dllexport)
+# else
+#  define EXPORT __declspec(dllimport)
+# endif
+#else
+# define EXPORT
+#endif
+
 #define UNUSED(x) (void)(x)
 
 #define node_isnull(x) (!x || x->t == NODE_NIL)
@@ -77,21 +87,21 @@ typedef struct _BUFFER {
   size_t len;
 } BUFFER;
 
-NODE* new_node();
-void free_node(NODE *node);
-ENV* new_env(ENV *p);
-void free_env(ENV *env);
+EXPORT NODE* new_node();
+EXPORT void free_node(NODE *node);
+EXPORT ENV* new_env(ENV *p);
+EXPORT void free_env(ENV *env);
 
-void add_variable(ENV *env, const char *k, NODE *node);
-void add_function(ENV *env, const char *k, NODE *node);
-void add_macro(ENV *env, const char *k, NODE *node);
-void add_sym(ENV *env, const char* n, f_do f);
-void sort_syms(ENV *env);
+EXPORT void add_variable(ENV *env, const char *k, NODE *node);
+EXPORT void add_function(ENV *env, const char *k, NODE *node);
+EXPORT void add_macro(ENV *env, const char *k, NODE *node);
+EXPORT void add_sym(ENV *env, const char* n, f_do f);
+EXPORT void sort_syms(ENV *env);
 
-int node_narg(NODE *node);
-NODE* eval_node(ENV *env, NODE *node);
-NODE* load_lisp(ENV *env, const char *fname);
-void fatal(const char *msg);
+EXPORT int node_narg(NODE *node);
+EXPORT NODE* eval_node(ENV *env, NODE *node);
+EXPORT NODE* load_lisp(ENV *env, const char *fname);
+EXPORT void fatal(const char *msg);
 
 #endif /* _CISP_H_ */
 

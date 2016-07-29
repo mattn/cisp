@@ -19,6 +19,8 @@
 # define PATH_MAX MAX_PATH
 #endif
 
+#define CISP_MAIN
+
 #include "cisp.h"
 #include "util.h"
 

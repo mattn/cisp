@@ -8,6 +8,8 @@
 # define snprintf(b,n,f,...) _snprintf(b,n,f,__VA_ARGS__)
 #endif
 
+#define CISP_MAIN
+
 #include "cisp.h"
 #include "parser.h"
 
