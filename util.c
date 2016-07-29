@@ -12,6 +12,7 @@
 # include <unistd.h>
 # include <dirent.h>
 #else
+# include <io.h>
 # include <direct.h>
 # define strdup(x) _strdup(x)
 # define isatty(f) _isatty(f)
