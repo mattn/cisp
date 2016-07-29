@@ -1,5 +1,8 @@
 /*
- * gcc -fPIC -I. -shared -o lib/hello.so ./example/hello.c libcisp.a
+ * Windows:
+ *   gcc -fPIC -I. -shared -o lib/hello.so ./example/hello.c libcisp.a
+ * Linux:
+ *   gcc -fPIC -I. -shared -o lib/hello.so ./example/hello.c
  */
 #include <stdio.h>
 #include <cisp.h>
