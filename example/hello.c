@@ -5,7 +5,8 @@
  *   gcc -fPIC -I. -shared -o lib/hello.so ./example/hello.c
  */
 #include <stdio.h>
-#include <cisp.h>
+#include "cisp.h"
+#include "util.h"
 
 static NODE*
 do_hello(ENV *env, NODE *alist) {
