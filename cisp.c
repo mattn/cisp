@@ -25,7 +25,6 @@
 #include "parser.h"
 #include "util.h"
 
-static void print_node(BUFFER *buf, NODE *node, int mode);
 static NODE* do_ident_global(ENV *env, NODE *node);
 static NODE* do_progn(ENV *env, NODE *alist);
 
@@ -224,8 +223,8 @@ print_float(BUFFER *buf, NODE *node) {
   buf_append(buf, tmp);
 }
 
-static void
-print_node(BUFFER *buf, NODE *node, int mode) {
+void
+print_node(BUFFER *buf, NODE *node, PRINT_MODE mode) {
   char tmp[BUFSIZ];
   if (!node) {
     buf_append(buf, "nil");

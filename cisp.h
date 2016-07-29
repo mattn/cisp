@@ -21,10 +21,14 @@
 
 #define node_isnull(x) (!x || x->t == NODE_NIL)
 
-enum NODE_TYPE {
+typedef enum _NODE_TYPE {
   NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_BQUOTE, NODE_IDENT,
-  NODE_LAMBDA, NODE_CELL, NODE_AREF, NODE_ENV, NODE_ERROR
-};
+  NODE_LAMBDA, NODE_CELL, NODE_AREF, NODE_ENV, NODE_ERROR,
+} NODE_TYPE;
+
+typedef enum _PRINT_MODE {
+  PRINT_DEFAULT, PRINT_QUOTED,
+} PRINT_MODE;
 
 typedef struct _ENV ENV;
 typedef struct _NODE NODE;
@@ -32,7 +36,7 @@ typedef struct _NODE NODE;
 typedef NODE* (*f_do)(ENV*, NODE*);
 
 struct _NODE {
-  enum NODE_TYPE t;
+  NODE_TYPE t;
   union {
     long i;
     double d;
@@ -91,6 +95,8 @@ EXPORT NODE* new_node();
 EXPORT void free_node(NODE *node);
 EXPORT ENV* new_env(ENV *p);
 EXPORT void free_env(ENV *env);
+
+EXPORT void print_node(BUFFER *buf, NODE *node, PRINT_MODE mode);
 
 EXPORT void add_variable(ENV *env, const char *k, NODE *node);
 EXPORT void add_function(ENV *env, const char *k, NODE *node);

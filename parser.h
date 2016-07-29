@@ -1,8 +1,9 @@
 #ifndef _PARSER_H_
 #define _PARSER_H_
 
-#define PARSE_ANY 0
-#define PARSE_BQUOTE 1
+enum PARSE_MODE {
+  PARSE_ANY, PARSE_BQUOTE,
+};
 
 EXPORT NODE* parse_paren(SCANNER *s, int mode);
 EXPORT NODE* parse_any(SCANNER *s, int mode);
