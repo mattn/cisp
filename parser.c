@@ -32,7 +32,7 @@ invalid_token(SCANNER *s) {
   char buf[BUFSIZ], c;
   size_t i, l, o;
   long pos = s_pos(s);
-  snprintf(buf, sizeof(buf), "invalid token at offset %ld", pos == -1 ? 0 : pos);
+  snprintf(buf, sizeof(buf)-1, "invalid token at offset %ld", pos == -1 ? 0 : pos);
   l = strlen(buf);
   if (s_reset(s) != -1)  {
     buf[l++] = '\n';

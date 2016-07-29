@@ -85,7 +85,7 @@ new_errorf(const char* fmt, ...) {
   char buf[BUFSIZ];
   va_list list;
   va_start(list, fmt);
-  vsnprintf(buf, sizeof(buf), fmt, list);
+  vsnprintf(buf, sizeof(buf)-1, fmt, list);
   va_end(list);
   return new_error(buf);
 }
@@ -188,8 +188,8 @@ print_str(BUFFER *buf, NODE *node, int mode) {
 
 static void
 print_float(BUFFER *buf, NODE *node) {
-  char tmp[BUFSIZ];
-  snprintf(tmp, sizeof(tmp), "%lf", node->d);
+  char tmp[32];
+  snprintf(tmp, sizeof(tmp)-1, "%lf", node->d);
   if (node->d == (double)(int)(node->d)) {
     char *p = tmp + strlen(tmp) - 1;
     while (p > tmp && *(p - 1) == '0') *p-- = 0;
