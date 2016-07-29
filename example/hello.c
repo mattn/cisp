@@ -9,7 +9,15 @@
 
 static NODE*
 do_hello(ENV *env, NODE *alist) {
-  puts("world!");
+  BUFFER buf;
+  buf_init(&buf);
+  buf_append(&buf, "world!");
+  if (node_narg(alist) > 0) {
+    buf_append(&buf, ": ");
+    print_node(&buf, alist->car, PRINT_DEFAULT);
+  }
+  puts(buf.ptr);
+  buf_free(&buf);
   return new_node();
 }
 
