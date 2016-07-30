@@ -10,3 +10,7 @@
 (labels nil (print 10) (print 20))
 (labels ((f nil (print 10) (print 20))) (f))
 (print (labels ((f nil)) (f)))
+
+(setq a 1)
+(labels ((f (a) (print a))) (f 10) (print a))
+(print a)

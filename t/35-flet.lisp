@@ -8,3 +8,7 @@
 (flet nil (print 10) (print 20))
 (flet ((f nil (print 10) (print 20))) (f))
 (print (flet ((f nil)) (f)))
+
+(setq a 1)
+(flet ((f (a) (print a))) (f 10) (print a))
+(print a)
