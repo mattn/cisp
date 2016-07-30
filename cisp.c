@@ -1363,7 +1363,7 @@ copy_node(ENV *env, NODE *lhs) {
 static NODE*
 call_node(ENV *env, NODE *node, NODE *alist) {
   ENV *newenv = NULL;
-  NODE *x = NULL, *p = NULL, *q = NULL, *c = NULL, *nn = NULL;
+  NODE *x = NULL, *p = NULL, *c = NULL, *nn = NULL;
   int macro = 0;
 
   if (node->t == NODE_IDENT) {
@@ -1402,8 +1402,6 @@ call_node(ENV *env, NODE *node, NODE *alist) {
   } else {
     return new_errorn("malformed arguments", node);
   }
-
-  if (!newenv) newenv = new_env(env);
 
   while (alist && c) {
     if (c && (c->t == NODE_IDENT || (c->car && !strcmp("&rest", c->car->s)))) {
@@ -1447,13 +1445,8 @@ call_node(ENV *env, NODE *node, NODE *alist) {
     c = c->cdr;
   }
   if (macro) {
-    nn = eval_node(newenv, x->cdr->cdr);
-    if (nn->t == NODE_BQUOTE) {
-      q = eval_node(newenv, nn);
-      c = eval_node(newenv, q);
-      free_node(q);
-    } else
-      c = eval_node(newenv, nn);
+    nn = do_progn(newenv, p);
+    c = eval_node(env, nn);
     free_node(nn);
     free_env(newenv);
     free_node(x);
@@ -1542,16 +1535,33 @@ do_defun(ENV *env, NODE *alist) {
 
 static NODE*
 do_defmacro(ENV *env, NODE *alist) {
-  NODE *x;
+  ENV *global;
+  NODE *x, *e, *n;
 
-  if (node_narg(alist) != 3) return new_errorn("malformed defmacro", alist);
+  if (node_narg(alist) < 2) return new_errorn("malformed defmacro", alist);
 
   x = alist->car;
-  if (x->t != NODE_IDENT) {
+  if (!x || x->t != NODE_IDENT) {
     return new_errorn("invalid identifier", x);
   }
-  add_macro(env, x->s, alist);
-  alist->r++;
+  if (!node_isnull(alist->cdr->car) && alist->cdr->car->t != NODE_CELL) {
+    return new_errorn("argument is not a list", alist);
+  }
+
+  e = new_node();
+  e->t = NODE_ENV;
+  e->p = env;
+  e->name = strdup(x->s);
+  env->r++;
+
+  n = new_node();
+  n->t = NODE_LAMBDA;
+  n->car = e;
+  n->cdr = alist->cdr;
+  alist->cdr->r++;
+
+  global = global_env(env);
+  add_macro(global, x->s, n);
   x->r++;
   return x;
 }
