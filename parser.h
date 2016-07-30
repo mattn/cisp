@@ -1,5 +1,5 @@
-#ifndef _PARSER_H_
-#define _PARSER_H_
+#ifndef parser_h
+#define parser_h
 
 enum PARSE_MODE {
   PARSE_ANY, PARSE_BQUOTE,
@@ -16,6 +16,6 @@ EXPORT int s_getc(SCANNER *s);
 EXPORT void skip_white(SCANNER *s);
 EXPORT void s_file_init(SCANNER *s, FILE* v);
 
-#endif /* _PARSER_H_ */
+#endif /* parser_h */
 
 /* vim:set et sw=2 cino=>2,\:0: */

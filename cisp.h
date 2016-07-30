@@ -1,5 +1,5 @@
-#ifndef _CISP_H_
-#define _CISP_H_
+#ifndef cisp_h
+#define cisp_h
 
 #ifdef _MSC_VER
 # define INLINE
@@ -109,6 +109,6 @@ EXPORT NODE* eval_node(ENV *env, NODE *node);
 EXPORT NODE* load_lisp(ENV *env, const char *fname);
 EXPORT void fatal(const char *msg);
 
-#endif /* _CISP_H_ */
+#endif /* cisp_h */
 
 /* vim:set et sw=2 cino=>2,\:0: */
