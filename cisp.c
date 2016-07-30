@@ -1122,7 +1122,7 @@ do_let_s(ENV *env, NODE *alist) {
 static NODE*
 do_flet_labels(ENV *env, NODE *alist, int mode) {
   ENV *newenv;
-  NODE *x, *c, *n, *e;
+  NODE *x, *c, *n, *e, *nn;
 
   if (node_narg(alist) < 1) return new_errorn(mode ? "malformed labels" : "malformed flet", alist);
 
@@ -1139,11 +1139,16 @@ do_flet_labels(ENV *env, NODE *alist, int mode) {
     e = new_node();
     e->t = NODE_ENV;
     e->p = mode ? newenv : env;
-    env->r++;
-    n->car->cdr = e;
+    e->name = strdup(n->car->s);
+    e->p->r++;
 
-    add_function(newenv, n->car->s, n);
-    n->r++;
+    nn = new_node();
+    nn->t = NODE_LAMBDA;
+    nn->car = e;
+    nn->cdr = n->cdr;
+    nn->cdr->r++;
+
+    add_function(newenv, n->car->s, nn);
     x = x->cdr;
   }
   c = do_progn(newenv, alist->cdr);
