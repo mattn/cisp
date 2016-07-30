@@ -263,7 +263,8 @@ free_node(NODE *node) {
     free((void*)node->s);
     break;
   case NODE_ENV:
-    free_env((ENV*) node->p);
+    free_env(node->p);
+    free(node->name);
     break;
   default:
     break;
@@ -1379,8 +1380,7 @@ call_node(ENV *env, NODE *node, NODE *alist) {
       }
     }
     if (x->t == NODE_LAMBDA) {
-      newenv = (ENV*) x->car->p;
-      newenv->r++;
+      newenv = new_env(x->car->p);
     } else if (x->t == NODE_CELL && x->car->cdr) {
       newenv = (ENV*) x->car->cdr->p;
       newenv->r++;
@@ -1454,13 +1454,7 @@ call_node(ENV *env, NODE *node, NODE *alist) {
     free_node(x);
     return c;
   }
-  c = NULL;
-  while (p) {
-    if (c) free_node(c);
-    c = eval_node(newenv, p->car);
-    if (c->t == NODE_ERROR) break;
-    p = p->cdr;
-  }
+  c = do_progn(newenv, p);
 
   free_env(newenv);
   free_node(x);
@@ -1511,30 +1505,32 @@ do_funcall(ENV *env, NODE *alist) {
 static NODE*
 do_defun(ENV *env, NODE *alist) {
   ENV *global;
-  NODE *x;
+  NODE *x, *e, *n;
 
-  if (node_narg(alist) < 3) return new_errorn("malformed defun", alist);
+  if (node_narg(alist) < 2) return new_errorn("malformed defun", alist);
 
   x = alist->car;
-  if (x->t != NODE_IDENT) {
+  if (!x || x->t != NODE_IDENT) {
     return new_errorn("invalid identifier", x);
   }
-  if (alist->cdr->car->t != NODE_CELL && alist->cdr->car->t != NODE_NIL) {
+  if (!node_isnull(alist->cdr->car) && alist->cdr->car->t != NODE_CELL) {
     return new_errorn("argument is not a list", alist);
   }
 
-  /* TODO: nested function should have env */
-#if 0
   e = new_node();
   e->t = NODE_ENV;
   e->p = env;
+  e->name = strdup(x->s);
   env->r++;
-  x->cdr = e;
-#endif
+
+  n = new_node();
+  n->t = NODE_LAMBDA;
+  n->car = e;
+  n->cdr = alist->cdr;
+  alist->cdr->r++;
 
   global = global_env(env);
-  add_function(global, x->s, alist);
-  alist->r++;
+  add_function(global, x->s, n);
   x->r++;
   return x;
 }
