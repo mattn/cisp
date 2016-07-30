@@ -41,7 +41,10 @@ struct _NODE {
     long i;
     double d;
     char* s;
-    void* p;
+    struct {
+      ENV *p;
+      char *name;
+    };
     struct {
       NODE *car;
       NODE *cdr;
