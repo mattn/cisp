@@ -1389,8 +1389,7 @@ call_node(ENV *env, NODE *node, NODE *alist) {
     p = x->cdr->cdr;
   } else if (node->t == NODE_LAMBDA) {
     x = node;
-    newenv = (ENV*) x->car->p;
-    newenv->r++;
+    newenv = new_env(x->car->p);
     c = x->cdr->car;
     p = x->cdr->cdr;
     x = node->cdr;
