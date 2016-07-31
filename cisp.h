@@ -37,10 +37,14 @@ typedef NODE* (*f_do)(ENV*, NODE*);
 
 struct _NODE {
   NODE_TYPE t;
+  int r;
   union {
     long i;
     double d;
-    char* s;
+    struct {
+      char* s;
+      f_do f;
+    };
     struct {
       ENV *p;
       char *name;
@@ -50,8 +54,6 @@ struct _NODE {
       NODE *cdr;
     };
   };
-  f_do f;
-  int r;
 };
 
 typedef struct {

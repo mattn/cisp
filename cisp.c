@@ -1366,42 +1366,32 @@ call_node(ENV *env, NODE *node, NODE *alist) {
   NODE *x = NULL, *p = NULL, *c = NULL, *nn = NULL;
   int macro = 0;
 
-  if (node->t == NODE_IDENT) {
-    x = do_ident_global(env, node);
-    if (x->f) {
-      f_do f = (f_do) x->f;
-      free_node(x);
-      return f(env, alist);
-    }
-    if (x->t != NODE_LAMBDA || x->t == NODE_ERROR) {
-      free_node(x);
-      x = look_func(env, node->s);
+  if (node->t == NODE_IDENT && !node->f) {
+    x = look_func(env, node->s);
+    if (!x) {
+      x = look_macro(env, node->s);
       if (!x) {
-        x = look_macro(env, node->s);
-        if (!x) {
-          return new_errorn("illegal function call", node);
-        }
-        macro = 1;
+        return new_errorn("illegal function call", node);
       }
+      macro = 1;
     }
-    if (x->t == NODE_LAMBDA) {
-      newenv = new_env(x->car->p);
-    } else if (x->t == NODE_CELL && x->car->cdr) {
-      newenv = (ENV*) x->car->cdr->p;
-      newenv->r++;
-    }
-    c = x->cdr->car;
-    p = x->cdr->cdr;
-  } else if (node->t == NODE_LAMBDA) {
-    x = node;
-    newenv = new_env(x->car->p);
-    c = x->cdr->car;
-    p = x->cdr->cdr;
-    x = node->cdr;
-    x->r++;
   } else {
+    x = node;
+    x->r++;
+  }
+
+  if (x->t == NODE_IDENT && x->f) {
+    f_do f = x->f;
+    free_node(x);
+    return f(env, alist);
+  } else if (x->t != NODE_LAMBDA) {
+    free_node(x);
     return new_errorn("malformed arguments", node);
   }
+
+  newenv = new_env(x->car->p);
+  c = x->cdr->car;
+  p = x->cdr->cdr;
 
   while (alist && c) {
     if (c && (c->t == NODE_IDENT || (c->car && !strcmp("&rest", c->car->s)))) {
