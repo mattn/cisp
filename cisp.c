@@ -2196,26 +2196,23 @@ eval_node(ENV *env, NODE *node) {
   case NODE_CELL:
     c = node->car;
     if (!c) {
-      return new_node();
+      return new_errorn("illegal function call", node);
     }
-    if (c && c->t == NODE_CELL && c->car && c->car->t != NODE_LAMBDA) {
-      NODE *r = eval_node(env, c);
-      if (r->t == NODE_LAMBDA) {
-        c = call_node(env, r, node->cdr);
+    if (c->t == NODE_CELL && c->car && c->car->t == NODE_IDENT && !strcmp(c->car->s, "lambda")) {
+      NODE *r = do_lambda(env, c->cdr);
+      if (r->t != NODE_LAMBDA) {
         free_node(r);
-        return c;
+        return new_errorn("illegal function call", node);
       }
-      return r;
-    }
-    if (c->t == NODE_IDENT || c->t == NODE_LAMBDA) {
+      c = call_node(env, r, node->cdr);
+      free_node(r);
+    } else if (c->t == NODE_IDENT) {
       c = call_node(env, c, node->cdr);
-    }
-    if (c == node->car) {
-      c->r++;
-      return c;
+    } else {
+      return new_errorn("illegal function call", node);
     }
     if (c) return c;
-    return new_errorn("illegal function call", node);
+    return new_node();
   case NODE_AREF:
     {
       NODE *x = node->car;
