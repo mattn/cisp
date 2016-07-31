@@ -3,7 +3,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#ifdef _MSC_VER
+#ifndef _MSC_VER
+#include <unistd.h>
+#else
+# include <io.h>
+# define isatty(f) _isatty(f)
+# define fileno(f) _fileno(f)
 # define strdup(x) _strdup(x)
 # define snprintf(b,n,f,...) _snprintf(b,n,f,__VA_ARGS__)
 #endif
@@ -34,7 +39,9 @@ invalid_token(SCANNER *s) {
   long pos = s_pos(s);
   snprintf(buf, sizeof(buf)-1, "invalid token at offset %ld", pos == -1 ? 0 : pos);
   l = strlen(buf);
-  if (s_reset(s) != -1)  {
+
+  s_reset(s);
+  if (!isatty(fileno(stdin))) {
     buf[l++] = '\n';
     o = l;
     for (i = 0; l < sizeof(buf)-1; i++) {
