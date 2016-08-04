@@ -138,7 +138,8 @@ walk(ENV *env, char *base) {
           handle = dlopen(path, RTLD_GLOBAL|RTLD_NOW);
           if (handle) {
             typedef int (*f_cisp_init)(ENV*);
-            f_cisp_init fcn = (f_cisp_init) dlsym(handle, "cisp_init");
+            f_cisp_init fcn;
+            *(void**)(&fcn) = dlsym(handle, "cisp_init");
             if (fcn) {
               if (fcn(env) == 0) {
                 sym_add++;

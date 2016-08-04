@@ -8,7 +8,7 @@ SRCS = \
 OBJS = $(subst .c,.o,$(SRCS))
 
 CC=gcc
-CFLAGS = -g -O2 -funroll-loops -Wall -Wextra -Wwrite-strings -Wformat=2 -Werror
+CFLAGS = -g -O2 -funroll-loops -Wall -Wextra -Wwrite-strings -Wformat=2 -Werror -pedantic
 
 ifeq ($(OS),Windows_NT)
 BIN := $(TARGET).exe
