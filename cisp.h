@@ -41,15 +41,15 @@ struct _NODE {
   union {
     long i;
     double d;
-    struct _REF_CFUNC {
+    struct {
       char* s;
       f_do f;
     };
-    struct _REF_ENV {
+    struct {
       ENV *p;
       char *name;
     };
-    struct _REF_CONS {
+    struct {
       NODE *car;
       NODE *cdr;
     };
