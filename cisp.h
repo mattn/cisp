@@ -23,7 +23,7 @@
 
 typedef enum _NODE_TYPE {
   NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_BQUOTE, NODE_IDENT,
-  NODE_LAMBDA, NODE_CELL, NODE_AREF, NODE_ENV, NODE_ERROR,
+  NODE_LAMBDA, NODE_SPECIAL, NODE_BUILTINFUNC, NODE_CELL, NODE_AREF, NODE_ENV, NODE_ERROR,
 } NODE_TYPE;
 
 typedef enum _PRINT_MODE {
@@ -106,7 +106,7 @@ EXPORT void print_node(BUFFER *buf, NODE *node, PRINT_MODE mode);
 EXPORT void add_variable(ENV *env, const char *k, NODE *node);
 EXPORT void add_function(ENV *env, const char *k, NODE *node);
 EXPORT void add_macro(ENV *env, const char *k, NODE *node);
-EXPORT void add_sym(ENV *env, const char* n, f_do f);
+EXPORT void add_sym(ENV *env, NODE_TYPE t, const char* n, f_do f);
 EXPORT void sort_syms(ENV *env);
 
 EXPORT int node_narg(NODE *node);
