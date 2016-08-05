@@ -207,6 +207,8 @@ print_node(BUFFER *buf, NODE *node, PRINT_MODE mode) {
     print_str(buf, node, mode);
     break;
   case NODE_IDENT:
+  case NODE_SPECIAL:
+  case NODE_BUILTINFUNC:
     buf_append(buf, node->s);
     break;
   case NODE_NIL:
@@ -255,6 +257,8 @@ free_node(NODE *node) {
     if (node->cdr) free_node(node->cdr);
     if (node->car) free_node(node->car);
     break;
+  case NODE_SPECIAL:
+  case NODE_BUILTINFUNC:
   case NODE_STRING:
   case NODE_IDENT:
   case NODE_ERROR:
@@ -453,6 +457,33 @@ double_value(ENV *env, NODE *node, NODE **err) {
   }
   free_node(node);
   return r;
+}
+
+static NODE*
+eval_list(ENV *env, NODE *list) {
+  NODE *head = NULL, *prev = NULL, *child, *cur;
+
+  while (!node_isnull(list)) {
+    child = eval_node(env, list->car);
+    if (child->t == NODE_ERROR) {
+      free_node(head);
+      return child;
+    }
+    cur = new_node();
+    cur->t = NODE_CELL;
+    cur->car = child;
+    if (prev)
+      prev->cdr = cur;
+    else
+      head = cur;
+    prev = cur;
+    list = list->cdr;
+  }
+
+  if (head)
+    return head;
+
+  return new_node();
 }
 
 static NODE*
@@ -922,15 +953,16 @@ static NODE*
 do_print(ENV *env, NODE *alist) {
   NODE *c;
   BUFFER buf;
+  UNUSED(env);
 
   if (node_narg(alist) != 1) return new_errorn("malformed print", alist);
 
-  c = eval_node(env, alist->car);
-  if (c->t == NODE_ERROR) return c;
+  c = alist->car;
+
   buf_init(&buf);
   print_node(&buf, c, 0);
   puts(buf.ptr);
-  free_node(c);
+
   c = new_node();
   c->t = NODE_STRING;
   c->s = buf.ptr;
@@ -1366,7 +1398,7 @@ call_node(ENV *env, NODE *node, NODE *alist) {
   NODE *x = NULL, *p = NULL, *c = NULL, *nn = NULL;
   int macro = 0;
 
-  if (node->t == NODE_IDENT && !node->f) {
+  if (node->t == NODE_IDENT) {
     x = look_func(env, node->s);
     if (!x) {
       x = look_macro(env, node->s);
@@ -1380,7 +1412,11 @@ call_node(ENV *env, NODE *node, NODE *alist) {
     x->r++;
   }
 
-  if (x->t == NODE_IDENT && x->f) {
+  if (x->t == NODE_SPECIAL) {
+    f_do f = x->f;
+    free_node(x);
+    return f(env, alist);
+  } else if (x->t == NODE_BUILTINFUNC) {
     f_do f = x->f;
     free_node(x);
     return f(env, alist);
@@ -1638,6 +1674,8 @@ do_type_of(ENV *env, NODE *alist) {
   case NODE_BQUOTE: p = "cons"; break;
   case NODE_CELL: p = "cons"; break;
   case NODE_AREF: p = "aref"; break;
+  case NODE_BUILTINFUNC:
+  case NODE_SPECIAL:
   case NODE_LAMBDA: p = "function"; break;
   case NODE_IDENT: p = "symbol"; break;
   case NODE_ENV: p = "environment"; break;
@@ -2076,11 +2114,11 @@ do_apply(ENV *env, NODE *alist) {
 }
 
 void
-add_sym(ENV *env, const char* n, f_do f) {
+add_sym(ENV *env, NODE_TYPE t, const char* n, f_do f) {
   ITEM *ni;
   NODE *node;
   node = new_node();
-  node->t = NODE_IDENT;
+  node->t = t;
   node->s = strdup(n);
   node->f = f;
   ni = (ITEM*)malloc(sizeof(ITEM));
@@ -2099,63 +2137,63 @@ sort_syms(ENV *env) {
 
 static void
 add_defaults(ENV *env) {
-  add_sym(env, "%", do_mod);
-  add_sym(env, "*", do_mul);
-  add_sym(env, "+", do_plus);
-  add_sym(env, "-", do_minus);
-  add_sym(env, "/", do_div);
-  add_sym(env, "1+", do_plus1);
-  add_sym(env, "1-", do_minus1);
-  add_sym(env, "<", do_lt);
-  add_sym(env, "<=", do_le);
-  add_sym(env, "=", do_eq);
-  add_sym(env, ">", do_gt);
-  add_sym(env, ">=", do_ge);
-  add_sym(env, "and", do_and);
-  add_sym(env, "apply", do_apply);
-  add_sym(env, "aref", do_aref);
-  add_sym(env, "car", do_car);
-  add_sym(env, "cdr", do_cdr);
-  add_sym(env, "concatenate", do_concatenate);
-  add_sym(env, "cond", do_cond);
-  add_sym(env, "cons", do_cons);
-  add_sym(env, "consp", do_consp);
-  add_sym(env, "defmacro", do_defmacro);
-  add_sym(env, "defun", do_defun);
-  add_sym(env, "dotimes", do_dotimes);
-  add_sym(env, "eq?", do_eq);
-  add_sym(env, "eval", do_eval);
-  add_sym(env, "evenp", do_evenp);
-  add_sym(env, "exit", do_exit);
-  add_sym(env, "flet", do_flet);
-  add_sym(env, "funcall", do_funcall);
-  add_sym(env, "getenv", do_getenv);
-  add_sym(env, "if", do_if);
-  add_sym(env, "labels", do_labels);
-  add_sym(env, "lambda", do_lambda);
-  add_sym(env, "length", do_length);
-  add_sym(env, "let", do_let);
-  add_sym(env, "let*", do_let_s);
-  add_sym(env, "list", do_list);
-  add_sym(env, "load", do_load);
-  add_sym(env, "make-array", do_make_array);
-  add_sym(env, "make-string", do_make_string);
-  add_sym(env, "mod", do_mod);
-  add_sym(env, "nconc", do_nconc);
-  add_sym(env, "not", do_not);
-  add_sym(env, "null", do_null);
-  add_sym(env, "oddp", do_oddp);
-  add_sym(env, "or", do_or);
-  add_sym(env, "princ", do_princ);
-  add_sym(env, "print", do_print);
-  add_sym(env, "println", do_println);
-  add_sym(env, "progn", do_progn);
-  add_sym(env, "quote", do_quote);
-  add_sym(env, "rplaca", do_rplaca);
-  add_sym(env, "rplacd", do_rplacd);
-  add_sym(env, "setf", do_setf);
-  add_sym(env, "setq", do_setq);
-  add_sym(env, "type-of", do_type_of);
+  add_sym(env, NODE_SPECIAL    , "%", do_mod);
+  add_sym(env, NODE_SPECIAL    , "*", do_mul);
+  add_sym(env, NODE_SPECIAL    , "+", do_plus);
+  add_sym(env, NODE_SPECIAL    , "-", do_minus);
+  add_sym(env, NODE_SPECIAL    , "/", do_div);
+  add_sym(env, NODE_SPECIAL    , "1+", do_plus1);
+  add_sym(env, NODE_SPECIAL    , "1-", do_minus1);
+  add_sym(env, NODE_SPECIAL    , "<", do_lt);
+  add_sym(env, NODE_SPECIAL    , "<=", do_le);
+  add_sym(env, NODE_SPECIAL    , "=", do_eq);
+  add_sym(env, NODE_SPECIAL    , ">", do_gt);
+  add_sym(env, NODE_SPECIAL    , ">=", do_ge);
+  add_sym(env, NODE_SPECIAL    , "and", do_and);
+  add_sym(env, NODE_SPECIAL    , "apply", do_apply);
+  add_sym(env, NODE_SPECIAL    , "aref", do_aref);
+  add_sym(env, NODE_SPECIAL    , "car", do_car);
+  add_sym(env, NODE_SPECIAL    , "cdr", do_cdr);
+  add_sym(env, NODE_SPECIAL    , "concatenate", do_concatenate);
+  add_sym(env, NODE_SPECIAL    , "cond", do_cond);
+  add_sym(env, NODE_SPECIAL    , "cons", do_cons);
+  add_sym(env, NODE_SPECIAL    , "consp", do_consp);
+  add_sym(env, NODE_SPECIAL    , "defmacro", do_defmacro);
+  add_sym(env, NODE_SPECIAL    , "defun", do_defun);
+  add_sym(env, NODE_SPECIAL    , "dotimes", do_dotimes);
+  add_sym(env, NODE_SPECIAL    , "eq?", do_eq);
+  add_sym(env, NODE_SPECIAL    , "eval", do_eval);
+  add_sym(env, NODE_SPECIAL    , "evenp", do_evenp);
+  add_sym(env, NODE_SPECIAL    , "exit", do_exit);
+  add_sym(env, NODE_SPECIAL    , "flet", do_flet);
+  add_sym(env, NODE_SPECIAL    , "funcall", do_funcall);
+  add_sym(env, NODE_SPECIAL    , "getenv", do_getenv);
+  add_sym(env, NODE_SPECIAL    , "if", do_if);
+  add_sym(env, NODE_SPECIAL    , "labels", do_labels);
+  add_sym(env, NODE_SPECIAL    , "lambda", do_lambda);
+  add_sym(env, NODE_SPECIAL    , "length", do_length);
+  add_sym(env, NODE_SPECIAL    , "let", do_let);
+  add_sym(env, NODE_SPECIAL    , "let*", do_let_s);
+  add_sym(env, NODE_SPECIAL    , "list", do_list);
+  add_sym(env, NODE_SPECIAL    , "load", do_load);
+  add_sym(env, NODE_SPECIAL    , "make-array", do_make_array);
+  add_sym(env, NODE_SPECIAL    , "make-string", do_make_string);
+  add_sym(env, NODE_SPECIAL    , "mod", do_mod);
+  add_sym(env, NODE_SPECIAL    , "nconc", do_nconc);
+  add_sym(env, NODE_SPECIAL    , "not", do_not);
+  add_sym(env, NODE_SPECIAL    , "null", do_null);
+  add_sym(env, NODE_SPECIAL    , "oddp", do_oddp);
+  add_sym(env, NODE_SPECIAL    , "or", do_or);
+  add_sym(env, NODE_SPECIAL    , "princ", do_princ);
+  add_sym(env, NODE_BUILTINFUNC, "print", do_print);
+  add_sym(env, NODE_SPECIAL    , "println", do_println);
+  add_sym(env, NODE_SPECIAL    , "progn", do_progn);
+  add_sym(env, NODE_SPECIAL    , "quote", do_quote);
+  add_sym(env, NODE_SPECIAL    , "rplaca", do_rplaca);
+  add_sym(env, NODE_SPECIAL    , "rplacd", do_rplacd);
+  add_sym(env, NODE_SPECIAL    , "setf", do_setf);
+  add_sym(env, NODE_SPECIAL    , "setq", do_setq);
+  add_sym(env, NODE_SPECIAL    , "type-of", do_type_of);
   sort_syms(env);
 
   load_libs(env);
@@ -2166,6 +2204,8 @@ eval_node(ENV *env, NODE *node) {
   NODE *c = NULL;
   switch (node->t) {
   case NODE_LAMBDA:
+  case NODE_BUILTINFUNC:
+  case NODE_SPECIAL:
   case NODE_INT:
   case NODE_DOUBLE:
   case NODE_NIL:
@@ -2197,7 +2237,14 @@ eval_node(ENV *env, NODE *node) {
       c = call_node(env, r, node->cdr);
       free_node(r);
     } else if (c->t == NODE_IDENT) {
-      c = call_node(env, c, node->cdr);
+      NODE *r = look_func(env, c->s);
+      if (r && r->t == NODE_BUILTINFUNC) {
+        NODE *x = eval_list(env, node->cdr);
+        c = call_node(env, r, x);
+        free_node(x);
+      } else
+        c = call_node(env, c, node->cdr);
+      free_node(r);
     } else {
       return new_errorn("illegal function call", node);
     }
