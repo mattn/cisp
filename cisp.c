@@ -1826,16 +1826,14 @@ do_rplacd(ENV *env, NODE *alist) {
 static NODE*
 do_cons(ENV *env, NODE *alist) {
   NODE *c, *lhs, *rhs;
+  UNUSED(env);
 
   if (node_narg(alist) != 2) return new_errorn("malformed cons", alist);
 
-  lhs = eval_node(env, alist->car);
-  if (lhs->t == NODE_ERROR) return lhs;
-  rhs = eval_node(env, alist->cdr->car);
-  if (rhs->t == NODE_ERROR) {
-    free_node(lhs);
-    return rhs;
-  }
+  lhs = alist->car;
+  lhs->r++;
+  rhs = alist->cdr->car;
+  rhs->r++;
   c = new_node();
   c->t = NODE_CELL;
   c->car = lhs;
@@ -2148,7 +2146,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "cdr", do_cdr);
   add_sym(env, NODE_SPECIAL    , "concatenate", do_concatenate);
   add_sym(env, NODE_SPECIAL    , "cond", do_cond);
-  add_sym(env, NODE_SPECIAL    , "cons", do_cons);
+  add_sym(env, NODE_BUILTINFUNC, "cons", do_cons);
   add_sym(env, NODE_SPECIAL    , "consp", do_consp);
   add_sym(env, NODE_SPECIAL    , "defmacro", do_defmacro);
   add_sym(env, NODE_SPECIAL    , "defun", do_defun);
