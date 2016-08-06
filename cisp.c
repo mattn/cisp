@@ -1838,13 +1838,21 @@ do_cons(ENV *env, NODE *alist) {
 
 static NODE*
 do_consp(ENV *env, NODE *alist) {
-  NODE *x, *c;
+  NODE *c;
+  UNUSED(env);
+
   if (node_narg(alist) != 1) return new_errorn("malformed consp", alist);
-  x = eval_node(env, alist->car);
-  if (x->t == NODE_ERROR) return x;
 
   c = new_node();
-  if (x->t == NODE_CELL) c->t = NODE_T;
+  switch (alist->car->t) {
+  case NODE_QUOTE:
+  case NODE_BQUOTE:
+  case NODE_CELL:
+    c->t = NODE_T;
+    break;
+  default:
+    break;
+  }
   return c;
 }
 
@@ -2142,7 +2150,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "concatenate", do_concatenate);
   add_sym(env, NODE_SPECIAL    , "cond", do_cond);
   add_sym(env, NODE_BUILTINFUNC, "cons", do_cons);
-  add_sym(env, NODE_SPECIAL    , "consp", do_consp);
+  add_sym(env, NODE_BUILTINFUNC, "consp", do_consp);
   add_sym(env, NODE_SPECIAL    , "defmacro", do_defmacro);
   add_sym(env, NODE_SPECIAL    , "defun", do_defun);
   add_sym(env, NODE_SPECIAL    , "dotimes", do_dotimes);
