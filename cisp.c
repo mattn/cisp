@@ -1974,41 +1974,35 @@ do_make_array(ENV *env, NODE *alist) {
 
 static NODE*
 do_nconc(ENV *env, NODE *alist) {
-  NODE *x, *y, *c;
+  NODE *x, *c, *n = NULL, *head = NULL;
+  UNUSED(env);
 
-  if (node_narg(alist) != 2) return new_errorn("malformed nconc", alist);
+  if (node_isnull(alist))
+    return new_node();
 
-  x = eval_node(env, alist->car);
-  if (x->t == NODE_ERROR) return x;
-  if (x->t != NODE_CELL) {
-    free_node(x);
-    return new_errorn("malformed nconc", alist);
+  for (c = alist; !node_isnull(c->cdr); c = c->cdr) {
+    x = c->car;
+    if (!node_isnull(x) && x->t != NODE_CELL)
+      return new_errorn("malformed nconc", alist);
   }
 
-  y = eval_node(env, alist->cdr->car);
-  if (y->t == NODE_ERROR) {
-    free_node(x);
-    return y;
-  }
-  if (y->t != NODE_CELL) {
-    free_node(x);
-    free_node(y);
-    return new_errorn("malformed nconc", alist);
+  for (c = alist; !node_isnull(c); c = c->cdr) {
+    x = c->car;
+    if (node_isnull(x) && !node_isnull(c->cdr))
+      continue;
+
+    if (head) {
+      while (n->cdr && n->cdr->t == NODE_CELL)
+        n = n->cdr;
+      free_node(n->cdr);
+      n->cdr = x;
+    } else
+      head = n = x;
+    x->r++;
+
   }
 
-  c = x;
-  while (c->cdr)
-    c = c->cdr;
-
-  while (y) {
-    c->cdr = new_node();
-    c->cdr->t = NODE_CELL;
-    c = c->cdr;
-    c->car = y->car;
-    c->car->r++;
-    y = y->cdr;
-  }
-  return x;
+  return head;
 }
 
 static NODE*
@@ -2177,7 +2171,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "make-array", do_make_array);
   add_sym(env, NODE_SPECIAL    , "make-string", do_make_string);
   add_sym(env, NODE_SPECIAL    , "mod", do_mod);
-  add_sym(env, NODE_SPECIAL    , "nconc", do_nconc);
+  add_sym(env, NODE_BUILTINFUNC, "nconc", do_nconc);
   add_sym(env, NODE_SPECIAL    , "not", do_not);
   add_sym(env, NODE_SPECIAL    , "null", do_null);
   add_sym(env, NODE_SPECIAL    , "oddp", do_oddp);
