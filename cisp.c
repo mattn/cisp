@@ -750,11 +750,10 @@ do_null(ENV *env, NODE *alist) {
 
   if (node_narg(alist) != 1) return new_errorn("malformed null", alist);
 
-  x = eval_node(env, alist->car);
+  x = alist->car;
   c = new_node();
   if (node_isnull(x))
     c->t = NODE_T;
-  free_node(x);
   return c;
 }
 
@@ -2167,7 +2166,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "mod", do_mod);
   add_sym(env, NODE_BUILTINFUNC, "nconc", do_nconc);
   add_sym(env, NODE_SPECIAL    , "not", do_not);
-  add_sym(env, NODE_SPECIAL    , "null", do_null);
+  add_sym(env, NODE_BUILTINFUNC, "null", do_null);
   add_sym(env, NODE_SPECIAL    , "oddp", do_oddp);
   add_sym(env, NODE_SPECIAL    , "or", do_or);
   add_sym(env, NODE_SPECIAL    , "princ", do_princ);
