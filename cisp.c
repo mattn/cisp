@@ -1804,20 +1804,18 @@ do_rplaca(ENV *env, NODE *alist) {
 static NODE*
 do_rplacd(ENV *env, NODE *alist) {
   NODE *lhs, *rhs;
+  UNUSED(env);
 
   if (node_narg(alist) != 2) return new_errorn("malformed rplacd", alist);
 
-  lhs = eval_node(env, alist->car);
-  if (lhs->t == NODE_ERROR) return lhs;
+  lhs = alist->car;
   if (lhs->t != NODE_CELL)
     return new_errorn("malformed rplacd", alist);
-  rhs = eval_node(env, alist->cdr->car);
-  if (rhs->t == NODE_ERROR) {
-    free_node(lhs);
-    return rhs;
-  }
+  rhs = alist->cdr->car;
   free_node(lhs->cdr);
   lhs->cdr = rhs;
+  rhs->r++;
+  lhs->r++;
   return lhs;
 }
 
@@ -2178,7 +2176,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "progn", do_progn);
   add_sym(env, NODE_SPECIAL    , "quote", do_quote);
   add_sym(env, NODE_BUILTINFUNC, "rplaca", do_rplaca);
-  add_sym(env, NODE_SPECIAL    , "rplacd", do_rplacd);
+  add_sym(env, NODE_BUILTINFUNC, "rplacd", do_rplacd);
   add_sym(env, NODE_SPECIAL    , "setf", do_setf);
   add_sym(env, NODE_SPECIAL    , "setq", do_setq);
   add_sym(env, NODE_SPECIAL    , "type-of", do_type_of);
