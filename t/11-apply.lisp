@@ -2,3 +2,5 @@
 (setq print 10)
 (apply 'print '(20))
 (apply 'print '((+ 1 2)))
+(print (apply 'car '((1 2))))
+(print (apply 'cdr '((1 2))))

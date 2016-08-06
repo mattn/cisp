@@ -6,3 +6,6 @@
 (print (cdr ''a))
 (print (cdr '(1 . 2)))
 (print (cdr '(a)))
+(setq y ''a)
+(print (cdr y))
+(print y)

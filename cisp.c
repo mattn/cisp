@@ -1735,53 +1735,51 @@ do_cond(ENV *env, NODE *alist) {
 static NODE*
 do_car(ENV *env, NODE *alist) {
   NODE *x, *c;
+  UNUSED(env);
 
   if (node_narg(alist) != 1) return new_errorn("malformed car", alist);
 
-  x = eval_node(env, alist->car);
+  x = alist->car;
   if (x->t == NODE_QUOTE) {
-    free_node(x);
     c = new_node();
     c->t = NODE_IDENT;
     c->s = strdup("quote");
     return c;
   }
-  if (x->t != NODE_CELL && x->t != NODE_NIL) {
-    free_node(x);
+  if (x->t != NODE_CELL && x->t != NODE_NIL)
     return new_errorn("argument is not a list", alist);
-  }
-  if (x->car) {
-    c = x->car;
+
+  c = x->car;
+  if (c)
     c->r++;
-    free_node(x);
-    return c;
-  }
-  free_node(x);
-  return new_node();
+  else
+    c = new_node();
+  return c;
 }
 
 static NODE*
 do_cdr(ENV *env, NODE *alist) {
   NODE *x, *c;
+  UNUSED(env);
 
   if (node_narg(alist) != 1) return new_errorn("malformed cdr", alist);
 
-  x = eval_node(env, alist->car);
+  x = alist->car;
   if (x->t == NODE_QUOTE) {
-    x->t = NODE_CELL;
-    return x;
+    c = new_node();
+    c->t = NODE_CELL;
+    c->car = x->car;
+    c->car->r++;
+    return c;
   }
-  if (x->t != NODE_CELL && x->t != NODE_NIL) {
-    free_node(x);
+  if (x->t != NODE_CELL && x->t != NODE_NIL)
     return new_errorn("argument is not a list", alist);
-  }
 
   c = x->cdr;
   if (c)
     c->r++;
   else
     c = new_node();
-  free_node(x);
   return c;
 }
 
@@ -2152,8 +2150,8 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "and", do_and);
   add_sym(env, NODE_SPECIAL    , "apply", do_apply);
   add_sym(env, NODE_SPECIAL    , "aref", do_aref);
-  add_sym(env, NODE_SPECIAL    , "car", do_car);
-  add_sym(env, NODE_SPECIAL    , "cdr", do_cdr);
+  add_sym(env, NODE_BUILTINFUNC, "car", do_car);
+  add_sym(env, NODE_BUILTINFUNC, "cdr", do_cdr);
   add_sym(env, NODE_SPECIAL    , "concatenate", do_concatenate);
   add_sym(env, NODE_SPECIAL    , "cond", do_cond);
   add_sym(env, NODE_SPECIAL    , "cons", do_cons);
