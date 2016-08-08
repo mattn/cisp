@@ -750,11 +750,10 @@ do_null(ENV *env, NODE *alist) {
 
   if (node_narg(alist) != 1) return new_errorn("malformed null", alist);
 
-  x = eval_node(env, alist->car);
+  x = alist->car;
   c = new_node();
   if (node_isnull(x))
     c->t = NODE_T;
-  free_node(x);
   return c;
 }
 
@@ -1786,56 +1785,50 @@ do_cdr(ENV *env, NODE *alist) {
 static NODE*
 do_rplaca(ENV *env, NODE *alist) {
   NODE *lhs, *rhs;
+  UNUSED(env);
 
   if (node_narg(alist) != 2) return new_errorn("malformed rplaca", alist);
 
-  lhs = eval_node(env, alist->car);
-  if (lhs->t == NODE_ERROR) return lhs;
+  lhs = alist->car;
   if (lhs->t != NODE_CELL)
     return new_errorn("malformed rplaca", alist);
-  rhs = eval_node(env, alist->cdr->car);
-  if (rhs->t == NODE_ERROR) {
-    free_node(lhs);
-    return rhs;
-  }
+  rhs = alist->cdr->car;
   free_node(lhs->car);
   lhs->car = rhs;
+  rhs->r++;
+  lhs->r++;
   return lhs;
 }
 
 static NODE*
 do_rplacd(ENV *env, NODE *alist) {
   NODE *lhs, *rhs;
+  UNUSED(env);
 
   if (node_narg(alist) != 2) return new_errorn("malformed rplacd", alist);
 
-  lhs = eval_node(env, alist->car);
-  if (lhs->t == NODE_ERROR) return lhs;
+  lhs = alist->car;
   if (lhs->t != NODE_CELL)
     return new_errorn("malformed rplacd", alist);
-  rhs = eval_node(env, alist->cdr->car);
-  if (rhs->t == NODE_ERROR) {
-    free_node(lhs);
-    return rhs;
-  }
+  rhs = alist->cdr->car;
   free_node(lhs->cdr);
   lhs->cdr = rhs;
+  rhs->r++;
+  lhs->r++;
   return lhs;
 }
 
 static NODE*
 do_cons(ENV *env, NODE *alist) {
   NODE *c, *lhs, *rhs;
+  UNUSED(env);
 
   if (node_narg(alist) != 2) return new_errorn("malformed cons", alist);
 
-  lhs = eval_node(env, alist->car);
-  if (lhs->t == NODE_ERROR) return lhs;
-  rhs = eval_node(env, alist->cdr->car);
-  if (rhs->t == NODE_ERROR) {
-    free_node(lhs);
-    return rhs;
-  }
+  lhs = alist->car;
+  lhs->r++;
+  rhs = alist->cdr->car;
+  rhs->r++;
   c = new_node();
   c->t = NODE_CELL;
   c->car = lhs;
@@ -1845,13 +1838,21 @@ do_cons(ENV *env, NODE *alist) {
 
 static NODE*
 do_consp(ENV *env, NODE *alist) {
-  NODE *x, *c;
+  NODE *c;
+  UNUSED(env);
+
   if (node_narg(alist) != 1) return new_errorn("malformed consp", alist);
-  x = eval_node(env, alist->car);
-  if (x->t == NODE_ERROR) return x;
 
   c = new_node();
-  if (x->t == NODE_CELL) c->t = NODE_T;
+  switch (alist->car->t) {
+  case NODE_QUOTE:
+  case NODE_BQUOTE:
+  case NODE_CELL:
+    c->t = NODE_T;
+    break;
+  default:
+    break;
+  }
   return c;
 }
 
@@ -2148,8 +2149,8 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "cdr", do_cdr);
   add_sym(env, NODE_SPECIAL    , "concatenate", do_concatenate);
   add_sym(env, NODE_SPECIAL    , "cond", do_cond);
-  add_sym(env, NODE_SPECIAL    , "cons", do_cons);
-  add_sym(env, NODE_SPECIAL    , "consp", do_consp);
+  add_sym(env, NODE_BUILTINFUNC, "cons", do_cons);
+  add_sym(env, NODE_BUILTINFUNC, "consp", do_consp);
   add_sym(env, NODE_SPECIAL    , "defmacro", do_defmacro);
   add_sym(env, NODE_SPECIAL    , "defun", do_defun);
   add_sym(env, NODE_SPECIAL    , "dotimes", do_dotimes);
@@ -2173,7 +2174,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "mod", do_mod);
   add_sym(env, NODE_BUILTINFUNC, "nconc", do_nconc);
   add_sym(env, NODE_SPECIAL    , "not", do_not);
-  add_sym(env, NODE_SPECIAL    , "null", do_null);
+  add_sym(env, NODE_BUILTINFUNC, "null", do_null);
   add_sym(env, NODE_SPECIAL    , "oddp", do_oddp);
   add_sym(env, NODE_SPECIAL    , "or", do_or);
   add_sym(env, NODE_SPECIAL    , "princ", do_princ);
@@ -2181,8 +2182,8 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "println", do_println);
   add_sym(env, NODE_SPECIAL    , "progn", do_progn);
   add_sym(env, NODE_SPECIAL    , "quote", do_quote);
-  add_sym(env, NODE_SPECIAL    , "rplaca", do_rplaca);
-  add_sym(env, NODE_SPECIAL    , "rplacd", do_rplacd);
+  add_sym(env, NODE_BUILTINFUNC, "rplaca", do_rplaca);
+  add_sym(env, NODE_BUILTINFUNC, "rplacd", do_rplacd);
   add_sym(env, NODE_SPECIAL    , "setf", do_setf);
   add_sym(env, NODE_SPECIAL    , "setq", do_setq);
   add_sym(env, NODE_SPECIAL    , "type-of", do_type_of);

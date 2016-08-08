@@ -10,3 +10,5 @@
 (print (rplaca '(1) nil))
 (print (rplaca '((1) 2) 3))
 (print (rplaca '(1 2) '(3)))
+(setq x '(1 2))
+(print (apply 'rplaca `(,x (+ 3 4))))
