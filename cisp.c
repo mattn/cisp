@@ -1048,13 +1048,17 @@ do_let_(ENV *env, NODE *alist, int star) {
       if (l == 1)
         add_variable(newenv, n->car->s, new_node());
       else {
-        c = eval_node(star ? newenv : env, n->cdr->car);
+        c = eval_node(env, n->cdr->car);
         if (c->t == NODE_ERROR) {
           free_env(newenv);
           return c;
         }
         add_variable(newenv, n->car->s, c);
       }
+    }
+    if (star) {
+      env = newenv;
+      newenv = new_env(env);
     }
     x = x->cdr;
   }

@@ -23,3 +23,6 @@
 (print (let* ((x (+ 1 2)) (y (+ x x))) (+ x y)))
 (print x)
 (print y)
+(setq x (lambda (a) a))
+(print (let  ((x (lambda (a) (funcall x a)))) (funcall x 1)))
+(print (let* ((x (lambda (a) (funcall x a)))) (funcall x 2)))
