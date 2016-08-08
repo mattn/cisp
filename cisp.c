@@ -7,6 +7,7 @@
 #include <memory.h>
 #include <ctype.h>
 #include <float.h>
+#include <limits.h>
 #ifndef _MSC_VER
 # include <inttypes.h>
 # include <unistd.h>
@@ -425,7 +426,7 @@ add_macro(ENV *env, const char *k, NODE *node) {
 
 static long
 int_value(ENV *env, NODE *node, NODE **err) {
-  int r = 0;
+  long r = 0;
   if (*err) return 0;
   node = eval_node(env, node);
   switch (node->t) {
@@ -794,16 +795,24 @@ do_oddp(ENV *env, NODE *alist) {
 static NODE*
 do_mod(ENV *env, NODE *alist) {
   NODE *c, *err = NULL;
+  long lhs, rhs;
 
   if (node_narg(alist) != 2) return new_errorn("malformed mod", alist);
 
+  lhs = int_value(env, alist->car, &err);
+  rhs = int_value(env, alist->cdr->car, &err);
+  if (err)
+    return err;
+
+  if (rhs == 0) return new_errorn("malformed mod", alist);
+
   c = new_node();
   c->t = NODE_INT;
-  c->i = int_value(env, alist->car, &err) % int_value(env, alist->cdr->car, &err);
-  if (err) {
-    free_node(c);
-    return err;
-  }
+#if LONG_MIN < -LONG_MAX
+  c->i = (lhs == LONG_MIN && rhs == -1) ? 0 : lhs % rhs;
+#else
+  c->i = lhs % rhs;
+#endif
   return c;
 }
 
