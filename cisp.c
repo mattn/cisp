@@ -730,17 +730,15 @@ do_or(ENV *env, NODE *alist) {
 
 static NODE*
 do_not(ENV *env, NODE *alist) {
-  NODE *c, *err = NULL;
+  NODE *x, *c;
+  UNUSED(env);
 
   if (node_narg(alist) != 1) return new_errorn("malformed not", alist);
 
+  x = alist->car;
   c = new_node();
-  c->t = NODE_INT;
-  c->i = !int_value(env, alist->car, &err);
-  if (err) {
-    free_node(c);
-    return err;
-  }
+  if (node_isnull(x))
+    c->t = NODE_T;
   return c;
 }
 
@@ -2186,7 +2184,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "make-string", do_make_string);
   add_sym(env, NODE_SPECIAL    , "mod", do_mod);
   add_sym(env, NODE_BUILTINFUNC, "nconc", do_nconc);
-  add_sym(env, NODE_SPECIAL    , "not", do_not);
+  add_sym(env, NODE_BUILTINFUNC, "not", do_not);
   add_sym(env, NODE_BUILTINFUNC, "null", do_null);
   add_sym(env, NODE_SPECIAL    , "oddp", do_oddp);
   add_sym(env, NODE_SPECIAL    , "or", do_or);
