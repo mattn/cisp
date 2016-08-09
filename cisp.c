@@ -488,11 +488,7 @@ do_plus(ENV *env, NODE *alist) {
   nn->i = 0;
 
   while (!node_isnull(alist)) {
-    c = eval_node(env, alist->car);
-    if (c->t == NODE_ERROR) {
-      free_node(nn);
-      return c;
-    }
+    c = alist->car;
     if (nn->t == NODE_INT) {
       if (c->t == NODE_DOUBLE) {
         nn->d = double_value(env, nn, &err) + double_value(env, c, &err);
@@ -502,7 +498,6 @@ do_plus(ENV *env, NODE *alist) {
     } else {
       nn->d += double_value(env, c, &err);
     }
-    free_node(c);
     if (err) {
       free_node(nn);
       return err;
@@ -518,8 +513,7 @@ do_minus(ENV *env, NODE *alist) {
 
   if (node_narg(alist) < 1) return new_errorn("malformed -", alist);
 
-  c = eval_node(env, alist->car);
-  if (c->t == NODE_ERROR) return c;
+  c = alist->car;
   nn = new_node();
   nn->t = c->t;
   switch (nn->t) {
@@ -533,7 +527,6 @@ do_minus(ENV *env, NODE *alist) {
     free_node(nn);
     return new_error("malformed number");
   }
-  free_node(c);
 
   alist = alist->cdr;
   if (node_isnull(alist)) {
@@ -545,8 +538,7 @@ do_minus(ENV *env, NODE *alist) {
   }
 
   while (!node_isnull(alist)) {
-    c = eval_node(env, alist->car);
-    if (c->t == NODE_ERROR) return c;
+    c = alist->car;
     if (nn->t == NODE_INT) {
       if (c->t == NODE_DOUBLE) {
         nn->d = double_value(env, nn, &err) - double_value(env, c, &err);
@@ -556,7 +548,6 @@ do_minus(ENV *env, NODE *alist) {
     } else {
       nn->d -= double_value(env, c, &err);
     }
-    free_node(c);
     if (err) {
       free_node(nn);
       return err;
@@ -575,8 +566,7 @@ do_mul(ENV *env, NODE *alist) {
   nn->i = 1;
 
   while (!node_isnull(alist)) {
-    c = eval_node(env, alist->car);
-    if (c->t == NODE_ERROR) return c;
+    c = alist->car;
     if (nn->t == NODE_INT) {
       if (c->t == NODE_DOUBLE) {
         nn->d = double_value(env, nn, &err) * double_value(env, c, &err);
@@ -586,7 +576,6 @@ do_mul(ENV *env, NODE *alist) {
     } else {
       nn->d *= double_value(env, c, &err);
     }
-    free_node(c);
     if (err) {
       free_node(nn);
       return err;
@@ -602,8 +591,7 @@ do_div(ENV *env, NODE *alist) {
 
   if (node_narg(alist) < 1) return new_errorn("malformed /", alist);
 
-  c = eval_node(env, alist->car);
-  if (c->t == NODE_ERROR) return c;
+  c = alist->car;
   nn = new_node();
   nn->t = c->t;
   switch (nn->t) {
@@ -617,7 +605,6 @@ do_div(ENV *env, NODE *alist) {
     free_node(nn);
     return new_error("malformed number");
   }
-  free_node(c);
 
   alist = alist->cdr;
   if (node_isnull(alist)) {
@@ -629,8 +616,7 @@ do_div(ENV *env, NODE *alist) {
   }
 
   while (!node_isnull(alist)) {
-    c = eval_node(env, alist->car);
-    if (c->t == NODE_ERROR) return c;
+    c = alist->car;
     if (nn->t == NODE_INT) {
       if (c->t == NODE_DOUBLE) {
         nn->d = double_value(env, nn, &err) / double_value(env, c, &err);
@@ -640,7 +626,6 @@ do_div(ENV *env, NODE *alist) {
     } else {
       nn->d /= double_value(env, c, &err);
     }
-    free_node(c);
     if (err) {
       free_node(nn);
       return err;
@@ -653,11 +638,11 @@ do_div(ENV *env, NODE *alist) {
 static NODE*
 do_plus1(ENV *env, NODE *alist) {
   NODE *x, *c;
+  UNUSED(env);
 
   if (node_narg(alist) != 1) return new_errorn("malformed 1+", alist);
 
-  x = eval_node(env, alist->car);
-  if (x->t == NODE_ERROR) return x;
+  x = alist->car;
 
   c = new_node();
   c->t = x->t;
@@ -666,18 +651,17 @@ do_plus1(ENV *env, NODE *alist) {
   case NODE_DOUBLE: c->d = x->d + 1.0; break;
   default: free_node(c); c = new_error("malformed number"); break;
   }
-  free_node(x);
   return c;
 }
 
 static NODE*
 do_minus1(ENV *env, NODE *alist) {
   NODE *x, *c;
+  UNUSED(env);
 
   if (node_narg(alist) != 1) return new_errorn("malformed 1-", alist);
 
-  x = eval_node(env, alist->car);
-  if (x->t == NODE_ERROR) return x;
+  x = alist->car;
 
   c = new_node();
   c->t = x->t;
@@ -686,7 +670,6 @@ do_minus1(ENV *env, NODE *alist) {
   case NODE_DOUBLE: c->d = x->d - 1.0; break;
   default: free_node(c); c = new_error("malformed number"); break;
   }
-  free_node(x);
   return c;
 }
 
@@ -2136,12 +2119,12 @@ sort_syms(ENV *env) {
 static void
 add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "%", do_mod);
-  add_sym(env, NODE_SPECIAL    , "*", do_mul);
-  add_sym(env, NODE_SPECIAL    , "+", do_plus);
-  add_sym(env, NODE_SPECIAL    , "-", do_minus);
-  add_sym(env, NODE_SPECIAL    , "/", do_div);
-  add_sym(env, NODE_SPECIAL    , "1+", do_plus1);
-  add_sym(env, NODE_SPECIAL    , "1-", do_minus1);
+  add_sym(env, NODE_BUILTINFUNC, "*", do_mul);
+  add_sym(env, NODE_BUILTINFUNC, "+", do_plus);
+  add_sym(env, NODE_BUILTINFUNC, "-", do_minus);
+  add_sym(env, NODE_BUILTINFUNC, "/", do_div);
+  add_sym(env, NODE_BUILTINFUNC, "1+", do_plus1);
+  add_sym(env, NODE_BUILTINFUNC, "1-", do_minus1);
   add_sym(env, NODE_BUILTINFUNC, "<", do_lt);
   add_sym(env, NODE_BUILTINFUNC, "<=", do_le);
   add_sym(env, NODE_SPECIAL    , "=", do_eq);
