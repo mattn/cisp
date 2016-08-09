@@ -427,36 +427,28 @@ add_macro(ENV *env, const char *k, NODE *node) {
 static long
 int_value(ENV *env, NODE *node, NODE **err) {
   long r = 0;
+  UNUSED(env);
   if (*err) return 0;
-  node = eval_node(env, node);
   switch (node->t) {
   case NODE_ERROR: *err = node; return 0;
-  case NODE_NIL: r = 0; break;
-  case NODE_T: r = 1; break;
   case NODE_INT: r = node->i; break;
   case NODE_DOUBLE: r = (long)node->d; break;
-  case NODE_QUOTE: r = int_value(env, node->car, err); break;
-  case NODE_BQUOTE: r = int_value(env, node->car, err); break;
   default: *err = new_error("malformed number"); break;
   }
-  free_node(node);
   return r;
 }
 
 static double
 double_value(ENV *env, NODE *node, NODE **err) {
   double r = 0;
+  UNUSED(env);
   if (*err) return 0;
-  node = eval_node(env, node);
   switch (node->t) {
   case NODE_ERROR: *err = node; return 0;
   case NODE_INT: r = (double)node->i; break;
   case NODE_DOUBLE: r = node->d; break;
-  case NODE_QUOTE: r = double_value(env, node->car, err); break;
-  case NODE_BQUOTE: r = double_value(env, node->car, err); break;
   default: *err = new_error("malformed number"); break;
   }
-  free_node(node);
   return r;
 }
 
@@ -1633,7 +1625,9 @@ do_dotimes(ENV *env, NODE *alist) {
   if (!(l == 2 || l == 3) || !(x->car && x->car->t == NODE_IDENT))
     return new_errorn("malformed dotimes", alist);
 
-  r = int_value(env, x->cdr->car, &err);
+  c = eval_node(env, x->cdr->car);
+  r = int_value(env, c, &err);
+  free_node(c);
   if (err) return err;
 
   newenv = new_env(env);
@@ -2141,18 +2135,18 @@ sort_syms(ENV *env) {
 
 static void
 add_defaults(ENV *env) {
-  add_sym(env, NODE_SPECIAL    , "%", do_mod);
+  add_sym(env, NODE_BUILTINFUNC, "%", do_mod);
   add_sym(env, NODE_SPECIAL    , "*", do_mul);
   add_sym(env, NODE_SPECIAL    , "+", do_plus);
   add_sym(env, NODE_SPECIAL    , "-", do_minus);
   add_sym(env, NODE_SPECIAL    , "/", do_div);
   add_sym(env, NODE_SPECIAL    , "1+", do_plus1);
   add_sym(env, NODE_SPECIAL    , "1-", do_minus1);
-  add_sym(env, NODE_SPECIAL    , "<", do_lt);
-  add_sym(env, NODE_SPECIAL    , "<=", do_le);
+  add_sym(env, NODE_BUILTINFUNC, "<", do_lt);
+  add_sym(env, NODE_BUILTINFUNC, "<=", do_le);
   add_sym(env, NODE_SPECIAL    , "=", do_eq);
-  add_sym(env, NODE_SPECIAL    , ">", do_gt);
-  add_sym(env, NODE_SPECIAL    , ">=", do_ge);
+  add_sym(env, NODE_BUILTINFUNC, ">", do_gt);
+  add_sym(env, NODE_BUILTINFUNC, ">=", do_ge);
   add_sym(env, NODE_SPECIAL    , "and", do_and);
   add_sym(env, NODE_SPECIAL    , "apply", do_apply);
   add_sym(env, NODE_SPECIAL    , "aref", do_aref);
@@ -2167,7 +2161,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "dotimes", do_dotimes);
   add_sym(env, NODE_SPECIAL    , "eq?", do_eq);
   add_sym(env, NODE_SPECIAL    , "eval", do_eval);
-  add_sym(env, NODE_SPECIAL    , "evenp", do_evenp);
+  add_sym(env, NODE_BUILTINFUNC, "evenp", do_evenp);
   add_sym(env, NODE_SPECIAL    , "exit", do_exit);
   add_sym(env, NODE_SPECIAL    , "flet", do_flet);
   add_sym(env, NODE_SPECIAL    , "funcall", do_funcall);
@@ -2182,11 +2176,11 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "load", do_load);
   add_sym(env, NODE_SPECIAL    , "make-array", do_make_array);
   add_sym(env, NODE_SPECIAL    , "make-string", do_make_string);
-  add_sym(env, NODE_SPECIAL    , "mod", do_mod);
+  add_sym(env, NODE_BUILTINFUNC, "mod", do_mod);
   add_sym(env, NODE_BUILTINFUNC, "nconc", do_nconc);
   add_sym(env, NODE_BUILTINFUNC, "not", do_not);
   add_sym(env, NODE_BUILTINFUNC, "null", do_null);
-  add_sym(env, NODE_SPECIAL    , "oddp", do_oddp);
+  add_sym(env, NODE_BUILTINFUNC, "oddp", do_oddp);
   add_sym(env, NODE_SPECIAL    , "or", do_or);
   add_sym(env, NODE_SPECIAL    , "princ", do_princ);
   add_sym(env, NODE_BUILTINFUNC, "print", do_print);
