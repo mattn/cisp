@@ -488,11 +488,7 @@ do_plus(ENV *env, NODE *alist) {
   nn->i = 0;
 
   while (!node_isnull(alist)) {
-    c = eval_node(env, alist->car);
-    if (c->t == NODE_ERROR) {
-      free_node(nn);
-      return c;
-    }
+    c = alist->car;
     if (nn->t == NODE_INT) {
       if (c->t == NODE_DOUBLE) {
         nn->d = double_value(env, nn, &err) + double_value(env, c, &err);
@@ -502,7 +498,6 @@ do_plus(ENV *env, NODE *alist) {
     } else {
       nn->d += double_value(env, c, &err);
     }
-    free_node(c);
     if (err) {
       free_node(nn);
       return err;
@@ -2137,7 +2132,7 @@ static void
 add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "%", do_mod);
   add_sym(env, NODE_SPECIAL    , "*", do_mul);
-  add_sym(env, NODE_SPECIAL    , "+", do_plus);
+  add_sym(env, NODE_BUILTINFUNC, "+", do_plus);
   add_sym(env, NODE_SPECIAL    , "-", do_minus);
   add_sym(env, NODE_SPECIAL    , "/", do_div);
   add_sym(env, NODE_SPECIAL    , "1+", do_plus1);
