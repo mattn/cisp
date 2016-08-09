@@ -1504,11 +1504,8 @@ do_eval(ENV *env, NODE *alist) {
 
 static NODE*
 do_funcall(ENV *env, NODE *alist) {
-  NODE *x;
-  if (node_narg(alist) < 2) return new_errorn("malformed funcall", alist);
-  x = eval_node(env, alist->car);
-  if (x->t == NODE_QUOTE) x = x->car;
-  return call_node(env, x, alist->cdr);
+  if (node_narg(alist) < 1) return new_errorn("malformed funcall", alist);
+  return call_node(env, alist->car, alist->cdr);
 }
 
 static NODE*
@@ -2077,20 +2074,34 @@ do_load(ENV *env, NODE *alist) {
 
 static NODE*
 do_apply(ENV *env, NODE *alist) {
-  NODE *x, *f, *nn;
+  NODE *c, *nn, *x = NULL, *head = NULL;
 
   if (node_narg(alist) < 2) return new_errorn("malformed apply", alist);
 
-  x = eval_node(env, alist->cdr->car);
-  if (x->t != NODE_CELL) {
-    free_node(x);
-    return new_errorn("second argument should be list", alist);
+  for (c = alist->cdr; !node_isnull(c->cdr); c = c->cdr) {
+    nn = new_node();
+    nn->t = NODE_CELL;
+    nn->car = c->car;
+    c->car->r++;
+    if (head) {
+      x->cdr = nn;
+      x = nn;
+    } else
+      head = x = nn;
   }
-  f = eval_node(env, alist->car);
-  nn = call_node(env, f, x);
-  if (nn->t == NODE_ERROR) {
-    return nn;
+
+  if (!node_isnull(c->car) && c->car->t != NODE_CELL) {
+    free_node(head);
+    return new_errorn("last argument should be list", alist);
   }
+  if (head)
+    x->cdr = c->car;
+  else
+    head = c->car;
+  c->car->r++;
+
+  nn = call_node(env, alist->car, head);
+  free_node(head);
   return nn;
 }
 
@@ -2131,7 +2142,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, ">", do_gt);
   add_sym(env, NODE_BUILTINFUNC, ">=", do_ge);
   add_sym(env, NODE_SPECIAL    , "and", do_and);
-  add_sym(env, NODE_SPECIAL    , "apply", do_apply);
+  add_sym(env, NODE_BUILTINFUNC, "apply", do_apply);
   add_sym(env, NODE_SPECIAL    , "aref", do_aref);
   add_sym(env, NODE_BUILTINFUNC, "car", do_car);
   add_sym(env, NODE_BUILTINFUNC, "cdr", do_cdr);
@@ -2147,7 +2158,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "evenp", do_evenp);
   add_sym(env, NODE_SPECIAL    , "exit", do_exit);
   add_sym(env, NODE_SPECIAL    , "flet", do_flet);
-  add_sym(env, NODE_SPECIAL    , "funcall", do_funcall);
+  add_sym(env, NODE_BUILTINFUNC, "funcall", do_funcall);
   add_sym(env, NODE_SPECIAL    , "getenv", do_getenv);
   add_sym(env, NODE_SPECIAL    , "if", do_if);
   add_sym(env, NODE_SPECIAL    , "labels", do_labels);
