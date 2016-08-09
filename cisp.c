@@ -513,8 +513,7 @@ do_minus(ENV *env, NODE *alist) {
 
   if (node_narg(alist) < 1) return new_errorn("malformed -", alist);
 
-  c = eval_node(env, alist->car);
-  if (c->t == NODE_ERROR) return c;
+  c = alist->car;
   nn = new_node();
   nn->t = c->t;
   switch (nn->t) {
@@ -528,7 +527,6 @@ do_minus(ENV *env, NODE *alist) {
     free_node(nn);
     return new_error("malformed number");
   }
-  free_node(c);
 
   alist = alist->cdr;
   if (node_isnull(alist)) {
@@ -540,8 +538,7 @@ do_minus(ENV *env, NODE *alist) {
   }
 
   while (!node_isnull(alist)) {
-    c = eval_node(env, alist->car);
-    if (c->t == NODE_ERROR) return c;
+    c = alist->car;
     if (nn->t == NODE_INT) {
       if (c->t == NODE_DOUBLE) {
         nn->d = double_value(env, nn, &err) - double_value(env, c, &err);
@@ -551,7 +548,6 @@ do_minus(ENV *env, NODE *alist) {
     } else {
       nn->d -= double_value(env, c, &err);
     }
-    free_node(c);
     if (err) {
       free_node(nn);
       return err;
@@ -2133,7 +2129,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "%", do_mod);
   add_sym(env, NODE_SPECIAL    , "*", do_mul);
   add_sym(env, NODE_BUILTINFUNC, "+", do_plus);
-  add_sym(env, NODE_SPECIAL    , "-", do_minus);
+  add_sym(env, NODE_BUILTINFUNC, "-", do_minus);
   add_sym(env, NODE_SPECIAL    , "/", do_div);
   add_sym(env, NODE_SPECIAL    , "1+", do_plus1);
   add_sym(env, NODE_SPECIAL    , "1-", do_minus1);
