@@ -638,11 +638,11 @@ do_div(ENV *env, NODE *alist) {
 static NODE*
 do_plus1(ENV *env, NODE *alist) {
   NODE *x, *c;
+  UNUSED(env);
 
   if (node_narg(alist) != 1) return new_errorn("malformed 1+", alist);
 
-  x = eval_node(env, alist->car);
-  if (x->t == NODE_ERROR) return x;
+  x = alist->car;
 
   c = new_node();
   c->t = x->t;
@@ -651,7 +651,6 @@ do_plus1(ENV *env, NODE *alist) {
   case NODE_DOUBLE: c->d = x->d + 1.0; break;
   default: free_node(c); c = new_error("malformed number"); break;
   }
-  free_node(x);
   return c;
 }
 
@@ -2125,7 +2124,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "+", do_plus);
   add_sym(env, NODE_BUILTINFUNC, "-", do_minus);
   add_sym(env, NODE_BUILTINFUNC, "/", do_div);
-  add_sym(env, NODE_SPECIAL    , "1+", do_plus1);
+  add_sym(env, NODE_BUILTINFUNC, "1+", do_plus1);
   add_sym(env, NODE_SPECIAL    , "1-", do_minus1);
   add_sym(env, NODE_BUILTINFUNC, "<", do_lt);
   add_sym(env, NODE_BUILTINFUNC, "<=", do_le);
