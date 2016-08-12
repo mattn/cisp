@@ -2116,7 +2116,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "eq?", do_eq);
   add_sym(env, NODE_BUILTINFUNC, "eval", do_eval);
   add_sym(env, NODE_BUILTINFUNC, "evenp", do_evenp);
-  add_sym(env, NODE_SPECIAL    , "exit", do_exit);
+  add_sym(env, NODE_BUILTINFUNC, "exit", do_exit);
   add_sym(env, NODE_SPECIAL    , "flet", do_flet);
   add_sym(env, NODE_BUILTINFUNC, "funcall", do_funcall);
   add_sym(env, NODE_BUILTINFUNC, "getenv", do_getenv);
