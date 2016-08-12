@@ -952,15 +952,13 @@ static NODE*
 do_println(ENV *env, NODE *alist) {
   NODE *c;
   BUFFER buf;
+  UNUSED(env);
 
   if (node_narg(alist) != 1) return new_errorn("malformed println", alist);
 
-  c = eval_node(env, alist);
-  if (c->t == NODE_ERROR) return c;
   buf_init(&buf);
-  print_node(&buf, c, 0);
+  print_node(&buf, alist->car, 0);
   puts(buf.ptr);
-  free_node(c);
   c = new_node();
   c->t = NODE_STRING;
   c->s = buf.ptr;
@@ -2176,7 +2174,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "or", do_or);
   add_sym(env, NODE_SPECIAL    , "princ", do_princ);
   add_sym(env, NODE_BUILTINFUNC, "print", do_print);
-  add_sym(env, NODE_SPECIAL    , "println", do_println);
+  add_sym(env, NODE_BUILTINFUNC, "println", do_println);
   add_sym(env, NODE_SPECIAL    , "progn", do_progn);
   add_sym(env, NODE_SPECIAL    , "quote", do_quote);
   add_sym(env, NODE_BUILTINFUNC, "rplaca", do_rplaca);
