@@ -1667,15 +1667,13 @@ static NODE*
 do_getenv(ENV *env, NODE *alist) {
   NODE *c;
   const char *p;
-  if (!alist) return new_errorn("malformed getenv", alist);
+  UNUSED(env);
+  if (node_narg(alist) != 1) return new_errorn("malformed getenv", alist);
 
-  c = eval_node(env, alist->car);
-  if (c->t != NODE_STRING || !c->s) {
-    free_node(c);
+  c = alist->car;
+  if (c->t != NODE_STRING || !c->s)
     return new_errorn("malformed getenv", alist);
-  }
   p = getenv(c->s);
-  free_node(c);
   if (p) {
     c = new_node();
     c->t = NODE_STRING;
@@ -2150,7 +2148,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "exit", do_exit);
   add_sym(env, NODE_SPECIAL    , "flet", do_flet);
   add_sym(env, NODE_BUILTINFUNC, "funcall", do_funcall);
-  add_sym(env, NODE_SPECIAL    , "getenv", do_getenv);
+  add_sym(env, NODE_BUILTINFUNC, "getenv", do_getenv);
   add_sym(env, NODE_SPECIAL    , "if", do_if);
   add_sym(env, NODE_SPECIAL    , "labels", do_labels);
   add_sym(env, NODE_SPECIAL    , "lambda", do_lambda);
