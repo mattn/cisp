@@ -898,8 +898,8 @@ do_eq(ENV *env, NODE *alist) {
 
   if (node_narg(alist) != 2) return new_errorn("malformed =", alist);
 
-  lhs = eval_node(env, alist->car);
-  rhs = eval_node(env, alist->cdr->car);
+  lhs = alist->car;
+  rhs = alist->cdr->car;
   nn = new_node();
   switch (lhs->t) {
   case NODE_INT:
@@ -921,8 +921,6 @@ do_eq(ENV *env, NODE *alist) {
     err = new_error("illegal comparing");
     break;
   }
-  free_node(lhs);
-  free_node(rhs);
   if (err) {
     free_node(nn);
     return err;
@@ -954,15 +952,13 @@ static NODE*
 do_println(ENV *env, NODE *alist) {
   NODE *c;
   BUFFER buf;
+  UNUSED(env);
 
   if (node_narg(alist) != 1) return new_errorn("malformed println", alist);
 
-  c = eval_node(env, alist);
-  if (c->t == NODE_ERROR) return c;
   buf_init(&buf);
-  print_node(&buf, c, 0);
+  print_node(&buf, alist->car, 0);
   puts(buf.ptr);
-  free_node(c);
   c = new_node();
   c->t = NODE_STRING;
   c->s = buf.ptr;
@@ -973,15 +969,13 @@ static NODE*
 do_princ(ENV *env, NODE *alist) {
   NODE *c;
   BUFFER buf;
+  UNUSED(env);
 
   if (node_narg(alist) != 1) return new_errorn("malformed printc", alist);
 
-  c = eval_node(env, alist);
-  if (c->t == NODE_ERROR) return c;
   buf_init(&buf);
-  print_node(&buf, c, 0);
+  print_node(&buf, alist->car, 0);
   printf("%s", buf.ptr);
-  free_node(c);
   c = new_node();
   c->t = NODE_STRING;
   c->s = buf.ptr;
@@ -1494,11 +1488,9 @@ do_lambda(ENV *env, NODE *alist) {
 
 static NODE*
 do_eval(ENV *env, NODE *alist) {
-  NODE *c, *x;
+  NODE *x;
   if (node_narg(alist) != 1) return new_errorn("malformed eval", alist);
-  c = eval_node(env, alist->car);
-  x = eval_node(env, c);
-  free_node(c);
+  x = eval_node(env, alist->car);
   return x;
 }
 
@@ -1643,11 +1635,11 @@ static NODE*
 do_type_of(ENV *env, NODE *alist) {
   NODE *c;
   const char *p = "unknown";
+  UNUSED(env);
 
-  if (!alist) return new_errorn("malformed type-of", alist);
+  if (node_narg(alist) != 1) return new_errorn("malformed type-of", alist);
 
-  c = eval_node(env, alist->car);
-  if (c->t == NODE_ERROR) return c;
+  c = alist->car;
   switch (c->t) {
   case NODE_NIL: p = "null"; break;
   case NODE_T: p = "boolean"; break;
@@ -1665,7 +1657,6 @@ do_type_of(ENV *env, NODE *alist) {
   case NODE_ENV: p = "environment"; break;
   case NODE_ERROR: p = "error"; break;
   }
-  free_node(c);
   c = new_node();
   c->t = NODE_STRING;
   c->s = strdup(p);
@@ -1676,15 +1667,13 @@ static NODE*
 do_getenv(ENV *env, NODE *alist) {
   NODE *c;
   const char *p;
-  if (!alist) return new_errorn("malformed getenv", alist);
+  UNUSED(env);
+  if (node_narg(alist) != 1) return new_errorn("malformed getenv", alist);
 
-  c = eval_node(env, alist->car);
-  if (c->t != NODE_STRING || !c->s) {
-    free_node(c);
+  c = alist->car;
+  if (c->t != NODE_STRING || !c->s)
     return new_errorn("malformed getenv", alist);
-  }
   p = getenv(c->s);
-  free_node(c);
   if (p) {
     c = new_node();
     c->t = NODE_STRING;
@@ -1844,18 +1833,16 @@ do_consp(ENV *env, NODE *alist) {
 static NODE*
 do_length(ENV *env, NODE *alist) {
   NODE *x, *c;
+  UNUSED(env);
 
-  if (!alist) return new_errorn("malformed length", alist);
+  if (node_narg(alist) != 1) return new_errorn("malformed length", alist);
 
-  x = eval_node(env, alist->car);
-  if (x->t != NODE_CELL && x->t != NODE_NIL && x->t != NODE_STRING) {
-    free_node(x);
+  x = alist->car;
+  if (x->t != NODE_CELL && x->t != NODE_NIL && x->t != NODE_STRING)
     return new_errorn("argument is not a list", alist);
-  }
   c = new_node();
   c->t = NODE_INT;
   c->i = x->t == NODE_NIL ? 0 : x->t == NODE_STRING ? (long)strlen(x->s) : node_narg(x);
-  free_node(x);
   return c;
 }
 
@@ -1863,19 +1850,16 @@ static NODE*
 do_concatenate(ENV *env, NODE *alist) {
   NODE *x, *c, *l, *nn;
   BUFFER buf;
+  UNUSED(env);
 
   if (node_narg(alist) < 3) return new_errorn("malformed concatenate", alist);
 
-  x = eval_node(env, alist->car);
-  if (x->t != NODE_IDENT) {
-    free_node(x);
+  x = alist->car;
+  if (x->t != NODE_IDENT)
     return new_errorn("first argument is not a quote", alist);
-  }
-  l = eval_node(env, alist->cdr->car);
-  if (l->t != NODE_CELL && l->t != NODE_NIL && l->t != NODE_STRING) {
-    free_node(x);
+  l = alist->cdr->car;
+  if (l->t != NODE_CELL && l->t != NODE_NIL && l->t != NODE_STRING)
     return new_errorn("argument is not a list", alist);
-  }
   c = new_node();
   c->t = !strcmp(x->s, "string") ? NODE_STRING : NODE_CELL;
 
@@ -1884,49 +1868,36 @@ do_concatenate(ENV *env, NODE *alist) {
   alist = alist->cdr;
   while (!node_isnull(alist)) {
     if (c->t == NODE_STRING) {
-      nn = eval_node(env, alist->car);
-      if (nn->t == NODE_ERROR) {
-        free_node(c);
-        buf_free(&buf);
-        c = nn;
-        break;
-      }
+      nn = alist->car;
       if (nn->t != NODE_STRING) {
         free_node(c);
         c = new_errorn("argument is not string", nn);
-        free_node(nn);
         buf_free(&buf);
         break;
       }
       buf_append(&buf, nn->s);
-      free_node(nn);
     }
     alist = alist->cdr;
   }
   if (node_isnull(alist)) c->s = buf.ptr;
-  free_node(x);
-  free_node(l);
   return c;
 }
 
 static NODE*
 do_make_string(ENV *env, NODE *alist) {
   NODE *x, *c;
+  UNUSED(env);
 
   if (node_narg(alist) != 1) return new_errorn("malformed make-string", alist);
 
-  x = eval_node(env, alist->car);
-  if (x->t == NODE_ERROR) return x;
-  if (x->t != NODE_INT || x->i < 0) {
-    free_node(x);
+  x = alist->car;
+  if (x->t != NODE_INT || x->i < 0)
     return new_errorn("malformed make-string", alist);
-  }
   c = new_node();
   c->t = NODE_STRING;
   c->s = (char*)malloc(x->i + 1);
   memset(c->s, ' ', x->i);
   *(c->s + x->i) = 0;
-  free_node(x);
   return c;
 }
 
@@ -1934,17 +1905,14 @@ static NODE*
 do_make_array(ENV *env, NODE *alist) {
   NODE *x, *c;
   int i, n;
+  UNUSED(env);
 
   if (node_narg(alist) != 1) return new_errorn("malformed make-array", alist);
 
-  x = eval_node(env, alist->car);
-  if (x->t == NODE_ERROR) return x;
-  if (x->t != NODE_INT || x->i < 0) {
-    free_node(x);
+  x = alist->car;
+  if (x->t != NODE_INT || x->i < 0)
     return new_errorn("malformed make-array", alist);
-  }
   n = x->i;
-  free_node(x);
 
   c = new_node();
   c->t = NODE_CELL;
@@ -1994,15 +1962,13 @@ do_nconc(ENV *env, NODE *alist) {
 static NODE*
 do_aref(ENV *env, NODE *alist) {
   NODE *x, *c;
+  UNUSED(env);
 
   if (node_narg(alist) != 2) return new_errorn("malformed aref", alist);
 
-  x = eval_node(env, alist->car);
-  if (x->t == NODE_ERROR) return x;
-  if (x->t != NODE_CELL) {
-    free_node(x);
+  x = alist->car;
+  if (x->t != NODE_CELL)
     return new_errorn("malformed aref", alist);
-  }
 
   x->r++;
   c = new_node();
@@ -2053,19 +2019,13 @@ static NODE*
 do_load(ENV *env, NODE *alist) {
   NODE *x, *ret;
 
-  if (!alist->car) return new_errorn("malformed load", alist);
-  x = eval_node(env, alist->car);
-  if (x->t == NODE_ERROR) return x;
-  if (x->t != NODE_STRING) {
-    free_node(x);
+  if (node_narg(alist) != 1) return new_errorn("malformed load", alist);
+  x = alist->car;
+  if (x->t != NODE_STRING)
     return new_errorn("malformed load", alist);
-  }
   ret = load_lisp(env, x->s);
-  if (ret->t == NODE_ERROR) {
-    free_node(x);
+  if (ret->t == NODE_ERROR)
     return ret;
-  }
-  free_node(x);
   free_node(ret);
   ret = new_node();
   ret->t = NODE_T;
@@ -2138,54 +2098,54 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "1-", do_minus1);
   add_sym(env, NODE_BUILTINFUNC, "<", do_lt);
   add_sym(env, NODE_BUILTINFUNC, "<=", do_le);
-  add_sym(env, NODE_SPECIAL    , "=", do_eq);
+  add_sym(env, NODE_BUILTINFUNC, "=", do_eq);
   add_sym(env, NODE_BUILTINFUNC, ">", do_gt);
   add_sym(env, NODE_BUILTINFUNC, ">=", do_ge);
   add_sym(env, NODE_SPECIAL    , "and", do_and);
   add_sym(env, NODE_BUILTINFUNC, "apply", do_apply);
-  add_sym(env, NODE_SPECIAL    , "aref", do_aref);
+  add_sym(env, NODE_BUILTINFUNC, "aref", do_aref);
   add_sym(env, NODE_BUILTINFUNC, "car", do_car);
   add_sym(env, NODE_BUILTINFUNC, "cdr", do_cdr);
-  add_sym(env, NODE_SPECIAL    , "concatenate", do_concatenate);
+  add_sym(env, NODE_BUILTINFUNC, "concatenate", do_concatenate);
   add_sym(env, NODE_SPECIAL    , "cond", do_cond);
   add_sym(env, NODE_BUILTINFUNC, "cons", do_cons);
   add_sym(env, NODE_BUILTINFUNC, "consp", do_consp);
   add_sym(env, NODE_SPECIAL    , "defmacro", do_defmacro);
   add_sym(env, NODE_SPECIAL    , "defun", do_defun);
   add_sym(env, NODE_SPECIAL    , "dotimes", do_dotimes);
-  add_sym(env, NODE_SPECIAL    , "eq?", do_eq);
-  add_sym(env, NODE_SPECIAL    , "eval", do_eval);
+  add_sym(env, NODE_BUILTINFUNC, "eq?", do_eq);
+  add_sym(env, NODE_BUILTINFUNC, "eval", do_eval);
   add_sym(env, NODE_BUILTINFUNC, "evenp", do_evenp);
-  add_sym(env, NODE_SPECIAL    , "exit", do_exit);
+  add_sym(env, NODE_BUILTINFUNC, "exit", do_exit);
   add_sym(env, NODE_SPECIAL    , "flet", do_flet);
   add_sym(env, NODE_BUILTINFUNC, "funcall", do_funcall);
-  add_sym(env, NODE_SPECIAL    , "getenv", do_getenv);
+  add_sym(env, NODE_BUILTINFUNC, "getenv", do_getenv);
   add_sym(env, NODE_SPECIAL    , "if", do_if);
   add_sym(env, NODE_SPECIAL    , "labels", do_labels);
   add_sym(env, NODE_SPECIAL    , "lambda", do_lambda);
-  add_sym(env, NODE_SPECIAL    , "length", do_length);
+  add_sym(env, NODE_BUILTINFUNC, "length", do_length);
   add_sym(env, NODE_SPECIAL    , "let", do_let);
   add_sym(env, NODE_SPECIAL    , "let*", do_let_s);
   add_sym(env, NODE_SPECIAL    , "list", do_list);
-  add_sym(env, NODE_SPECIAL    , "load", do_load);
-  add_sym(env, NODE_SPECIAL    , "make-array", do_make_array);
-  add_sym(env, NODE_SPECIAL    , "make-string", do_make_string);
+  add_sym(env, NODE_BUILTINFUNC, "load", do_load);
+  add_sym(env, NODE_BUILTINFUNC, "make-array", do_make_array);
+  add_sym(env, NODE_BUILTINFUNC, "make-string", do_make_string);
   add_sym(env, NODE_BUILTINFUNC, "mod", do_mod);
   add_sym(env, NODE_BUILTINFUNC, "nconc", do_nconc);
   add_sym(env, NODE_BUILTINFUNC, "not", do_not);
   add_sym(env, NODE_BUILTINFUNC, "null", do_null);
   add_sym(env, NODE_BUILTINFUNC, "oddp", do_oddp);
   add_sym(env, NODE_SPECIAL    , "or", do_or);
-  add_sym(env, NODE_SPECIAL    , "princ", do_princ);
+  add_sym(env, NODE_BUILTINFUNC, "princ", do_princ);
   add_sym(env, NODE_BUILTINFUNC, "print", do_print);
-  add_sym(env, NODE_SPECIAL    , "println", do_println);
+  add_sym(env, NODE_BUILTINFUNC, "println", do_println);
   add_sym(env, NODE_SPECIAL    , "progn", do_progn);
   add_sym(env, NODE_SPECIAL    , "quote", do_quote);
   add_sym(env, NODE_BUILTINFUNC, "rplaca", do_rplaca);
   add_sym(env, NODE_BUILTINFUNC, "rplacd", do_rplacd);
   add_sym(env, NODE_SPECIAL    , "setf", do_setf);
   add_sym(env, NODE_SPECIAL    , "setq", do_setq);
-  add_sym(env, NODE_SPECIAL    , "type-of", do_type_of);
+  add_sym(env, NODE_BUILTINFUNC, "type-of", do_type_of);
   sort_syms(env);
 
   load_libs(env);
