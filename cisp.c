@@ -1045,6 +1045,16 @@ do_let_(ENV *env, NODE *alist, int star) {
 
 static NODE*
 do_list(ENV *env, NODE *alist) {
+  UNUSED(env);
+
+  if (!alist)
+    return new_node();
+  alist->r++;
+  return alist;
+}
+
+static NODE*
+do_bquote(ENV *env, NODE *alist) {
   int bq;
   NODE *c, *v, *nc, *l = NULL, *rr = NULL;
   UNUSED(env);
@@ -2126,7 +2136,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "length", do_length);
   add_sym(env, NODE_SPECIAL    , "let", do_let);
   add_sym(env, NODE_SPECIAL    , "let*", do_let_s);
-  add_sym(env, NODE_SPECIAL    , "list", do_list);
+  add_sym(env, NODE_BUILTINFUNC, "list", do_list);
   add_sym(env, NODE_BUILTINFUNC, "load", do_load);
   add_sym(env, NODE_BUILTINFUNC, "make-array", do_make_array);
   add_sym(env, NODE_BUILTINFUNC, "make-string", do_make_string);
@@ -2172,7 +2182,7 @@ eval_node(ENV *env, NODE *node) {
     c->r++;
     return c;
   case NODE_BQUOTE:
-    return do_list(env, node);
+    return do_bquote(env, node);
   case NODE_IDENT:
     return do_ident(env, node);
   case NODE_CELL:
