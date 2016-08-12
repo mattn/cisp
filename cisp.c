@@ -1850,19 +1850,16 @@ static NODE*
 do_concatenate(ENV *env, NODE *alist) {
   NODE *x, *c, *l, *nn;
   BUFFER buf;
+  UNUSED(env);
 
   if (node_narg(alist) < 3) return new_errorn("malformed concatenate", alist);
 
-  x = eval_node(env, alist->car);
-  if (x->t != NODE_IDENT) {
-    free_node(x);
+  x = alist->car;
+  if (x->t != NODE_IDENT)
     return new_errorn("first argument is not a quote", alist);
-  }
-  l = eval_node(env, alist->cdr->car);
-  if (l->t != NODE_CELL && l->t != NODE_NIL && l->t != NODE_STRING) {
-    free_node(x);
+  l = alist->cdr->car;
+  if (l->t != NODE_CELL && l->t != NODE_NIL && l->t != NODE_STRING)
     return new_errorn("argument is not a list", alist);
-  }
   c = new_node();
   c->t = !strcmp(x->s, "string") ? NODE_STRING : NODE_CELL;
 
@@ -1871,28 +1868,18 @@ do_concatenate(ENV *env, NODE *alist) {
   alist = alist->cdr;
   while (!node_isnull(alist)) {
     if (c->t == NODE_STRING) {
-      nn = eval_node(env, alist->car);
-      if (nn->t == NODE_ERROR) {
-        free_node(c);
-        buf_free(&buf);
-        c = nn;
-        break;
-      }
+      nn = alist->car;
       if (nn->t != NODE_STRING) {
         free_node(c);
         c = new_errorn("argument is not string", nn);
-        free_node(nn);
         buf_free(&buf);
         break;
       }
       buf_append(&buf, nn->s);
-      free_node(nn);
     }
     alist = alist->cdr;
   }
   if (node_isnull(alist)) c->s = buf.ptr;
-  free_node(x);
-  free_node(l);
   return c;
 }
 
@@ -2133,7 +2120,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "aref", do_aref);
   add_sym(env, NODE_BUILTINFUNC, "car", do_car);
   add_sym(env, NODE_BUILTINFUNC, "cdr", do_cdr);
-  add_sym(env, NODE_SPECIAL    , "concatenate", do_concatenate);
+  add_sym(env, NODE_BUILTINFUNC, "concatenate", do_concatenate);
   add_sym(env, NODE_SPECIAL    , "cond", do_cond);
   add_sym(env, NODE_BUILTINFUNC, "cons", do_cons);
   add_sym(env, NODE_BUILTINFUNC, "consp", do_consp);
