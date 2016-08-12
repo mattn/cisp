@@ -2019,19 +2019,13 @@ static NODE*
 do_load(ENV *env, NODE *alist) {
   NODE *x, *ret;
 
-  if (!alist->car) return new_errorn("malformed load", alist);
-  x = eval_node(env, alist->car);
-  if (x->t == NODE_ERROR) return x;
-  if (x->t != NODE_STRING) {
-    free_node(x);
+  if (node_narg(alist) != 1) return new_errorn("malformed load", alist);
+  x = alist->car;
+  if (x->t != NODE_STRING)
     return new_errorn("malformed load", alist);
-  }
   ret = load_lisp(env, x->s);
-  if (ret->t == NODE_ERROR) {
-    free_node(x);
+  if (ret->t == NODE_ERROR)
     return ret;
-  }
-  free_node(x);
   free_node(ret);
   ret = new_node();
   ret->t = NODE_T;
@@ -2133,7 +2127,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "let", do_let);
   add_sym(env, NODE_SPECIAL    , "let*", do_let_s);
   add_sym(env, NODE_SPECIAL    , "list", do_list);
-  add_sym(env, NODE_SPECIAL    , "load", do_load);
+  add_sym(env, NODE_BUILTINFUNC, "load", do_load);
   add_sym(env, NODE_BUILTINFUNC, "make-array", do_make_array);
   add_sym(env, NODE_BUILTINFUNC, "make-string", do_make_string);
   add_sym(env, NODE_BUILTINFUNC, "mod", do_mod);
