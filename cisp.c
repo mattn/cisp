@@ -1962,15 +1962,13 @@ do_nconc(ENV *env, NODE *alist) {
 static NODE*
 do_aref(ENV *env, NODE *alist) {
   NODE *x, *c;
+  UNUSED(env);
 
   if (node_narg(alist) != 2) return new_errorn("malformed aref", alist);
 
-  x = eval_node(env, alist->car);
-  if (x->t == NODE_ERROR) return x;
-  if (x->t != NODE_CELL) {
-    free_node(x);
+  x = alist->car;
+  if (x->t != NODE_CELL)
     return new_errorn("malformed aref", alist);
-  }
 
   x->r++;
   c = new_node();
@@ -2111,7 +2109,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, ">=", do_ge);
   add_sym(env, NODE_SPECIAL    , "and", do_and);
   add_sym(env, NODE_BUILTINFUNC, "apply", do_apply);
-  add_sym(env, NODE_SPECIAL    , "aref", do_aref);
+  add_sym(env, NODE_BUILTINFUNC, "aref", do_aref);
   add_sym(env, NODE_BUILTINFUNC, "car", do_car);
   add_sym(env, NODE_BUILTINFUNC, "cdr", do_cdr);
   add_sym(env, NODE_BUILTINFUNC, "concatenate", do_concatenate);
