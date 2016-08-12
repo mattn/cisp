@@ -1488,11 +1488,9 @@ do_lambda(ENV *env, NODE *alist) {
 
 static NODE*
 do_eval(ENV *env, NODE *alist) {
-  NODE *c, *x;
+  NODE *x;
   if (node_narg(alist) != 1) return new_errorn("malformed eval", alist);
-  c = eval_node(env, alist->car);
-  x = eval_node(env, c);
-  free_node(c);
+  x = eval_node(env, alist->car);
   return x;
 }
 
@@ -2148,7 +2146,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "defun", do_defun);
   add_sym(env, NODE_SPECIAL    , "dotimes", do_dotimes);
   add_sym(env, NODE_BUILTINFUNC, "eq?", do_eq);
-  add_sym(env, NODE_SPECIAL    , "eval", do_eval);
+  add_sym(env, NODE_BUILTINFUNC, "eval", do_eval);
   add_sym(env, NODE_BUILTINFUNC, "evenp", do_evenp);
   add_sym(env, NODE_SPECIAL    , "exit", do_exit);
   add_sym(env, NODE_SPECIAL    , "flet", do_flet);
