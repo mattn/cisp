@@ -898,8 +898,8 @@ do_eq(ENV *env, NODE *alist) {
 
   if (node_narg(alist) != 2) return new_errorn("malformed =", alist);
 
-  lhs = eval_node(env, alist->car);
-  rhs = eval_node(env, alist->cdr->car);
+  lhs = alist->car;
+  rhs = alist->cdr->car;
   nn = new_node();
   switch (lhs->t) {
   case NODE_INT:
@@ -921,8 +921,6 @@ do_eq(ENV *env, NODE *alist) {
     err = new_error("illegal comparing");
     break;
   }
-  free_node(lhs);
-  free_node(rhs);
   if (err) {
     free_node(nn);
     return err;
@@ -2138,7 +2136,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "1-", do_minus1);
   add_sym(env, NODE_BUILTINFUNC, "<", do_lt);
   add_sym(env, NODE_BUILTINFUNC, "<=", do_le);
-  add_sym(env, NODE_SPECIAL    , "=", do_eq);
+  add_sym(env, NODE_BUILTINFUNC, "=", do_eq);
   add_sym(env, NODE_BUILTINFUNC, ">", do_gt);
   add_sym(env, NODE_BUILTINFUNC, ">=", do_ge);
   add_sym(env, NODE_SPECIAL    , "and", do_and);
@@ -2153,7 +2151,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "defmacro", do_defmacro);
   add_sym(env, NODE_SPECIAL    , "defun", do_defun);
   add_sym(env, NODE_SPECIAL    , "dotimes", do_dotimes);
-  add_sym(env, NODE_SPECIAL    , "eq?", do_eq);
+  add_sym(env, NODE_BUILTINFUNC, "eq?", do_eq);
   add_sym(env, NODE_SPECIAL    , "eval", do_eval);
   add_sym(env, NODE_BUILTINFUNC, "evenp", do_evenp);
   add_sym(env, NODE_SPECIAL    , "exit", do_exit);
