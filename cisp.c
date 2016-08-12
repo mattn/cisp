@@ -1635,11 +1635,11 @@ static NODE*
 do_type_of(ENV *env, NODE *alist) {
   NODE *c;
   const char *p = "unknown";
+  UNUSED(env);
 
-  if (!alist) return new_errorn("malformed type-of", alist);
+  if (node_narg(alist) != 1) return new_errorn("malformed type-of", alist);
 
-  c = eval_node(env, alist->car);
-  if (c->t == NODE_ERROR) return c;
+  c = alist->car;
   switch (c->t) {
   case NODE_NIL: p = "null"; break;
   case NODE_T: p = "boolean"; break;
@@ -1657,7 +1657,6 @@ do_type_of(ENV *env, NODE *alist) {
   case NODE_ENV: p = "environment"; break;
   case NODE_ERROR: p = "error"; break;
   }
-  free_node(c);
   c = new_node();
   c->t = NODE_STRING;
   c->s = strdup(p);
@@ -2177,7 +2176,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "rplacd", do_rplacd);
   add_sym(env, NODE_SPECIAL    , "setf", do_setf);
   add_sym(env, NODE_SPECIAL    , "setq", do_setq);
-  add_sym(env, NODE_SPECIAL    , "type-of", do_type_of);
+  add_sym(env, NODE_BUILTINFUNC, "type-of", do_type_of);
   sort_syms(env);
 
   load_libs(env);
