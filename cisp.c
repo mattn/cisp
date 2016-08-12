@@ -1833,18 +1833,16 @@ do_consp(ENV *env, NODE *alist) {
 static NODE*
 do_length(ENV *env, NODE *alist) {
   NODE *x, *c;
+  UNUSED(env);
 
-  if (!alist) return new_errorn("malformed length", alist);
+  if (node_narg(alist) != 1) return new_errorn("malformed length", alist);
 
-  x = eval_node(env, alist->car);
-  if (x->t != NODE_CELL && x->t != NODE_NIL && x->t != NODE_STRING) {
-    free_node(x);
+  x = alist->car;
+  if (x->t != NODE_CELL && x->t != NODE_NIL && x->t != NODE_STRING)
     return new_errorn("argument is not a list", alist);
-  }
   c = new_node();
   c->t = NODE_INT;
   c->i = x->t == NODE_NIL ? 0 : x->t == NODE_STRING ? (long)strlen(x->s) : node_narg(x);
-  free_node(x);
   return c;
 }
 
@@ -2152,7 +2150,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "if", do_if);
   add_sym(env, NODE_SPECIAL    , "labels", do_labels);
   add_sym(env, NODE_SPECIAL    , "lambda", do_lambda);
-  add_sym(env, NODE_SPECIAL    , "length", do_length);
+  add_sym(env, NODE_BUILTINFUNC, "length", do_length);
   add_sym(env, NODE_SPECIAL    , "let", do_let);
   add_sym(env, NODE_SPECIAL    , "let*", do_let_s);
   add_sym(env, NODE_SPECIAL    , "list", do_list);
