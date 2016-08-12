@@ -1905,17 +1905,14 @@ static NODE*
 do_make_array(ENV *env, NODE *alist) {
   NODE *x, *c;
   int i, n;
+  UNUSED(env);
 
   if (node_narg(alist) != 1) return new_errorn("malformed make-array", alist);
 
-  x = eval_node(env, alist->car);
-  if (x->t == NODE_ERROR) return x;
-  if (x->t != NODE_INT || x->i < 0) {
-    free_node(x);
+  x = alist->car;
+  if (x->t != NODE_INT || x->i < 0)
     return new_errorn("malformed make-array", alist);
-  }
   n = x->i;
-  free_node(x);
 
   c = new_node();
   c->t = NODE_CELL;
@@ -2139,7 +2136,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "let*", do_let_s);
   add_sym(env, NODE_SPECIAL    , "list", do_list);
   add_sym(env, NODE_SPECIAL    , "load", do_load);
-  add_sym(env, NODE_SPECIAL    , "make-array", do_make_array);
+  add_sym(env, NODE_BUILTINFUNC, "make-array", do_make_array);
   add_sym(env, NODE_BUILTINFUNC, "make-string", do_make_string);
   add_sym(env, NODE_BUILTINFUNC, "mod", do_mod);
   add_sym(env, NODE_BUILTINFUNC, "nconc", do_nconc);
