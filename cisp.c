@@ -7,6 +7,7 @@
 #include <memory.h>
 #include <ctype.h>
 #include <float.h>
+#include <time.h>
 #include <limits.h>
 #ifndef _MSC_VER
 # include <inttypes.h>
@@ -1674,6 +1675,19 @@ do_type_of(ENV *env, NODE *alist) {
 }
 
 static NODE*
+do_time(ENV *env, NODE *alist) {
+  NODE *c;
+  clock_t start;
+  UNUSED(env);
+
+  if (node_narg(alist) != 1) return new_errorn("malformed time", alist);
+  start = clock();
+  c = eval_node(env, alist->car);
+  printf("Elapsed time: %f msecs\n", (double)(clock() - start));
+  return c;
+}
+
+static NODE*
 do_getenv(ENV *env, NODE *alist) {
   NODE *c;
   const char *p;
@@ -2156,6 +2170,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "setf", do_setf);
   add_sym(env, NODE_SPECIAL    , "setq", do_setq);
   add_sym(env, NODE_BUILTINFUNC, "type-of", do_type_of);
+  add_sym(env, NODE_BUILTINFUNC, "time", do_time);
   sort_syms(env);
 
   load_libs(env);
