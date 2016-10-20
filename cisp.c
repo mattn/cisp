@@ -22,6 +22,10 @@
 # define _printf_(a,b)
 #endif
 
+#ifdef _WIN32
+# include <windows.h>
+#endif
+
 #define CISP_MAIN
 
 #include "cisp.h"
@@ -1675,6 +1679,26 @@ do_type_of(ENV *env, NODE *alist) {
 }
 
 static NODE*
+do_sleep(ENV *env, NODE *alist) {
+  NODE *err = NULL;
+  double d;
+  UNUSED(env);
+
+  if (node_narg(alist) != 1) return new_errorn("malformed time", alist);
+
+  d = double_value(env, alist->car, &err);
+  if (err) {
+    return err;
+  }
+#ifdef _WIN32
+  Sleep((int)(d * 1000));
+#else
+  usleep((int)(d * 1000000));
+#endif
+  return new_node();
+}
+
+static NODE*
 do_time(ENV *env, NODE *alist) {
   NODE *c;
   clock_t start;
@@ -2169,6 +2193,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "rplacd", do_rplacd);
   add_sym(env, NODE_SPECIAL    , "setf", do_setf);
   add_sym(env, NODE_SPECIAL    , "setq", do_setq);
+  add_sym(env, NODE_BUILTINFUNC, "sleep", do_sleep);
   add_sym(env, NODE_BUILTINFUNC, "type-of", do_type_of);
   add_sym(env, NODE_BUILTINFUNC, "time", do_time);
   sort_syms(env);
