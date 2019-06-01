@@ -32,6 +32,8 @@
 #include "parser.h"
 #include "util.h"
 
+#define ILLIGAL_FUNCTION_CALL "illegal function call"
+
 static NODE* do_ident_global(ENV *env, NODE *node);
 static NODE* do_progn(ENV *env, NODE *alist);
 
@@ -1397,7 +1399,7 @@ call_node(ENV *env, NODE *node, NODE *alist) {
     if (!x) {
       x = look_macro(env, node->s);
       if (!x) {
-        return new_errorn("illegal function call", node);
+        return new_errorn(ILLIGAL_FUNCTION_CALL, node);
       }
       macro = 1;
     }
@@ -2228,13 +2230,13 @@ eval_node(ENV *env, NODE *node) {
   case NODE_CELL:
     c = node->car;
     if (!c) {
-      return new_errorn("illegal function call", node);
+      return new_errorn(ILLIGAL_FUNCTION_CALL, node);
     }
     if (c->t == NODE_CELL && c->car && c->car->t == NODE_IDENT && !strcmp(c->car->s, "lambda")) {
       NODE *r = do_lambda(env, c->cdr);
       if (r->t != NODE_LAMBDA) {
         free_node(r);
-        return new_errorn("illegal function call", node);
+        return new_errorn(ILLIGAL_FUNCTION_CALL, node);
       }
       c = call_node(env, r, node->cdr);
       free_node(r);
@@ -2248,7 +2250,7 @@ eval_node(ENV *env, NODE *node) {
         c = call_node(env, c, node->cdr);
       free_node(r);
     } else {
-      return new_errorn("illegal function call", node);
+      return new_errorn(ILLIGAL_FUNCTION_CALL, node);
     }
     if (c) return c;
     return new_node();
