@@ -1857,6 +1857,10 @@ do_cons(ENV *env, NODE *alist) {
   c->t = NODE_CELL;
   c->car = lhs;
   c->cdr = rhs;
+  //puts(">-----------------");
+  //dump_node(lhs);
+  //dump_node(rhs);
+  //puts("-----------------<");
   return c;
 }
 
@@ -2302,6 +2306,7 @@ main(int argc, char* argv[]) {
 
     node = parse_any(s, PARSE_ANY);
     if (node == NULL) {
+      if (!isatty(fileno(stdin))) break;
       if (s->err) fprintf(stderr, "cisp: %s\n", s->err);
       s_reset(s);
       continue;
