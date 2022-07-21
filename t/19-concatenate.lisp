@@ -1,2 +1,2 @@
-(print (concatenate 'string "foo" "bar"))
-(print (concatenate 'string "そのまさかだ" "フハハハハハ"))
+(prin1 (concatenate 'string "foo" "bar"))
+(prin1 (concatenate 'string "そのまさかだ" "フハハハハハ"))

@@ -936,6 +936,26 @@ do_eq(ENV *env, NODE *alist) {
 }
 
 static NODE*
+do_prin1(ENV *env, NODE *alist) {
+  NODE *c;
+  BUFFER buf;
+  UNUSED(env);
+
+  if (node_narg(alist) != 1) return new_errorn("malformed print", alist);
+
+  c = alist->car;
+
+  buf_init(&buf);
+  print_node(&buf, c, 0);
+  puts(buf.ptr);
+
+  c = new_node();
+  c->t = NODE_STRING;
+  c->s = buf.ptr;
+  return c;
+}
+
+static NODE*
 do_print(ENV *env, NODE *alist) {
   NODE *c;
   BUFFER buf;
@@ -946,7 +966,8 @@ do_print(ENV *env, NODE *alist) {
   c = alist->car;
 
   buf_init(&buf);
-  print_node(&buf, c, 1);
+  print_node(&buf, c, 0);
+  puts("");
   puts(buf.ptr);
 
   c = new_node();
@@ -964,7 +985,7 @@ do_println(ENV *env, NODE *alist) {
   if (node_narg(alist) != 1) return new_errorn("malformed println", alist);
 
   buf_init(&buf);
-  print_node(&buf, alist->car, 1);
+  print_node(&buf, alist->car, 0);
   puts(buf.ptr);
   c = new_node();
   c->t = NODE_STRING;
@@ -2240,6 +2261,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "or", do_or);
   add_sym(env, NODE_BUILTINFUNC, "princ", do_princ);
   add_sym(env, NODE_BUILTINFUNC, "print", do_print);
+  add_sym(env, NODE_BUILTINFUNC, "prin1", do_prin1);
   add_sym(env, NODE_BUILTINFUNC, "println", do_println);
   add_sym(env, NODE_SPECIAL    , "progn", do_progn);
   add_sym(env, NODE_SPECIAL    , "quote", do_quote);

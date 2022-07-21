@@ -1,4 +1,4 @@
 (when (= 0 1)
-  (print "hello")
-  (print "world"))
+  (prin1 "hello")
+  (prin1 "world"))
 

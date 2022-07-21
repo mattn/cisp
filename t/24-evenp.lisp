@@ -1,1 +1,1 @@
-(dotimes (i 10) (print (evenp i)))
+(dotimes (i 10) (prin1 (evenp i)))

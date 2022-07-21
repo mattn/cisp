@@ -1,1 +1,1 @@
-(print (make-string 5))
+(prin1 (make-string 5))

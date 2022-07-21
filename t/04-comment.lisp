@@ -3,5 +3,5 @@
   ) ; bar
 
 ; (
-(print (+ 1 2)) ; baz
+(prin1 (+ 1 2)) ; baz
 ; )

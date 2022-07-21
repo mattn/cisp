@@ -1,6 +1,6 @@
 (defun fizzbuzz ()
   (dotimes (i 100)
-    (print
+    (prin1
      (cond
       ((= 0 (mod i 15)) "FizzBuzz")
       ((= 0 (mod i 3)) "Fizz")

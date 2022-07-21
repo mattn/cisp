@@ -1,2 +1,2 @@
-(dotimes (i 10) (print (oddp i)))
-(dotimes (i 10) (print (oddp (- 0 i))))
+(dotimes (i 10) (prin1 (oddp i)))
+(dotimes (i 10) (prin1 (oddp (- 0 i))))

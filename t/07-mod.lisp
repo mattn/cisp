@@ -1,1 +1,1 @@
-(print (mod 5 3))
+(prin1 (mod 5 3))
