@@ -1186,6 +1186,23 @@ do_flet_labels(ENV *env, NODE *alist, int mode) {
 }
 
 static NODE*
+do_float(ENV *env, NODE *alist) {
+  NODE *c, *err = NULL;
+  double d;
+
+  if (node_narg(alist) != 1) return new_errorn("malformed float", alist);
+
+  d = double_value(env, alist->car, &err);
+  if (err) {
+    return err;
+  }
+  c = new_node();
+  c->t = NODE_DOUBLE;
+  c->d = d;
+  return c;
+}
+
+static NODE*
 do_flet(ENV *env, NODE *alist) {
   return do_flet_labels(env, alist, 0);
 }
@@ -2172,6 +2189,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "evenp", do_evenp);
   add_sym(env, NODE_BUILTINFUNC, "exit", do_exit);
   add_sym(env, NODE_SPECIAL    , "flet", do_flet);
+  add_sym(env, NODE_SPECIAL    , "float", do_float);
   add_sym(env, NODE_BUILTINFUNC, "funcall", do_funcall);
   add_sym(env, NODE_BUILTINFUNC, "getenv", do_getenv);
   add_sym(env, NODE_SPECIAL    , "if", do_if);
