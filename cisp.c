@@ -946,7 +946,7 @@ do_print(ENV *env, NODE *alist) {
   c = alist->car;
 
   buf_init(&buf);
-  print_node(&buf, c, 0);
+  print_node(&buf, c, 1);
   puts(buf.ptr);
 
   c = new_node();
@@ -964,7 +964,7 @@ do_println(ENV *env, NODE *alist) {
   if (node_narg(alist) != 1) return new_errorn("malformed println", alist);
 
   buf_init(&buf);
-  print_node(&buf, alist->car, 0);
+  print_node(&buf, alist->car, 1);
   puts(buf.ptr);
   c = new_node();
   c->t = NODE_STRING;
@@ -978,10 +978,10 @@ do_princ(ENV *env, NODE *alist) {
   BUFFER buf;
   UNUSED(env);
 
-  if (node_narg(alist) != 1) return new_errorn("malformed printc", alist);
+  if (node_narg(alist) != 1) return new_errorn("malformed princ", alist);
 
   buf_init(&buf);
-  print_node(&buf, alist->car, 0);
+  print_node(&buf, alist->car, 1);
   printf("%s", buf.ptr);
   c = new_node();
   c->t = NODE_STRING;
@@ -2136,6 +2136,36 @@ do_apply(ENV *env, NODE *alist) {
   return nn;
 }
 
+static NODE*
+do_while(ENV *env, NODE *alist) {
+  ENV *newenv;
+  NODE *c, *err = NULL;
+  int r;
+
+  if (node_narg(alist) < 1) return new_errorn("malformed while", alist);
+
+  newenv = new_env(env);
+
+  while (1) {
+    c = eval_node(env, alist->car);
+    r = c->t == NODE_T;
+    free_node(c);
+    if (err) return err;
+    if (r == 0) break;
+
+    c = do_progn(newenv, alist->cdr);
+    if (c->t == NODE_ERROR) {
+      free_env(newenv);
+      return c;
+    }
+    free_node(c);
+  }
+
+  c = new_node();
+  free_env(newenv);
+  return c;
+}
+
 void
 add_sym(ENV *env, NODE_TYPE t, const char* n, f_do f) {
   ITEM *ni;
@@ -2189,7 +2219,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "evenp", do_evenp);
   add_sym(env, NODE_BUILTINFUNC, "exit", do_exit);
   add_sym(env, NODE_SPECIAL    , "flet", do_flet);
-  add_sym(env, NODE_SPECIAL    , "float", do_float);
+  add_sym(env, NODE_BUILTINFUNC, "float", do_float);
   add_sym(env, NODE_BUILTINFUNC, "funcall", do_funcall);
   add_sym(env, NODE_BUILTINFUNC, "getenv", do_getenv);
   add_sym(env, NODE_SPECIAL    , "if", do_if);
@@ -2220,6 +2250,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "sleep", do_sleep);
   add_sym(env, NODE_BUILTINFUNC, "type-of", do_type_of);
   add_sym(env, NODE_BUILTINFUNC, "time", do_time);
+  add_sym(env, NODE_SPECIAL,     "while", do_while);
   sort_syms(env);
 
   load_libs(env);

@@ -309,7 +309,7 @@ parse_string(SCANNER *s) {
   while (!s_eof(s)) {
     c = s_getc(s);
     if (c == '\\' && !s_eof(s)) {
-      c = s_peek(s);
+      c = s_getc(s);
       switch (c) {
       case '\\': c = '\\'; break;
       case 'b': c = '\b'; break;
@@ -321,8 +321,8 @@ parse_string(SCANNER *s) {
       }
     } else if (c == '"') break;
     if (n >= l-1) {
-      buf = (char*)realloc(buf, l+20);
-      l += 20;
+      buf = (char*)realloc(buf, l+40);
+      l += 40;
     }
     buf[n++] = c;
   }
