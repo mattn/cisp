@@ -36,8 +36,8 @@ lib$(TARGET).a : $(OBJS)
 clean :
 	rm -f *.o $(BIN)
 
-debug :
-	$(CC) -g -o cisp -pg cisp.c
+debug : $(OBJS)
+	$(CC) -g -o cisp -pg $(OBJS) $(LIBS)
 
 test : $(BIN)
 	@./t/run-test.sh
