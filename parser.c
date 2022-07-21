@@ -320,7 +320,7 @@ parse_string(SCANNER *s) {
       default: free(buf); return invalid_token(s);
       }
     } else if (c == '"') break;
-    if (n == l) {
+    if (n >= l-1) {
       buf = (char*)realloc(buf, l+20);
       l += 20;
     }
@@ -334,7 +334,7 @@ parse_string(SCANNER *s) {
 
   node = new_node();
   node->t = NODE_STRING;
-  node->s = (char*)realloc(buf, n+1);
+  node->s = buf;
   return node;
 }
 
