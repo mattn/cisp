@@ -1845,6 +1845,24 @@ do_cdr(ENV *env, NODE *alist) {
 }
 
 static NODE*
+do_random(ENV *env, NODE *alist) {
+  NODE *c;
+  UNUSED(env);
+
+  if (node_narg(alist) != 1) return new_errorn("malformed random", alist);
+  if (alist->car->t != NODE_INT && alist->car->t != NODE_DOUBLE)
+    return new_errorn("malformed random", alist);
+
+  c = new_node();
+  c->t = alist->car->t;
+  if (c->t == NODE_INT)
+    c->i = rand() % alist->car->i;
+  else
+    c->d = (double)rand()/RAND_MAX;
+  return c;
+}
+
+static NODE*
 do_rplaca(ENV *env, NODE *alist) {
   NODE *lhs, *rhs;
   UNUSED(env);
@@ -2265,6 +2283,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "println", do_println);
   add_sym(env, NODE_SPECIAL    , "progn", do_progn);
   add_sym(env, NODE_SPECIAL    , "quote", do_quote);
+  add_sym(env, NODE_BUILTINFUNC, "random", do_random);
   add_sym(env, NODE_BUILTINFUNC, "rplaca", do_rplaca);
   add_sym(env, NODE_BUILTINFUNC, "rplacd", do_rplacd);
   add_sym(env, NODE_SPECIAL    , "setf", do_setf);
@@ -2353,6 +2372,8 @@ main(int argc, char* argv[]) {
   ENV *env;
   NODE *node, *ret;
   SCANNER sv, *s = &sv;
+
+  srand(time(NULL));
 
   if (argc > 1) {
     int err = 0;
