@@ -235,7 +235,8 @@ static NODE*
 parse_primitive(SCANNER *s) {
   char buf[BUFSIZ];
   size_t n = 0;
-  char *e, c;
+  char *e;
+  int c;
   NODE *x;
 
   while (n < sizeof(buf) && !s_eof(s)) {
