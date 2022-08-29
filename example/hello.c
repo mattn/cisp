@@ -25,6 +25,6 @@ do_hello(ENV *env, NODE *alist) {
 int
 cisp_init(ENV *env) {
   NODE* c = new_node();
-  add_sym(env, "hello", do_hello);
+  add_sym(env, NODE_BUILTINFUNC, "hello", do_hello);
   return 0;
 }
