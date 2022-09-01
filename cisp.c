@@ -1593,7 +1593,11 @@ do_format(ENV *env, NODE *alist) {
         tmp[0] = '\n';
         buf_append(&buf, tmp);
       } else if (n != NULL) {
-        if (*p == 'd' && n->car->t == NODE_INT) {
+        if (*p == 'c' && n->car->t == NODE_CHARACTER) {
+          snprintf(atmp, sizeof(atmp)-1, "%c", n->car->c);
+          buf_append(&buf, atmp);
+          n = n->cdr;
+        } else if (*p == 'd' && n->car->t == NODE_INT) {
           snprintf(atmp, sizeof(atmp)-1, "%ld", n->car->i);
           buf_append(&buf, atmp);
           n = n->cdr;
