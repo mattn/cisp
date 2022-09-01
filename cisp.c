@@ -1567,6 +1567,92 @@ do_eval(ENV *env, NODE *alist) {
 }
 
 static NODE*
+do_format(ENV *env, NODE *alist) {
+  char tmp[2];
+  const char* p;
+  NODE *c, *n;
+  BUFFER buf;
+  UNUSED(env);
+
+  if (node_narg(alist) < 2) return new_errorn("malformed format", alist);
+  if (alist->car->t != NODE_T && alist->car->t != NODE_NIL)
+      return new_errorn("malformed format", alist);
+  if (alist->cdr->car->t != NODE_STRING) return new_errorn("malformed format", alist);
+
+  p = alist->cdr->car->s;
+  n = alist->cdr->cdr;
+
+  buf_init(&buf);
+
+  tmp[1] = 0;
+  while (*p) {
+    if (*p == '~') {
+      char atmp[DBL_MAX_10_EXP];
+      p++;
+      if (*p == '%') {
+        tmp[0] = '\n';
+        buf_append(&buf, tmp);
+      } else if (n != NULL) {
+        if (*p == 'd' && n->car->t == NODE_INT) {
+          snprintf(atmp, sizeof(atmp)-1, "%ld", n->car->i);
+          buf_append(&buf, atmp);
+          n = n->cdr;
+        } else if (*p == 'x' && n->car->t == NODE_INT) {
+          snprintf(atmp, sizeof(atmp)-1, "%lx", n->car->i);
+          buf_append(&buf, atmp);
+          n = n->cdr;
+        } else if (*p == 'x' && n->car->t == NODE_INT) {
+          snprintf(atmp, sizeof(atmp)-1, "%lo", n->car->i);
+          buf_append(&buf, atmp);
+          n = n->cdr;
+        } else if (*p == 'b' && n->car->t == NODE_INT) {
+          int z;
+          for (z = 128; z > 0; z >>= 1) {
+            if ((n->car->i & z) == z) buf_append(&buf, "1");
+            else buf_append(&buf, "0");
+          }
+          n = n->cdr;
+        } else if (*p == 'f' && n->car->t == NODE_DOUBLE) {
+          snprintf(atmp, sizeof(atmp)-1, "%lf", n->car->d);
+          buf_append(&buf, atmp);
+          n = n->cdr;
+        } else if (*p == 'e' && n->car->t == NODE_DOUBLE) {
+          snprintf(atmp, sizeof(atmp)-1, "%le", n->car->d);
+          buf_append(&buf, atmp);
+          n = n->cdr;
+        } else if (*p == 'g' && n->car->t == NODE_DOUBLE) {
+          snprintf(atmp, sizeof(atmp)-1, "%lg", n->car->d);
+          buf_append(&buf, atmp);
+          n = n->cdr;
+        } else if (*p == 'a' && n->car->t == NODE_STRING) {
+          print_node(&buf, n, 0);
+          n = n->cdr;
+        } else if (*p == 's' && n->car->t == NODE_STRING) {
+          print_node(&buf, n->car, 1);
+          n = n->cdr;
+        } else {
+          print_node(&buf, n->car, 0);
+          n = n->cdr;
+        }
+      }
+    } else {
+      tmp[0] = *p;
+      buf_append(&buf, tmp);
+    }
+    p++;
+  }
+  c = new_node();
+  if (alist->car->t == NODE_T) {
+    printf("%s", buf.ptr);
+    buf_free(&buf);
+  } else {
+    c->t = NODE_STRING;
+    c->s = buf.ptr;
+  }
+  return c;
+}
+
+static NODE*
 do_funcall(ENV *env, NODE *alist) {
   if (node_narg(alist) < 1) return new_errorn("malformed funcall", alist);
   return call_node(env, alist->car, alist->cdr);
@@ -2277,6 +2363,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "exit", do_exit);
   add_sym(env, NODE_SPECIAL    , "flet", do_flet);
   add_sym(env, NODE_BUILTINFUNC, "float", do_float);
+  add_sym(env, NODE_BUILTINFUNC, "format", do_format);
   add_sym(env, NODE_BUILTINFUNC, "funcall", do_funcall);
   add_sym(env, NODE_BUILTINFUNC, "getenv", do_getenv);
   add_sym(env, NODE_SPECIAL    , "if", do_if);
@@ -2357,6 +2444,8 @@ eval_node(ENV *env, NODE *node) {
       NODE *r = look_func(env, c->s);
       if (r && r->t == NODE_BUILTINFUNC) {
         NODE *x = eval_list(env, node->cdr);
+        if (x->t == NODE_ERROR)
+          return x;
         c = call_node(env, r, x);
         free_node(x);
       } else
