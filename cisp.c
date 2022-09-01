@@ -1593,45 +1593,46 @@ do_format(ENV *env, NODE *alist) {
         tmp[0] = '\n';
         buf_append(&buf, tmp);
       } else if (n != NULL) {
-        if (*p == 'c' && n->car->t == NODE_CHARACTER) {
+        char f = tolower(*p);
+        if (f == 'c' && n->car->t == NODE_CHARACTER) {
           snprintf(atmp, sizeof(atmp)-1, "%c", n->car->c);
           buf_append(&buf, atmp);
           n = n->cdr;
-        } else if (*p == 'd' && n->car->t == NODE_INT) {
+        } else if (f == 'd' && n->car->t == NODE_INT) {
           snprintf(atmp, sizeof(atmp)-1, "%ld", n->car->i);
           buf_append(&buf, atmp);
           n = n->cdr;
-        } else if (*p == 'x' && n->car->t == NODE_INT) {
+        } else if (f == 'x' && n->car->t == NODE_INT) {
           snprintf(atmp, sizeof(atmp)-1, "%lx", n->car->i);
           buf_append(&buf, atmp);
           n = n->cdr;
-        } else if (*p == 'x' && n->car->t == NODE_INT) {
+        } else if (f == 'x' && n->car->t == NODE_INT) {
           snprintf(atmp, sizeof(atmp)-1, "%lo", n->car->i);
           buf_append(&buf, atmp);
           n = n->cdr;
-        } else if (*p == 'b' && n->car->t == NODE_INT) {
+        } else if (f == 'b' && n->car->t == NODE_INT) {
           int z;
           for (z = 128; z > 0; z >>= 1) {
             if ((n->car->i & z) == z) buf_append(&buf, "1");
             else buf_append(&buf, "0");
           }
           n = n->cdr;
-        } else if (*p == 'f' && n->car->t == NODE_DOUBLE) {
+        } else if (f == 'f' && n->car->t == NODE_DOUBLE) {
           snprintf(atmp, sizeof(atmp)-1, "%lf", n->car->d);
           buf_append(&buf, atmp);
           n = n->cdr;
-        } else if (*p == 'e' && n->car->t == NODE_DOUBLE) {
+        } else if (f == 'e' && n->car->t == NODE_DOUBLE) {
           snprintf(atmp, sizeof(atmp)-1, "%le", n->car->d);
           buf_append(&buf, atmp);
           n = n->cdr;
-        } else if (*p == 'g' && n->car->t == NODE_DOUBLE) {
+        } else if (f == 'g' && n->car->t == NODE_DOUBLE) {
           snprintf(atmp, sizeof(atmp)-1, "%lg", n->car->d);
           buf_append(&buf, atmp);
           n = n->cdr;
-        } else if (*p == 'a' && n->car->t == NODE_STRING) {
+        } else if (f == 'a' && n->car->t == NODE_STRING) {
           print_node(&buf, n, 0);
           n = n->cdr;
-        } else if (*p == 's' && n->car->t == NODE_STRING) {
+        } else if (f == 's' && n->car->t == NODE_STRING) {
           print_node(&buf, n->car, 1);
           n = n->cdr;
         } else {
