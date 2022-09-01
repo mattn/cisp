@@ -1617,12 +1617,24 @@ do_format(ENV *env, NODE *alist) {
             else buf_append(&buf, "0");
           }
           n = n->cdr;
+        } else if (f == 'f' && n->car->t == NODE_INT) {
+          snprintf(atmp, sizeof(atmp)-1, "%lf", (double) n->car->i);
+          buf_append(&buf, atmp);
+          n = n->cdr;
         } else if (f == 'f' && n->car->t == NODE_DOUBLE) {
           snprintf(atmp, sizeof(atmp)-1, "%lf", n->car->d);
           buf_append(&buf, atmp);
           n = n->cdr;
+        } else if (f == 'e' && n->car->t == NODE_INT) {
+          snprintf(atmp, sizeof(atmp)-1, "%le", (double) n->car->i);
+          buf_append(&buf, atmp);
+          n = n->cdr;
         } else if (f == 'e' && n->car->t == NODE_DOUBLE) {
           snprintf(atmp, sizeof(atmp)-1, "%le", n->car->d);
+          buf_append(&buf, atmp);
+          n = n->cdr;
+        } else if (f == 'g' && n->car->t == NODE_INT) {
+          snprintf(atmp, sizeof(atmp)-1, "%lg", (double) n->car->i);
           buf_append(&buf, atmp);
           n = n->cdr;
         } else if (f == 'g' && n->car->t == NODE_DOUBLE) {
