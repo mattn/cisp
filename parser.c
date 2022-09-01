@@ -242,7 +242,8 @@ parse_primitive(SCANNER *s) {
   while (n < sizeof(buf) && !s_eof(s)) {
     c = s_peek(s);
     if (c == -1) return NULL;
-    if (isalnum(c) || strchr(SYMBOL_CHARS, c)) buf[n++] = s_getc(s);
+    if (n == 1 && c == '\\') buf[n++] = s_getc(s);
+    else if (isalnum(c) || strchr(SYMBOL_CHARS, c)) buf[n++] = s_getc(s);
     else break;
   }
   buf[n] = 0;
@@ -253,6 +254,28 @@ parse_primitive(SCANNER *s) {
   }
   if (match(buf, "t", n)) {
     x->t = NODE_T;
+    return x;
+  }
+  if (buf[0] == '#') {
+    if (buf[1] != '\\') {
+      free_node(x);
+      return raise(s, "invalid character");
+    }
+    x->t = NODE_CHARACTER;
+    if (!strcmp(buf + 2, "tab"))
+      x->c = '\t';
+    else if (!strcmp(buf + 2, "return"))
+      x->c = '\n';
+    else if (!strcmp(buf + 2, "space"))
+      x->c = ' ';
+    else if (!strcmp(buf + 2, "newline") || !strcmp(buf + 2, "linefeed"))
+      x->c = '\r';
+    else if (n == 3)
+      x->c = buf[2];
+    else {
+      free_node(x);
+      return raise(s, "invalid character");
+    }
     return x;
   }
   x->i = strtol(buf, &e, 10);

@@ -203,6 +203,18 @@ print_node(BUFFER *buf, NODE *node, PRINT_MODE mode) {
     return;
   }
   switch (node->t) {
+  case NODE_CHARACTER:
+    if (node->c == '\n')
+      buf_append(buf, "#\\return");
+    else if (node->c == '\r')
+      buf_append(buf, "#\\newline");
+    else if (node->c == '\t')
+      buf_append(buf, "#\\tab");
+    else {
+      snprintf(tmp, sizeof(tmp)-1, "#\\%c", node->c);
+      buf_append(buf, tmp);
+    }
+    break;
   case NODE_INT:
     snprintf(tmp, sizeof(tmp)-1, "%ld", node->i);
     buf_append(buf, tmp);
@@ -909,6 +921,11 @@ do_eq(ENV *env, NODE *alist) {
   rhs = alist->cdr->car;
   nn = new_node();
   switch (lhs->t) {
+  case NODE_CHARACTER:
+    if (lhs->c == rhs->c) {
+      nn->t = NODE_T;
+    }
+    break;
   case NODE_INT:
     if (int_value(env, lhs, &err) == int_value(env, rhs, &err)) {
       nn->t = NODE_T;
@@ -1698,6 +1715,7 @@ do_type_of(ENV *env, NODE *alist) {
   switch (c->t) {
   case NODE_NIL: p = "null"; break;
   case NODE_T: p = "boolean"; break;
+  case NODE_CHARACTER: p = "character"; break;
   case NODE_INT: p = "int"; break;
   case NODE_DOUBLE: p = "float"; break;
   case NODE_STRING: p = "string"; break;
@@ -2304,6 +2322,7 @@ eval_node(ENV *env, NODE *node) {
   case NODE_LAMBDA:
   case NODE_BUILTINFUNC:
   case NODE_SPECIAL:
+  case NODE_CHARACTER:
   case NODE_INT:
   case NODE_DOUBLE:
   case NODE_NIL:

@@ -22,7 +22,7 @@
 #define node_isnull(x) (!x || x->t == NODE_NIL)
 
 typedef enum _NODE_TYPE {
-  NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_STRING, NODE_QUOTE, NODE_BQUOTE, NODE_IDENT,
+  NODE_NIL, NODE_T, NODE_INT, NODE_DOUBLE, NODE_CHARACTER, NODE_STRING, NODE_QUOTE, NODE_BQUOTE, NODE_IDENT,
   NODE_LAMBDA, NODE_SPECIAL, NODE_BUILTINFUNC, NODE_CELL, NODE_AREF, NODE_ENV, NODE_ERROR,
 } NODE_TYPE;
 
@@ -39,6 +39,7 @@ struct _NODE {
   NODE_TYPE t;
   int r;
   union {
+    wchar_t c;
     long i;
     double d;
     struct {
