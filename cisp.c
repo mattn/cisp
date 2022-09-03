@@ -210,6 +210,8 @@ print_node(BUFFER *buf, NODE *node, PRINT_MODE mode) {
       buf_append(buf, "#\\newline");
     else if (node->c == '\t')
       buf_append(buf, "#\\tab");
+    else if (node->c == '\x0c')
+      buf_append(buf, "#\\page");
     else {
       snprintf(tmp, sizeof(tmp)-1, "#\\%c", node->c);
       buf_append(buf, tmp);
@@ -1587,30 +1589,66 @@ do_format(ENV *env, NODE *alist) {
   tmp[1] = 0;
   while (*p) {
     if (*p == '~') {
+      int r = 0, i;
       char atmp[DBL_MAX_10_EXP];
       p++;
-      if (*p == '%') {
+
+      while (isdigit(*p))
+        r = r * 10 + (int) (*p++ - '0');
+      if (*p == '~') {
+        tmp[0] = '~';
+        r = r == 0 ? 1 : r;
+        for (i = 0; i < r; i++)
+          buf_append(&buf, tmp);
+      } else if (*p == '%') {
         tmp[0] = '\n';
-        buf_append(&buf, tmp);
+        r = r == 0 ? 1 : r;
+        for (i = 0; i < r; i++)
+          buf_append(&buf, tmp);
+      } else if (*p == '&') {
+        tmp[0] = '\n';
+        r = r == 0 ? 1 : r;
+        for (i = 0; i < r; i++)
+          buf_append(&buf, tmp);
+      } else if (*p == '|') {
+        tmp[0] = '\x0c';
+        r = r == 0 ? 1 : r;
+        for (i = 0; i < r; i++)
+          buf_append(&buf, tmp);
       } else if (n != NULL) {
+        // TODO:
+        //   ~T: Tabulate
+        //   ~P: Plural
+        //   ~^: Escape Upward
+        //   ~<: Left Justification
+        //   ~>: Right Justification
+        //   ~[~]: Conditional Expression
+        //   ~{~}: Iteration
+        //   ~(~): Case Conversion
+        //   ~*: Goto
+        //   ~?: Recursive Processing
         char f = tolower(*p);
         if (f == 'c' && n->car->t == NODE_CHARACTER) {
           snprintf(atmp, sizeof(atmp)-1, "%c", n->car->c);
           buf_append(&buf, atmp);
           n = n->cdr;
         } else if (f == 'd' && n->car->t == NODE_INT) {
+          // TODO: mincol , padchar , commachar , comma-interval
           snprintf(atmp, sizeof(atmp)-1, "%ld", n->car->i);
           buf_append(&buf, atmp);
           n = n->cdr;
         } else if (f == 'x' && n->car->t == NODE_INT) {
+          // TODO: mincol , padchar , commachar , comma-interval
           snprintf(atmp, sizeof(atmp)-1, "%lx", n->car->i);
           buf_append(&buf, atmp);
           n = n->cdr;
         } else if (f == 'x' && n->car->t == NODE_INT) {
+          // TODO: mincol , padchar , commachar , comma-interval
           snprintf(atmp, sizeof(atmp)-1, "%lo", n->car->i);
           buf_append(&buf, atmp);
           n = n->cdr;
         } else if (f == 'b' && n->car->t == NODE_INT) {
+          // TODO: mincol , padchar , commachar , comma-interval
           int z;
           for (z = 128; z > 0; z >>= 1) {
             if ((n->car->i & z) == z) buf_append(&buf, "1");
@@ -1618,26 +1656,32 @@ do_format(ENV *env, NODE *alist) {
           }
           n = n->cdr;
         } else if (f == 'f' && n->car->t == NODE_INT) {
+          // TODO: w , d , k , overflowchar , padchar
           snprintf(atmp, sizeof(atmp)-1, "%lf", (double) n->car->i);
           buf_append(&buf, atmp);
           n = n->cdr;
         } else if (f == 'f' && n->car->t == NODE_DOUBLE) {
+          // TODO: w , d , k , overflowchar , padchar
           snprintf(atmp, sizeof(atmp)-1, "%lf", n->car->d);
           buf_append(&buf, atmp);
           n = n->cdr;
         } else if (f == 'e' && n->car->t == NODE_INT) {
+          // TODO: w , d , e , k , overflowchar , padchar , exponentchar
           snprintf(atmp, sizeof(atmp)-1, "%le", (double) n->car->i);
           buf_append(&buf, atmp);
           n = n->cdr;
         } else if (f == 'e' && n->car->t == NODE_DOUBLE) {
+          // TODO: w , d , e , k , overflowchar , padchar , exponentchar
           snprintf(atmp, sizeof(atmp)-1, "%le", n->car->d);
           buf_append(&buf, atmp);
           n = n->cdr;
         } else if (f == 'g' && n->car->t == NODE_INT) {
+          // TODO w , d , e , k , overflowchar , padchar , exponentchar
           snprintf(atmp, sizeof(atmp)-1, "%lg", (double) n->car->i);
           buf_append(&buf, atmp);
           n = n->cdr;
         } else if (f == 'g' && n->car->t == NODE_DOUBLE) {
+          // TODO w , d , e , k , overflowchar , padchar , exponentchar
           snprintf(atmp, sizeof(atmp)-1, "%lg", n->car->d);
           buf_append(&buf, atmp);
           n = n->cdr;

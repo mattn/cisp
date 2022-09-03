@@ -242,7 +242,7 @@ parse_primitive(SCANNER *s) {
   while (n < sizeof(buf) && !s_eof(s)) {
     c = s_peek(s);
     if (c == -1) return NULL;
-    if (n == 1 && c == '\\') buf[n++] = s_getc(s);
+    if (n == 1 && buf[0] == '#' && c == '\\') buf[n++] = s_getc(s);
     else if (isalnum(c) || strchr(SYMBOL_CHARS, c)) buf[n++] = s_getc(s);
     else break;
   }
@@ -270,6 +270,8 @@ parse_primitive(SCANNER *s) {
       x->c = ' ';
     else if (!strcmp(buf + 2, "newline") || !strcmp(buf + 2, "linefeed"))
       x->c = '\r';
+    else if (!strcmp(buf + 2, "page"))
+      x->c = '\x0c';
     else if (n == 3)
       x->c = buf[2];
     else {
