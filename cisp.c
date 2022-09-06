@@ -41,7 +41,7 @@ static void
 dump_node(NODE *node) {
   BUFFER buf;
   buf_init(&buf);
-  print_node(&buf, node, PRINT_QUOTED);
+  print_node(&buf, node, PRINT_DEFAULT);
   puts(buf.ptr);
   buf_free(&buf);
 }
@@ -846,6 +846,82 @@ do_if(ENV *env, NODE *alist) {
 }
 
 static NODE*
+do_incf(ENV *env, NODE *alist) {
+  NODE *x, *c = NULL;
+
+  if (node_narg(alist) != 2 || alist->car->t != NODE_IDENT) return new_errorn("malformed incf", alist);
+  if (alist->cdr->car->t != NODE_INT && alist->cdr->car->t) return new_errorn("malformed incf", alist);
+
+  x = alist->car;
+  if (!x || x->t != NODE_IDENT)
+    return new_errorn("invalid identifier", x);
+
+  while (env) {
+    ITEM *ni = find_item(env->lv, env->nv, x->s);
+    if (ni) {
+      if (ni->v->t != NODE_INT && ni->v->t) {
+        return new_errorn("invalid type", alist);
+      }
+      c = eval_node(env, alist->cdr->car);
+      if (c->t == NODE_ERROR) return c;
+
+      if (c->t == NODE_INT)
+        ni->v->i += c->i;
+      else
+        ni->v->d += c->d;
+      break;
+    }
+    if (!env->p) {
+      break;
+    }
+    env = env->p;
+  }
+
+  if (c == NULL)
+    return new_errorn("invalid identifier", x);
+  c->r++;
+  return c;
+}
+
+static NODE*
+do_decf(ENV *env, NODE *alist) {
+  NODE *x, *c = NULL;
+
+  if (node_narg(alist) != 2 || alist->car->t != NODE_IDENT) return new_errorn("malformed decf", alist);
+  if (alist->cdr->car->t != NODE_INT && alist->cdr->car->t) return new_errorn("malformed decf", alist);
+
+  x = alist->car;
+  if (!x || x->t != NODE_IDENT)
+    return new_errorn("invalid identifier", x);
+
+  while (env) {
+    ITEM *ni = find_item(env->lv, env->nv, x->s);
+    if (ni) {
+      if (ni->v->t != NODE_INT && ni->v->t) {
+        return new_errorn("invalid type", alist);
+      }
+      c = eval_node(env, alist->cdr->car);
+      if (c->t == NODE_ERROR) return c;
+
+      if (c->t == NODE_INT)
+        ni->v->i -= c->i;
+      else
+        ni->v->d -= c->d;
+      break;
+    }
+    if (!env->p) {
+      break;
+    }
+    env = env->p;
+  }
+
+  if (c == NULL)
+    return new_errorn("invalid identifier", x);
+  c->r++;
+  return c;
+}
+
+static NODE*
 do_gt(ENV *env, NODE *alist) {
   NODE *nn, *err = NULL;
 
@@ -987,7 +1063,7 @@ do_print(ENV *env, NODE *alist) {
   buf_init(&buf);
   print_node(&buf, c, PRINT_QUOTED);
   puts("");
-  puts(buf.ptr);
+  printf("%s", buf.ptr);
 
   c = new_node();
   c->t = NODE_STRING;
@@ -2415,6 +2491,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL    , "cond", do_cond);
   add_sym(env, NODE_BUILTINFUNC, "cons", do_cons);
   add_sym(env, NODE_BUILTINFUNC, "consp", do_consp);
+  add_sym(env, NODE_SPECIAL    , "decf", do_decf);
   add_sym(env, NODE_SPECIAL    , "defmacro", do_defmacro);
   add_sym(env, NODE_SPECIAL    , "defun", do_defun);
   add_sym(env, NODE_SPECIAL    , "dotimes", do_dotimes);
@@ -2428,6 +2505,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "funcall", do_funcall);
   add_sym(env, NODE_BUILTINFUNC, "getenv", do_getenv);
   add_sym(env, NODE_SPECIAL    , "if", do_if);
+  add_sym(env, NODE_SPECIAL    , "incf", do_incf);
   add_sym(env, NODE_SPECIAL    , "labels", do_labels);
   add_sym(env, NODE_SPECIAL    , "lambda", do_lambda);
   add_sym(env, NODE_BUILTINFUNC, "length", do_length);
@@ -2577,6 +2655,7 @@ main(int argc, char* argv[]) {
     if (ret->t == NODE_ERROR) {
       fprintf(stderr, "cisp: %s\n", ret->s);
     } else if (isatty(fileno(stdin))) {
+      puts("");
       dump_node(ret);
     }
     free_node(ret);
