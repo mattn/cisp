@@ -41,7 +41,7 @@ static void
 dump_node(NODE *node) {
   BUFFER buf;
   buf_init(&buf);
-  print_node(&buf, node, 0);
+  print_node(&buf, node, PRINT_QUOTED);
   puts(buf.ptr);
   buf_free(&buf);
 }
@@ -106,7 +106,7 @@ new_errorn(const char* msg, NODE *n) {
   buf_init(&buf);
   buf_append(&buf, msg);
   buf_append(&buf, ": ");
-  print_node(&buf, n, 0);
+  print_node(&buf, n, PRINT_DEFAULT);
   node = new_error(buf.ptr);
   return node;
 }
@@ -168,7 +168,7 @@ static void
 print_str(BUFFER *buf, NODE *node, int mode) {
   char tmp[2];
   const char* p;
-  if (mode) {
+  if (mode == PRINT_DEFAULT) {
     buf_append(buf, node->s);
     return;
   }
@@ -965,7 +965,7 @@ do_prin1(ENV *env, NODE *alist) {
   c = alist->car;
 
   buf_init(&buf);
-  print_node(&buf, c, 0);
+  print_node(&buf, c, PRINT_QUOTED);
   puts(buf.ptr);
 
   c = new_node();
@@ -985,7 +985,7 @@ do_print(ENV *env, NODE *alist) {
   c = alist->car;
 
   buf_init(&buf);
-  print_node(&buf, c, 0);
+  print_node(&buf, c, PRINT_QUOTED);
   puts("");
   puts(buf.ptr);
 
@@ -1004,7 +1004,7 @@ do_println(ENV *env, NODE *alist) {
   if (node_narg(alist) != 1) return new_errorn("malformed println", alist);
 
   buf_init(&buf);
-  print_node(&buf, alist->car, 0);
+  print_node(&buf, alist->car, PRINT_QUOTED);
   puts(buf.ptr);
   c = new_node();
   c->t = NODE_STRING;
@@ -1021,7 +1021,7 @@ do_princ(ENV *env, NODE *alist) {
   if (node_narg(alist) != 1) return new_errorn("malformed princ", alist);
 
   buf_init(&buf);
-  print_node(&buf, alist->car, 1);
+  print_node(&buf, alist->car, PRINT_DEFAULT);
   printf("%s", buf.ptr);
   c = new_node();
   c->t = NODE_STRING;
@@ -1686,7 +1686,7 @@ do_format(ENV *env, NODE *alist) {
           buf_append(&buf, atmp);
           n = n->cdr;
         } else if (f == 'a' && n->car->t == NODE_STRING) {
-          print_node(&buf, n, 0);
+          print_node(&buf, n->car, 0);
           n = n->cdr;
         } else if (f == 's' && n->car->t == NODE_STRING) {
           print_node(&buf, n->car, 1);
