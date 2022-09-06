@@ -1045,11 +1045,7 @@ do_prin1(ENV *env, NODE *alist) {
   puts(buf.ptr);
   buf_free(&buf);
 
-  buf_init(&buf);
-  print_node(&buf, c, PRINT_DEFAULT);
-  c = new_node();
-  c->t = NODE_STRING;
-  c->s = buf.ptr;
+  c->r++;
   return c;
 }
 
@@ -1069,11 +1065,7 @@ do_print(ENV *env, NODE *alist) {
   printf("%s", buf.ptr);
   buf_free(&buf);
 
-  buf_init(&buf);
-  print_node(&buf, c, PRINT_DEFAULT);
-  c = new_node();
-  c->t = NODE_STRING;
-  c->s = buf.ptr;
+  c->r++;
   return c;
 }
 
@@ -1092,11 +1084,7 @@ do_println(ENV *env, NODE *alist) {
   puts(buf.ptr);
   buf_free(&buf);
 
-  buf_init(&buf);
-  print_node(&buf, c, PRINT_DEFAULT);
-  c = new_node();
-  c->t = NODE_STRING;
-  c->s = buf.ptr;
+  c->r++;
   return c;
 }
 
@@ -1108,12 +1096,14 @@ do_princ(ENV *env, NODE *alist) {
 
   if (node_narg(alist) != 1) return new_errorn("malformed princ", alist);
 
+  c = alist->car;
+
   buf_init(&buf);
   print_node(&buf, alist->car, PRINT_DEFAULT);
   printf("%s", buf.ptr);
-  c = new_node();
-  c->t = NODE_STRING;
-  c->s = buf.ptr;
+  buf_free(&buf);
+
+  c->r++;
   return c;
 }
 
