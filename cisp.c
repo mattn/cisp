@@ -41,7 +41,7 @@ static void
 dump_node(NODE *node) {
   BUFFER buf;
   buf_init(&buf);
-  print_node(&buf, node, PRINT_DEFAULT);
+  print_node(&buf, node, PRINT_QUOTED);
   puts(buf.ptr);
   buf_free(&buf);
 }
@@ -1043,7 +1043,10 @@ do_prin1(ENV *env, NODE *alist) {
   buf_init(&buf);
   print_node(&buf, c, PRINT_QUOTED);
   puts(buf.ptr);
+  buf_free(&buf);
 
+  buf_init(&buf);
+  print_node(&buf, c, PRINT_DEFAULT);
   c = new_node();
   c->t = NODE_STRING;
   c->s = buf.ptr;
@@ -1064,7 +1067,10 @@ do_print(ENV *env, NODE *alist) {
   print_node(&buf, c, PRINT_QUOTED);
   puts("");
   printf("%s", buf.ptr);
+  buf_free(&buf);
 
+  buf_init(&buf);
+  print_node(&buf, c, PRINT_DEFAULT);
   c = new_node();
   c->t = NODE_STRING;
   c->s = buf.ptr;
@@ -1079,9 +1085,15 @@ do_println(ENV *env, NODE *alist) {
 
   if (node_narg(alist) != 1) return new_errorn("malformed println", alist);
 
+  c = alist->car;
+
   buf_init(&buf);
-  print_node(&buf, alist->car, PRINT_QUOTED);
+  print_node(&buf, c, PRINT_QUOTED);
   puts(buf.ptr);
+  buf_free(&buf);
+
+  buf_init(&buf);
+  print_node(&buf, c, PRINT_DEFAULT);
   c = new_node();
   c->t = NODE_STRING;
   c->s = buf.ptr;
