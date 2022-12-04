@@ -8,14 +8,14 @@ SRCS = \
 OBJS = $(subst .c,.o,$(SRCS))
 
 CC=gcc
-CFLAGS = -g -O2 -funroll-loops -Wall -Wextra -Wwrite-strings -Wformat=2 -Werror
+CFLAGS = -O3 -funroll-loops -Wall -Wextra -Wwrite-strings -Wformat=2 -Werror
 
 ifeq ($(OS),Windows_NT)
 BIN := $(TARGET).exe
-LIBS = -g -O2 -funroll-loops -ldl -Wl,--export-all-symbols -Wl,--out-implib,libcisp.a
+LIBS = -O3 -funroll-loops -ldl -Wl,--export-all-symbols -Wl,--out-implib,libcisp.a
 else
 BIN = $(TARGET)
-LIBS = -g -O2 -funroll-loops -ldl -Wl,--export-dynamic
+LIBS = -O3 -funroll-loops -ldl -Wl,--export-dynamic
 endif
 
 .SUFFIXES: .c .o

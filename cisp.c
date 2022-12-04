@@ -14,10 +14,12 @@
 # include <unistd.h>
 # define _printf_(a,b) __attribute__ ((format (printf, a, b)))
 #else
+# include <proces.h>
 # include <io.h>
 # define strdup(x) _strdup(x)
 # define isatty(f) _isatty(f)
 # define fileno(f) _fileno(f)
+# define getpid() _getpid()
 # define snprintf(b,n,f,...) _snprintf(b,n,f,__VA_ARGS__)
 # define _printf_(a,b)
 #endif
@@ -1331,6 +1333,15 @@ do_labels(ENV *env, NODE *alist) {
 }
 
 static NODE*
+do_error(ENV *env, NODE *alist) {
+  UNUSED(env);
+
+  if (node_narg(alist) != 1 || alist->cdr->t != NODE_STRING) return new_errorn("malformed error", alist);
+
+  return new_error(alist->cdr->car->s);
+}
+
+static NODE*
 do_exit(ENV *env, NODE *alist) {
   UNUSED(env);
 
@@ -2500,6 +2511,7 @@ add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "eq?", do_eq);
   add_sym(env, NODE_BUILTINFUNC, "eval", do_eval);
   add_sym(env, NODE_BUILTINFUNC, "evenp", do_evenp);
+  add_sym(env, NODE_BUILTINFUNC, "error", do_error);
   add_sym(env, NODE_BUILTINFUNC, "exit", do_exit);
   add_sym(env, NODE_SPECIAL    , "flet", do_flet);
   add_sym(env, NODE_BUILTINFUNC, "float", do_float);
@@ -2622,7 +2634,7 @@ main(int argc, char* argv[]) {
   NODE *node, *ret;
   SCANNER sv, *s = &sv;
 
-  srand(time(NULL));
+  srand(time(NULL)^getpid());
 
   if (argc > 1) {
     int err = 0;
