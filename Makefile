@@ -43,12 +43,12 @@ test : $(BIN)
 	@./t/run-test.sh
 
 prof1 : $(BIN)
-	$(CC) -o $(BIN) -pg cisp.c
+	$(CC) -o $(BIN) -pg $(SRCS) $(LIBS)
 	./$(BIN) example/tak.lisp
 	gprof $(BIN) gmon.out -p | less
 
 prof2 : $(BIN)
-	$(CC) -o $(BIN) -pg cisp.c
+	$(CC) -o $(BIN) -pg $(SRCS) $(LIBS)
 	./$(BIN) example/fib.lisp
 	gprof $(BIN) gmon.out -p | less
 
