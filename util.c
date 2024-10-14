@@ -105,7 +105,7 @@ readdir(DIR *dir) {
 
 static void
 walk(ENV *env, char *base) {
-  char path[PATH_MAX];
+  char path[PATH_MAX+1];
   DIR *dir;
   struct dirent *ent;
   struct stat st;
@@ -117,7 +117,7 @@ walk(ENV *env, char *base) {
   ent = readdir(dir);
   while (ent) {
     if (*(ent->d_name) != '.') {
-      snprintf(path, sizeof(path)-1, "%s/%s", base, ent->d_name);
+      snprintf(path, sizeof(path), "%s/%s", base, ent->d_name);
       if (stat(path, &st)) {
         fprintf(stderr, "failed to get stat: %s\n", path);
         break;
