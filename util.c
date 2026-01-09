@@ -168,7 +168,7 @@ load_libs(ENV *env) {
 
 #if defined(__APPLE__)
    uint32_t size = sizeof(path);
-   if (_NSGetExecutablePath(path, &size) == 0)
+   if (_NSGetExecutablePath(path, &size) != 0)
      fatal("couldn't get module information");
  #elif defined(__linux__)
    ssize_t len = readlink("/proc/self/exe", path, sizeof(path)-1);
@@ -187,7 +187,7 @@ load_libs(ENV *env) {
   while (*ptr != '/') ptr--;
   *ptr = 0;
   ptr = top + strlen(top) - 4;
-  if (strcmp("/bin", ptr) == 0)
+  if (strcmp(ptr, "/bin") != 0)
     ptr += 4;
   strcpy(ptr, "/lib");
 

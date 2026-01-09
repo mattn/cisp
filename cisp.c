@@ -1406,8 +1406,17 @@ do_setf(ENV *env, NODE *alist) {
       y = eval_node(env, x->car->car);
       while (x) {
         z = eval_node(env, x->car->cdr);
-        if (z->t == NODE_ERROR) return z;
-        if (z->t != NODE_INT) return new_errorn("malformed setf", alist);
+        if (z->t == NODE_ERROR) {
+          free_node(c);
+          free_node(y);
+          return z;
+        }
+        if (z->t != NODE_INT) {
+          free_node(c);
+          free_node(y);
+          free_node(z);
+          return new_errorn("malformed setf", alist);
+        }
         n = z->i;
         free_node(z);
         for (i = 0; i < n; i++) {
@@ -2597,8 +2606,10 @@ eval_node(ENV *env, NODE *node) {
       NODE *r = look_func(env, c->s);
       if (r && r->t == NODE_BUILTINFUNC) {
         NODE *x = eval_list(env, node->cdr);
-        if (x->t == NODE_ERROR)
+        if (x->t == NODE_ERROR) {
+          free_node(r);
           return x;
+        }
         c = call_node(env, r, x);
         free_node(x);
       } else
