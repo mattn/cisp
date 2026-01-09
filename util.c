@@ -167,27 +167,27 @@ load_libs(ENV *env) {
   char path[PATH_MAX], *top = path, *ptr;
 
 #if defined(__APPLE__)
-  uint32_t size = sizeof(path);
-  if (_NSGetExecutablePath(path, &size) == 0)
-    fatal("cound't get module information");
-#elif defined(__linux__)
-  ssize_t len = readlink("/proc/self/exe", path, sizeof(path)-1);
-  if (len == -1)
-    fatal("cound't get module information");
-  path[len] = '\0';
-#elif defined(_WIN32)
-  if (GetModuleFileName(NULL, path, sizeof(path)) == 0)
-    fatal("cound't get module information");
-  ptr = path;
-  while (*ptr) { if (*ptr == '\\') *ptr = '/'; ptr++; }
-#else
-  fatal("cound't get module information");
-#endif
+   uint32_t size = sizeof(path);
+   if (_NSGetExecutablePath(path, &size) == 0)
+     fatal("couldn't get module information");
+ #elif defined(__linux__)
+   ssize_t len = readlink("/proc/self/exe", path, sizeof(path)-1);
+   if (len == -1)
+     fatal("couldn't get module information");
+   path[len] = '\0';
+ #elif defined(_WIN32)
+   if (GetModuleFileName(NULL, path, sizeof(path)) == 0)
+     fatal("couldn't get module information");
+   ptr = path;
+   while (*ptr) { if (*ptr == '\\') *ptr = '/'; ptr++; }
+ #else
+   fatal("couldn't get module information");
+ #endif
   ptr = top + strlen(top) - 1;
   while (*ptr != '/') ptr--;
   *ptr = 0;
   ptr = top + strlen(top) - 4;
-  if (strcmp("/bin", ptr))
+  if (strcmp("/bin", ptr) == 0)
     ptr += 4;
   strcpy(ptr, "/lib");
 
