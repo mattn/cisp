@@ -135,6 +135,9 @@ ENV *new_env(ENV *p) {
     env->p = p;
     env->r = 1;
   }
+  if (p) {
+    p->r++;
+  }
   return env;
 }
 
@@ -343,6 +346,7 @@ void free_node(NODE *node) {
 
 void free_env(ENV *env) {
   int i;
+  ENV *parent;
   env->r--;
   if (env->r > 0)
     return;
@@ -364,8 +368,12 @@ void free_env(ENV *env) {
   env->nm = 0;
   env->lf = NULL;
   env->lm = NULL;
+  parent = env->p;
   env->p = env_freelist;
   env_freelist = env;
+  if (parent) {
+    free_env(parent);
+  }
 }
 
 static int compare_item(const void *a, const void *b) {
@@ -1486,6 +1494,16 @@ static NODE *do_exit(ENV *env, NODE *alist) {
   return NULL;
 }
 
+static ITEM *find_item_in_env_chain(ENV *env, const char *k) {
+  while (env) {
+    ITEM *ni = find_item_linear(env->lv, env->nv, k);
+    if (ni)
+      return ni;
+    env = env->p;
+  }
+  return NULL;
+}
+
 static NODE *do_setq(ENV *env, NODE *alist) {
   NODE *x, *c, *last = NULL;
 
@@ -1501,28 +1519,14 @@ static NODE *do_setq(ENV *env, NODE *alist) {
     last = eval_node(env, c->car);
     if (last->t == NODE_ERROR)
       return last;
-    // Search in current environment first
-    ITEM *ni = find_item_linear(env->lv, env->nv, x->s);
+    // Search in current and parent environments
+    ITEM *ni = find_item_in_env_chain(env, x->s);
     if (ni) {
       free_node(ni->v);
       ni->v = last;
     } else {
-      // Search in parent environments (but not global for local variables)
-      ENV *current_env = env->p;
-      ni = NULL;
-      while (current_env && current_env->p) {  // Don't search global
-        ni = find_item_linear(current_env->lv, current_env->nv, x->s);
-        if (ni) {
-          free_node(ni->v);
-          ni->v = last;
-          break;
-        }
-        current_env = current_env->p;
-      }
-      // If not found in non-global scopes, create in current environment
-      if (!ni) {
-        add_variable(env, x->s, last);
-      }
+      // Variable not found anywhere, create in current env
+      add_variable(env, x->s, last);
     }
     alist = c->cdr;
   }
@@ -1712,10 +1716,8 @@ static NODE *call_node(ENV *env, NODE *node, NODE *alist) {
     return new_errorn("malformed arguments", node);
   }
 
-  // Use the captured environment directly instead of creating a new one
-  // For closures, use the captured environment directly
-  newenv = x->car->p;
-  newenv->r++;
+  // Create a new environment with the captured environment as parent
+  newenv = new_env(x->car->p);
   c = x->cdr->car;
   p = x->cdr->cdr;
 
