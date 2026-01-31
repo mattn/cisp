@@ -63,7 +63,7 @@ typedef struct {
 } ITEM;
 
 struct _ENV {
-  int nv;
+  int nv, cv;
   ITEM **lv;
   int nf;
   ITEM **lf;

@@ -73,10 +73,19 @@ skip_white(SCANNER *s) {
   }
 }
 
+static NODE *node_freelist = NULL;
+
 NODE*
 new_node() {
-  NODE* node = (NODE*)malloc(sizeof(NODE));
-  memset(node, 0, sizeof(NODE));
+  NODE* node;
+  if (node_freelist) {
+    node = node_freelist;
+    node_freelist = node->cdr;
+    memset(node, 0, sizeof(NODE));
+  } else {
+    node = (NODE*)malloc(sizeof(NODE));
+    memset(node, 0, sizeof(NODE));
+  }
   node->t = NODE_NIL;
   node->r++;
   return node;
@@ -113,12 +122,23 @@ new_errorn(const char* msg, NODE *n) {
   return node;
 }
 
+static ENV *env_freelist = NULL;
+
 ENV*
 new_env(ENV *p) {
-  ENV* env = (ENV*)malloc(sizeof(ENV));
-  memset(env, 0, sizeof(ENV));
-  env->p = p;
-  env->r++;
+  ENV* env;
+  if (env_freelist) {
+    env = env_freelist;
+    env_freelist = env->p;
+    env->nv = 0;
+    env->p = p;
+    env->r = 1;
+  } else {
+    env = (ENV*)malloc(sizeof(ENV));
+    memset(env, 0, sizeof(ENV));
+    env->p = p;
+    env->r = 1;
+  }
   return env;
 }
 
@@ -297,7 +317,8 @@ free_node(NODE *node) {
   default:
     break;
   }
-  free((void*)node);
+  node->cdr = node_freelist;
+  node_freelist = node;
 }
 
 void
@@ -307,8 +328,6 @@ free_env(ENV *env) {
   if (env->r > 0) return;
   for (i = 0; i < env->nv; i++) {
     free_node(env->lv[i]->v);
-    free((void*)env->lv[i]->k);
-    free((void*)env->lv[i]);
   }
   for (i = 0; i < env->nf; i++) {
     free_node(env->lf[i]->v);
@@ -320,10 +339,15 @@ free_env(ENV *env) {
     free((void*)env->lm[i]->k);
     free((void*)env->lm[i]);
   }
-  free((void*)env->lv);
   free((void*)env->lf);
   free((void*)env->lm);
-  free((void*)env);
+  env->nv = 0;
+  env->nf = 0;
+  env->nm = 0;
+  env->lf = NULL;
+  env->lm = NULL;
+  env->p = env_freelist;
+  env_freelist = env;
 }
 
 static int
@@ -332,7 +356,7 @@ compare_item(const void *a, const void *b) {
 }
 
 static INLINE void
-add_item(ITEM ***ll, int *nl, const char *k, NODE *v) {
+add_item(ITEM ***ll, int *nl, const char *k, NODE *v, int do_sort) {
   ITEM *ni = (ITEM*)malloc(sizeof(ITEM));
   memset(ni, 0, sizeof(ITEM));
   ni->k = strdup(k);
@@ -340,7 +364,19 @@ add_item(ITEM ***ll, int *nl, const char *k, NODE *v) {
   *ll = (ITEM**)realloc(*ll, sizeof(ITEM*) * (*nl + 1));
   (*ll)[*nl] = ni;
   (*nl)++;
-  qsort(*ll, *nl, sizeof(ITEM*), compare_item);
+  if (do_sort)
+    qsort(*ll, *nl, sizeof(ITEM*), compare_item);
+}
+
+static INLINE ITEM*
+find_item_linear(ITEM **ll, int nl, const char *k) {
+  int i;
+  for (i = 0; i < nl; i++) {
+    if (strcmp(ll[i]->k, k) == 0) {
+      return ll[i];
+    }
+  }
+  return NULL;
 }
 
 static INLINE ITEM*
@@ -369,7 +405,7 @@ look_ident(ENV *env, const char *k) {
 
   if (!k) return NULL;
 
-  ni = find_item(env->lv, env->nv, k);
+  ni = find_item_linear(env->lv, env->nv, k);
   if (ni) {
     ni->v->r++;
     return ni->v;
@@ -416,13 +452,24 @@ look_macro(ENV *env, const char *k) {
 
 void
 add_variable(ENV *env, const char *k, NODE *node) {
-  ITEM *ni = find_item(env->lv, env->nv, k);
+  ITEM *ni = find_item_linear(env->lv, env->nv, k);
+  int i;
   if (ni) {
     free_node(ni->v);
     ni->v = node;
     return;
   }
-  add_item(&env->lv, &env->nv, k, node);
+  if (env->nv >= env->cv) {
+    int newcv = env->cv ? env->cv * 2 : 4;
+    env->lv = (ITEM**)realloc(env->lv, sizeof(ITEM*) * newcv);
+    for (i = env->cv; i < newcv; i++) {
+      env->lv[i] = (ITEM*)malloc(sizeof(ITEM));
+    }
+    env->cv = newcv;
+  }
+  ni = env->lv[env->nv++];
+  ni->k = k;
+  ni->v = node;
 }
 
 void
@@ -433,7 +480,7 @@ add_function(ENV *env, const char *k, NODE *node) {
     ni->v = node;
     return;
   }
-  add_item(&env->lf, &env->nf, k, node);
+  add_item(&env->lf, &env->nf, k, node, 1);
 }
 
 void
@@ -444,7 +491,7 @@ add_macro(ENV *env, const char *k, NODE *node) {
     ni->v = node;
     return;
   }
-  add_item(&env->lm, &env->nm, k, node);
+  add_item(&env->lm, &env->nm, k, node, 1);
 }
 
 static long
@@ -859,7 +906,7 @@ do_incf(ENV *env, NODE *alist) {
     return new_errorn("invalid identifier", x);
 
   while (env) {
-    ITEM *ni = find_item(env->lv, env->nv, x->s);
+    ITEM *ni = find_item_linear(env->lv, env->nv, x->s);
     if (ni) {
       if (ni->v->t != NODE_INT && ni->v->t) {
         return new_errorn("invalid type", alist);
@@ -897,7 +944,7 @@ do_decf(ENV *env, NODE *alist) {
     return new_errorn("invalid identifier", x);
 
   while (env) {
-    ITEM *ni = find_item(env->lv, env->nv, x->s);
+    ITEM *ni = find_item_linear(env->lv, env->nv, x->s);
     if (ni) {
       if (ni->v->t != NODE_INT && ni->v->t) {
         return new_errorn("invalid type", alist);
@@ -1371,7 +1418,7 @@ do_setq(ENV *env, NODE *alist) {
         add_variable(env, x->s, last);
         break;
       }
-      ITEM *ni = find_item(env->lv, env->nv, x->s);
+      ITEM *ni = find_item_linear(env->lv, env->nv, x->s);
       if (ni) {
         free_node(ni->v);
         ni->v = last;
@@ -1436,7 +1483,7 @@ do_setf(ENV *env, NODE *alist) {
       c = eval_node(env, c);
       if (c->t == NODE_ERROR) return c;
       while (env) {
-        ITEM *ni = find_item(env->lv, env->nv, x->s);
+        ITEM *ni = find_item_linear(env->lv, env->nv, x->s);
         if (!env->p) {
           add_variable(env, x->s, c);
           break;
@@ -1471,7 +1518,7 @@ static INLINE NODE*
 do_ident(ENV *env, NODE *alist) {
   ITEM *ni;
 
-  ni = find_item(env->lv, env->nv, alist->s);
+  ni = find_item_linear(env->lv, env->nv, alist->s);
   if (ni) {
     ni->v->r++;
     return ni->v;
@@ -1504,7 +1551,7 @@ copy_node(ENV *env, NODE *lhs) {
 
   if (!lhs) return NULL;
   if (lhs->t == NODE_IDENT) {
-    ni = find_item(env->lv, env->nv, lhs->s);
+    ni = find_item_linear(env->lv, env->nv, lhs->s);
     if (ni) {
       ni->v->r++;
       rhs = ni->v;
