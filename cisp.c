@@ -2440,39 +2440,78 @@ static NODE *do_length(ENV *env, NODE *alist) {
 static NODE *do_concatenate(ENV *env, NODE *alist) {
   NODE *x, *c, *l, *nn;
   BUFFER buf;
+  int is_string;
+  NODE *result_head = NULL, *result_tail = NULL;
   UNUSED(env);
 
   if (node_narg(alist) < 3)
     return new_errorn("malformed concatenate", alist);
 
   x = alist->car;
+  if (x->t == NODE_QUOTE && x->car && x->car->t == NODE_IDENT) {
+    x = x->car;
+  }
   if (x->t != NODE_IDENT)
     return new_errorn("first argument is not a quote", alist);
   l = alist->cdr->car;
   if (l->t != NODE_CELL && l->t != NODE_NIL && l->t != NODE_STRING)
     return new_errorn("argument is not a list", alist);
-  c = new_node();
-  c->t = !strcmp(x->s, "string") ? NODE_STRING : NODE_CELL;
 
-  buf_init(&buf);
+  is_string = !strcmp(x->s, "string");
 
-  alist = alist->cdr;
-  while (!node_isnull(alist)) {
-    if (c->t == NODE_STRING) {
+  if (is_string) {
+    c = new_node();
+    c->t = NODE_STRING;
+    buf_init(&buf);
+
+    alist = alist->cdr;
+    while (!node_isnull(alist)) {
       nn = alist->car;
       if (nn->t != NODE_STRING) {
         free_node(c);
         c = new_errorn("argument is not string", nn);
         buf_free(&buf);
-        break;
+        return c;
       }
       buf_append(&buf, nn->s);
+      alist = alist->cdr;
     }
-    alist = alist->cdr;
-  }
-  if (node_isnull(alist))
     c->s = buf.ptr;
-  return c;
+    return c;
+  } else {
+    alist = alist->cdr;
+    while (alist && !node_isnull(alist)) {
+      nn = alist->car;
+      if (nn->t != NODE_CELL && nn->t != NODE_NIL) {
+        return new_errorn("argument is not a list", nn);
+      }
+      while (nn && nn->t == NODE_CELL) {
+        NODE *new_cell = new_node();
+        new_cell->t = NODE_CELL;
+        new_cell->car = nn->car;
+        if (new_cell->car)
+          new_cell->car->r++;
+        new_cell->cdr = NULL;
+        if (result_head == NULL) {
+          result_head = new_cell;
+          result_tail = new_cell;
+        } else {
+          result_tail->cdr = new_cell;
+          result_tail = new_cell;
+        }
+        nn = nn->cdr;
+      }
+      alist = alist->cdr;
+    }
+    if (result_head == NULL) {
+      c = new_node();
+      c->t = NODE_NIL;
+      return c;
+    }
+    result_tail->cdr = new_node();
+    result_tail->cdr->t = NODE_NIL;
+    return result_head;
+  }
 }
 
 static NODE *do_make_string(ENV *env, NODE *alist) {

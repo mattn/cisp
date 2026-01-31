@@ -1,2 +1,6 @@
 (prin1 (concatenate 'string "foo" "bar"))
 (prin1 (concatenate 'string "そのまさかだ" "フハハハハハ"))
+(prin1 (concatenate 'list '(1 2 3) '(4 5 6)))
+(prin1 (concatenate 'list '(a b) '(c) '(d e f)))
+(prin1 (concatenate 'list '() '(1 2)))
+(prin1 (concatenate 'list '(1 2) '()))
