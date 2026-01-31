@@ -33,6 +33,8 @@ jobs:
       run: |
         if command -v valgrind &> /dev/null; then
           make valgrind
+          echo "Valgrind log:"
+          cat valgrind.log | head -50
         else
           echo "valgrind not available, skipping memory leak check"
         fi
