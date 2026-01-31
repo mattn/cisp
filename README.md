@@ -8,7 +8,7 @@ A compact Lisp interpreter written in C.
 
 - **Cross-platform**: Runs on Linux, macOS, and Windows
 - **Lightweight**: Single binary with minimal dependencies
-- **Lisp-1**: Functions and variables share the same namespace
+- **Lisp-2**: Functions and variables have separate namespaces
 - **Dynamic library support**: Load shared libraries with the `load` function
 - **First-class continuations**: Supports `call/cc`
 - **Tail call optimization**: Efficient execution of recursive functions
