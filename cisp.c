@@ -1507,8 +1507,22 @@ static NODE *do_setq(ENV *env, NODE *alist) {
       free_node(ni->v);
       ni->v = last;
     } else {
-      // Create new variable in current environment if not found
-      add_variable(env, x->s, last);
+      // Search in parent environments (but not global for local variables)
+      ENV *current_env = env->p;
+      ni = NULL;
+      while (current_env && current_env->p) {  // Don't search global
+        ni = find_item_linear(current_env->lv, current_env->nv, x->s);
+        if (ni) {
+          free_node(ni->v);
+          ni->v = last;
+          break;
+        }
+        current_env = current_env->p;
+      }
+      // If not found in non-global scopes, create in current environment
+      if (!ni) {
+        add_variable(env, x->s, last);
+      }
     }
     alist = c->cdr;
   }
@@ -2059,7 +2073,7 @@ static NODE *do_progn(ENV *env, NODE *alist) {
 
 static NODE *do_dotimes(ENV *env, NODE *alist) {
   ENV *newenv;
-  NODE *c, *x, *nn, *err = NULL;
+  NODE *c = NULL, *x, *nn, *err = NULL;
   int i, r;
   long l;
 
@@ -2085,15 +2099,22 @@ static NODE *do_dotimes(ENV *env, NODE *alist) {
     nn->t = NODE_INT;
     nn->i = i;
     add_variable(newenv, x->car->s, nn);
-    c = do_progn(newenv, alist->cdr);
-    if (c->t == NODE_TAIL) {
-      c = eval_node(newenv, c);
+    NODE *result = do_progn(newenv, alist->cdr);
+    if (result->t == NODE_TAIL) {
+      result = eval_node(newenv, result);
     }
-    if (c->t == NODE_ERROR) {
+    if (result->t == NODE_ERROR) {
       free_env(newenv);
-      return c;
+      return result;
     }
-    free_node(c);
+    // Only free result if we're not in 3-argument mode
+    if (l != 3) {
+      free_node(result);
+    } else {
+    // Keep the last iteration's result for 3-argument mode
+    if (c) free_node(c);
+    c = result;
+    }
   }
 
   if (l == 3) {
