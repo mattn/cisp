@@ -1699,7 +1699,9 @@ static NODE *call_node(ENV *env, NODE *node, NODE *alist) {
   }
 
   // Use the captured environment directly instead of creating a new one
-  newenv = new_env(x->car->p);
+  // For closures, use the captured environment directly
+  newenv = x->car->p;
+  newenv->r++;
   c = x->cdr->car;
   p = x->cdr->cdr;
 
