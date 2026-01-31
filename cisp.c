@@ -36,7 +36,7 @@
 
 #define ILLEGAL_FUNCTION_CALL "illegal function call"
 
-static NODE *do_ident_global(ENV *env, NODE *node);
+
 static NODE *do_progn(ENV *env, NODE *alist);
 
 static void dump_node(NODE *node) {
@@ -1622,18 +1622,7 @@ static INLINE NODE *do_ident(ENV *env, NODE *alist) {
   return new_errorf("unknown identity: %s", alist->s);
 }
 
-static INLINE NODE *do_ident_global(ENV *env, NODE *node) {
-  ENV *global = global_env(env);
-  ITEM *ni;
 
-  ni = find_item(global->lf, global->nf, node->s);
-  if (ni) {
-    ni->v->r++;
-    return ni->v;
-  }
-
-  return new_errorf("unknown identify: %s", node->s);
-}
 
 #if 0
 static NODE*
