@@ -5,6 +5,7 @@ EXPORT void load_libs(ENV *env);
 EXPORT void buf_init(BUFFER *b);
 EXPORT void buf_append(BUFFER *b, const char *s);
 EXPORT void buf_free(BUFFER *b);
+EXPORT const char* intern(const char* s);
 
 #endif /* util_h */
 

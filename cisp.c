@@ -301,14 +301,15 @@ free_node(NODE *node) {
     if (node->cdr) free_node(node->cdr);
     if (node->car) free_node(node->car);
     break;
-  case NODE_SPECIAL:
-  case NODE_BUILTINFUNC:
   case NODE_STRING:
-  case NODE_IDENT:
   case NODE_ERROR:
   case NODE_NIL:
   case NODE_T:
     free((void*)node->s);
+    break;
+  case NODE_SPECIAL:
+  case NODE_BUILTINFUNC:
+  case NODE_IDENT:
     break;
   case NODE_ENV:
     free_env(node->p);
@@ -331,12 +332,10 @@ free_env(ENV *env) {
   }
   for (i = 0; i < env->nf; i++) {
     free_node(env->lf[i]->v);
-    free((void*)env->lf[i]->k);
     free((void*)env->lf[i]);
   }
   for (i = 0; i < env->nm; i++) {
     free_node(env->lm[i]->v);
-    free((void*)env->lm[i]->k);
     free((void*)env->lm[i]);
   }
   free((void*)env->lf);
@@ -352,14 +351,16 @@ free_env(ENV *env) {
 
 static int
 compare_item(const void *a, const void *b) {
-  return strcmp((*((ITEM**)a))->k, (*((ITEM**)b))->k);
+  if ((*((ITEM**)a))->k == (*((ITEM**)b))->k) return 0;
+  else if ((*((ITEM**)a))->k < (*((ITEM**)b))->k) return -1;
+  else return 1;
 }
 
 static INLINE void
 add_item(ITEM ***ll, int *nl, const char *k, NODE *v, int do_sort) {
   ITEM *ni = (ITEM*)malloc(sizeof(ITEM));
   memset(ni, 0, sizeof(ITEM));
-  ni->k = strdup(k);
+  ni->k = k;
   ni->v = v;
   *ll = (ITEM**)realloc(*ll, sizeof(ITEM*) * (*nl + 1));
   (*ll)[*nl] = ni;
@@ -372,7 +373,7 @@ static INLINE ITEM*
 find_item_linear(ITEM **ll, int nl, const char *k) {
   int i;
   for (i = 0; i < nl; i++) {
-    if (strcmp(ll[i]->k, k) == 0) {
+    if (ll[i]->k == k) {
       return ll[i];
     }
   }
@@ -381,16 +382,15 @@ find_item_linear(ITEM **ll, int nl, const char *k) {
 
 static INLINE ITEM*
 find_item(ITEM **ll, int nl, const char *k) {
-  int left, right, mid, r;
+  int left, right, mid;
 
   left = 0;
   right = nl - 1;
   while (left <= right) {
     mid = (left + right) / 2;
-    r = strcmp(ll[mid]->k, k);
-    if (r == 0) {
+    if (ll[mid]->k == k) {
       return ll[mid];
-    } else if (r < 0) {
+    } else if (ll[mid]->k < k) {
       left = mid + 1;
     } else {
       right = mid - 1;
@@ -1244,7 +1244,7 @@ do_bquote(ENV *env, NODE *alist) {
     if (bq && v->t == NODE_IDENT) {
       if (*v->s == '@') {
         expand = 2;
-        c = look_ident(env, v->s+1);
+        c = look_ident(env, intern(v->s+1));
       } else {
         expand = 1;
         c = look_ident(env, v->s);
@@ -2120,7 +2120,7 @@ do_car(ENV *env, NODE *alist) {
   if (x->t == NODE_QUOTE) {
     c = new_node();
     c->t = NODE_IDENT;
-    c->s = strdup("quote");
+    c->s = (char*)intern("quote");
     return c;
   }
   if (x->t != NODE_CELL && x->t != NODE_NIL)
@@ -2527,11 +2527,11 @@ add_sym(ENV *env, NODE_TYPE t, const char* n, f_do f) {
   NODE *node;
   node = new_node();
   node->t = t;
-  node->s = strdup(n);
+  node->s = (char*)intern(n);
   node->f = f;
   ni = (ITEM*)malloc(sizeof(ITEM));
   memset(ni, 0, sizeof(ITEM));
-  ni->k = strdup(n);
+  ni->k = intern(n);
   ni->v = node;
   env->lf = (ITEM**)realloc(env->lf, sizeof(ITEM*) * (env->nf + 1));
   env->lf[env->nf] = ni;

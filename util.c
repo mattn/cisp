@@ -220,4 +220,31 @@ buf_free(BUFFER *b) {
   free(b->ptr);
 }
 
+typedef struct _INTERN_ITEM {
+  const char *k;
+  struct _INTERN_ITEM *next;
+} INTERN_ITEM;
+
+static INTERN_ITEM *intern_list[4099];
+
+static unsigned int hash(const char *s) {
+  unsigned int h = 0;
+  while (*s) h = h * 31 + *s++;
+  return h;
+}
+
+const char* intern(const char* s) {
+  unsigned int h = hash(s) % 4099;
+  INTERN_ITEM *item = intern_list[h];
+  while (item) {
+    if (!strcmp(item->k, s)) return item->k;
+    item = item->next;
+  }
+  item = (INTERN_ITEM*)malloc(sizeof(INTERN_ITEM));
+  item->k = strdup(s);
+  item->next = intern_list[h];
+  intern_list[h] = item;
+  return item->k;
+}
+
 /* vim:set et sw=2 cino=>2,\:0: */

@@ -17,6 +17,7 @@
 
 #include "cisp.h"
 #include "parser.h"
+#include "util.h"
 
 #define SYMBOL_CHARS "+-*/<>=&%?.@_#$:*"
 
@@ -291,9 +292,7 @@ parse_primitive(SCANNER *s) {
     return x;
   }
   x->t = NODE_IDENT;
-  x->s = (char*)malloc(n + 1);
-  memset(x->s, 0, n + 1);
-  memcpy(x->s, buf, n);
+  x->s = (char*)intern(buf);
   return x;
 }
 
