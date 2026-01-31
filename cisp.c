@@ -678,10 +678,19 @@ do_div(ENV *env, NODE *alist) {
 
   alist = alist->cdr;
   if (node_isnull(alist)) {
-    if (nn->t == NODE_INT)
+    if (nn->t == NODE_INT) {
+      if (nn->i == 0) {
+        free_node(nn);
+        return new_error("division by zero");
+      }
       nn->i = 1 / nn->i;
-    else
+    } else {
+      if (nn->d == 0.0) {
+        free_node(nn);
+        return new_error("division by zero");
+      }
       nn->d = 1.0 / nn->d;
+    }
     return nn;
   }
 
@@ -888,10 +897,22 @@ do_if(ENV *env, NODE *alist) {
   }
   free_node(c);
   if (narg == 2) {
-    if (r > 0) return eval_node(env, alist->cdr->car);
+    if (r > 0) {
+      NODE *tail = new_node();
+      tail->t = NODE_TAIL;
+      tail->car = alist->cdr->car;
+      tail->cdr = NULL;
+      return tail;
+    }
     return new_node();
   }
-  return eval_node(env, r > 0 ? alist->cdr->car : alist->cdr->cdr->car);
+  {
+    NODE *tail = new_node();
+    tail->t = NODE_TAIL;
+    tail->car = r > 0 ? alist->cdr->car : alist->cdr->cdr->car;
+    tail->cdr = NULL;
+    return tail;
+  }
 }
 
 static NODE*
@@ -1213,6 +1234,10 @@ do_let_(ENV *env, NODE *alist, int star) {
     x = x->cdr;
   }
   c = do_progn(newenv, alist->cdr);
+  if (c->t == NODE_TAIL) {
+      c->cdr = (NODE*)newenv; // Transfer environment ownership
+      return c;
+  }
   free_env(newenv);
   return c;
 }
@@ -1353,6 +1378,10 @@ do_flet_labels(ENV *env, NODE *alist, int mode) {
     x = x->cdr;
   }
   c = do_progn(newenv, alist->cdr);
+  if (c && c->t == NODE_TAIL) {
+    c->cdr = (NODE*)newenv; // Transfer environment ownership
+    return c;
+  }
   free_env(newenv);
   if (c) return c;
   return new_node();
@@ -1676,13 +1705,29 @@ call_node(ENV *env, NODE *node, NODE *alist) {
   }
   if (macro) {
     nn = do_progn(newenv, p);
-    c = eval_node(env, nn);
-    free_node(nn);
-    free_env(newenv);
-    free_node(x);
-    return c;
+    // Macro body execution (expansion) must happen in newenv.
+    // We cannot simply return a tail for the expansion logic itself if it depends on newenv.
+    if (nn->t == NODE_TAIL) {
+        nn = eval_node(newenv, nn);
+    }
+
+    {
+       NODE *tail = new_node();
+       tail->t = NODE_TAIL;
+       tail->car = nn;
+       tail->cdr = NULL; // The expansion result should be evaluated in the caller's env
+       free_env(newenv);
+       free_node(x);
+       return tail;
+    }
   }
   c = do_progn(newenv, p);
+
+  if (c && c->t == NODE_TAIL) {
+      c->cdr = (NODE*)newenv; // Transfer env ownership
+      free_node(x);
+      return c;
+  }
 
   free_env(newenv);
   free_node(x);
@@ -1943,6 +1988,13 @@ do_progn(ENV *env, NODE *alist) {
   c = NULL;
   while (!node_isnull(alist)) {
     if (c) free_node(c);
+    if (node_isnull(alist->cdr)) {
+       NODE *tail = new_node();
+       tail->t = NODE_TAIL;
+       tail->car = alist->car;
+       tail->cdr = NULL;
+       return tail;
+    }
     c = eval_node(env, alist->car);
     if (c->t == NODE_ERROR) break;
     alist = alist->cdr;
@@ -1981,6 +2033,9 @@ do_dotimes(ENV *env, NODE *alist) {
     nn->i = i;
     add_variable(newenv, x->car->s, nn);
     c = do_progn(newenv, alist->cdr);
+    if (c->t == NODE_TAIL) {
+        c = eval_node(newenv, c);
+    }
     if (c->t == NODE_ERROR) {
       free_env(newenv);
       return c;
@@ -2027,6 +2082,7 @@ do_type_of(ENV *env, NODE *alist) {
   case NODE_IDENT: p = "symbol"; break;
   case NODE_ENV: p = "environment"; break;
   case NODE_ERROR: p = "error"; break;
+  case NODE_TAIL: p = "tail"; break;
   }
   c = new_node();
   c->t = NODE_STRING;
@@ -2436,7 +2492,13 @@ load_lisp(ENV *env, const char *fname) {
   fclose(fp);
 
   ret = do_progn(env, top);
-
+  if (ret && ret->t == NODE_TAIL) {
+      NODE *tail_car = ret->car;
+      if (tail_car) tail_car->r++;
+      free_node(ret);
+      ret = eval_node(env, tail_car); // Evaluate the tail's content
+  }
+  
   free_node(top);
   return ret;
 }
@@ -2509,6 +2571,9 @@ do_while(ENV *env, NODE *alist) {
     if (r == 0) break;
 
     c = do_progn(newenv, alist->cdr);
+    if (c->t == NODE_TAIL) {
+      c = eval_node(newenv, c);
+    }
     if (c->t == NODE_ERROR) {
       free_env(newenv);
       return c;
@@ -2617,10 +2682,13 @@ add_defaults(ENV *env) {
   load_libs(env);
 }
 
-NODE*
-eval_node(ENV *env, NODE *node) {
+static NODE*
+eval_node_dispatch(ENV *env, NODE *node) {
   NODE *c = NULL;
   switch (node->t) {
+  case NODE_TAIL:
+    node->r++;
+    return node;
   case NODE_LAMBDA:
   case NODE_BUILTINFUNC:
   case NODE_SPECIAL:
@@ -2690,6 +2758,55 @@ eval_node(ENV *env, NODE *node) {
   }
 
   return new_error("unknown node");
+}
+
+NODE*
+eval_node(ENV *env, NODE *node) {
+  NODE *ret = NULL;
+  ENV *curr_env = env;
+  NODE *curr_node = node;
+  ENV **env_stack = NULL;
+  int env_stack_size = 0;
+  int env_stack_capacity = 0;
+
+  while (1) {
+    ret = eval_node_dispatch(curr_env, curr_node);
+    if (ret && ret->t == NODE_TAIL) {
+      NODE *next_node = ret->car;
+      ENV *next_env = (ENV*)ret->cdr;
+
+      if (next_node) next_node->r++;
+
+      ret->car = NULL;
+      ret->cdr = NULL;
+      free_node(ret);
+
+      if (curr_node != node) {
+        free_node(curr_node);
+      }
+      curr_node = next_node;
+
+      if (next_env) {
+        // Add to environment stack instead of freeing immediately
+        if (env_stack_size >= env_stack_capacity) {
+          env_stack_capacity = env_stack_capacity == 0 ? 4 : env_stack_capacity * 2;
+          env_stack = (ENV**)realloc(env_stack, sizeof(ENV*) * env_stack_capacity);
+        }
+        env_stack[env_stack_size++] = next_env;
+        curr_env = next_env;
+      }
+      continue;
+    }
+
+    // Free all environments in the stack
+    for (int i = 0; i < env_stack_size; i++) {
+      free_env(env_stack[i]);
+    }
+    free(env_stack);
+
+    if (curr_node != node) free_node(curr_node);
+    return ret;
+  }
 }
 
 int
