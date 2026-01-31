@@ -191,7 +191,7 @@ parse_paren(SCANNER *s, int mode) {
     char q = s_peek(s) == ',';
     if (q) s_getc(s);
 
-    child = parse_any(s, PARSE_ANY);
+    child = parse_any(s, (mode & PARSE_BQUOTE && !q) ? mode : PARSE_ANY);
     if (child == NULL) return NULL;
 
     if ((mode & PARSE_BQUOTE) != 0 && !q) {

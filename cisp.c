@@ -1249,6 +1249,12 @@ do_bquote(ENV *env, NODE *alist) {
         expand = 1;
         c = look_ident(env, v->s);
       }
+    } else if (bq && v->t == NODE_QUOTE && v->car && v->car->t == NODE_CELL) {
+      NODE tmp;
+      memset(&tmp, 0, sizeof(NODE));
+      tmp.t = NODE_BQUOTE;
+      tmp.car = v->car;
+      c = do_bquote(env, &tmp);
     } else {
       c = eval_node(env, v);
     }
