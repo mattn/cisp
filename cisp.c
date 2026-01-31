@@ -1288,7 +1288,6 @@ static NODE *do_let_(ENV *env, NODE *alist, int star) {
     }
     if (star) {
       env = newenv;
-      newenv = new_env(env);
     }
     x = x->cdr;
   }
@@ -1502,18 +1501,14 @@ static NODE *do_setq(ENV *env, NODE *alist) {
     last = eval_node(env, c->car);
     if (last->t == NODE_ERROR)
       return last;
-    while (env) {
-      if (!env->p) {
-        add_variable(env, x->s, last);
-        break;
-      }
-      ITEM *ni = find_item_linear(env->lv, env->nv, x->s);
-      if (ni) {
-        free_node(ni->v);
-        ni->v = last;
-        break;
-      }
-      env = env->p;
+    // Search in current environment first
+    ITEM *ni = find_item_linear(env->lv, env->nv, x->s);
+    if (ni) {
+      free_node(ni->v);
+      ni->v = last;
+    } else {
+      // Create new variable in current environment if not found
+      add_variable(env, x->s, last);
     }
     alist = c->cdr;
   }
@@ -1703,6 +1698,7 @@ static NODE *call_node(ENV *env, NODE *node, NODE *alist) {
     return new_errorn("malformed arguments", node);
   }
 
+  // Use the captured environment directly instead of creating a new one
   newenv = new_env(x->car->p);
   c = x->cdr->car;
   p = x->cdr->cdr;
@@ -2854,6 +2850,7 @@ NODE *eval_node(ENV *env, NODE *node) {
   ENV **env_stack = NULL;
   int env_stack_size = 0;
   int env_stack_capacity = 0;
+
 
   while (1) {
     ret = eval_node_dispatch(curr_env, curr_node);
