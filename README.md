@@ -14,6 +14,27 @@ A compact Lisp interpreter written in C.
 - **Tail call optimization**: Efficient execution of recursive functions
 - **Macro system**: Full macro support with backquote syntax
 - **Rich data types**: Integers, floats, characters, strings, symbols, and cons cells
+- **C plugin support**: Write plugins in C for extending functionality
+
+## C Plugin Example
+
+You can extend cisp with C plugins. See `example/hello.c` for an example:
+
+```c
+int cisp_init(ENV *env) {
+  add_sym(env, NODE_BUILTINFUNC, "hello", do_hello);
+  return 0;
+}
+```
+
+Compile with:
+```sh
+# Linux
+gcc -fPIC -I. -shared -o lib/hello.so ./example/hello.c
+
+# Windows
+gcc -fPIC -I. -shared -o lib/hello.so ./example/hello.c libcisp.a
+```
 
 ## Build
 
