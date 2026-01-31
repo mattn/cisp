@@ -1,6 +1,6 @@
 # cisp
 
-[![Build Status](https://travis-ci.org/mattn/cisp.svg?branch=master)](https://travis-ci.org/mattn/cisp)
+[![CI](https://github.com/mattn/cisp/workflows/CI/badge.svg)](https://github.com/mattn/cisp/actions)
 
 Lisp Interpreter
 
