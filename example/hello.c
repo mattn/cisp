@@ -5,6 +5,7 @@
  *   gcc -fPIC -I. -shared -o lib/hello.so ./example/hello.c
  */
 #include <stdio.h>
+#include <wchar.h>
 #include "cisp.h"
 #include "util.h"
 
