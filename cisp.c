@@ -737,16 +737,22 @@ static NODE *do_div(ENV *env, NODE *alist) {
     c = alist->car;
     if (nn->t == NODE_INT) {
       if (c->t == NODE_DOUBLE) {
-        nn->d = double_value(env, nn, &err) / double_value(env, c, &err);
+        double dv = double_value(env, c, &err);
+        if (err) { free_node(nn); return err; }
+        if (dv == 0.0) { free_node(nn); return new_error("division by zero"); }
+        nn->d = double_value(env, nn, &err) / dv;
         nn->t = c->t;
-      } else
-        nn->i /= int_value(env, c, &err);
+      } else {
+        long iv = int_value(env, c, &err);
+        if (err) { free_node(nn); return err; }
+        if (iv == 0) { free_node(nn); return new_error("division by zero"); }
+        nn->i /= iv;
+      }
     } else {
-      nn->d /= double_value(env, c, &err);
-    }
-    if (err) {
-      free_node(nn);
-      return err;
+      double dv = double_value(env, c, &err);
+      if (err) { free_node(nn); return err; }
+      if (dv == 0.0) { free_node(nn); return new_error("division by zero"); }
+      nn->d /= dv;
     }
     alist = alist->cdr;
   }
