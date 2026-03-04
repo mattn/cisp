@@ -722,7 +722,8 @@ static NODE *do_div(ENV *env, NODE *alist) {
         free_node(nn);
         return new_error("division by zero");
       }
-      nn->i = 1 / nn->i;
+      nn->d = 1.0 / (double)nn->i;
+      nn->t = NODE_DOUBLE;
     } else {
       if (nn->d == 0.0) {
         free_node(nn);
@@ -746,7 +747,12 @@ static NODE *do_div(ENV *env, NODE *alist) {
         long iv = int_value(env, c, &err);
         if (err) { free_node(nn); return err; }
         if (iv == 0) { free_node(nn); return new_error("division by zero"); }
-        nn->i /= iv;
+        if (nn->i % iv != 0) {
+          nn->d = (double)nn->i / (double)iv;
+          nn->t = NODE_DOUBLE;
+        } else {
+          nn->i /= iv;
+        }
       }
     } else {
       double dv = double_value(env, c, &err);
