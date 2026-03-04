@@ -1478,10 +1478,10 @@ static NODE *do_labels(ENV *env, NODE *alist) {
 static NODE *do_error(ENV *env, NODE *alist) {
   UNUSED(env);
 
-  if (node_narg(alist) != 1 || alist->cdr->t != NODE_STRING)
+  if (node_narg(alist) != 1 || alist->car->t != NODE_STRING)
     return new_errorn("malformed error", alist);
 
-  return new_error(alist->cdr->car->s);
+  return new_error(alist->car->s);
 }
 
 static NODE *do_exit(ENV *env, NODE *alist) {
