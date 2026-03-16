@@ -1,0 +1,8 @@
+(prin1 (= (format nil "~o" 8) "10"))
+(prin1 (= (format nil "~o" -8) "-10"))
+(prin1 (= (format nil "~x" 255) "ff"))
+(prin1 (= (format nil "~b" 256) "100000000"))
+(prin1 (= (format nil "~b" -5) "-101"))
+(prin1 (= (format nil "~c" #\return) "\r"))
+(prin1 (= (format nil "~c" #\newline) "\n"))
+(prin1 (= (format nil "~c" #\linefeed) "\n"))

@@ -249,11 +249,11 @@ static NODE *parse_primitive(SCANNER *s) {
     if (!strcmp(buf + 2, "tab"))
       x->c = '\t';
     else if (!strcmp(buf + 2, "return"))
-      x->c = '\n';
+      x->c = '\r';
     else if (!strcmp(buf + 2, "space"))
       x->c = ' ';
     else if (!strcmp(buf + 2, "newline") || !strcmp(buf + 2, "linefeed"))
-      x->c = '\r';
+      x->c = '\n';
     else if (!strcmp(buf + 2, "page"))
       x->c = '\x0c';
     else if (n == 3)

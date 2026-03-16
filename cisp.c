@@ -39,6 +39,35 @@
 
 static NODE *do_progn(ENV *env, NODE *alist);
 
+static void buf_append_int_radix(BUFFER *buf, long value, unsigned int base) {
+  char digits[] = "0123456789abcdef";
+  char tmp[sizeof(unsigned long) * CHAR_BIT + 2];
+  unsigned long u;
+  size_t pos = 0;
+
+  if (base < 2 || base > 16)
+    return;
+
+  if (value < 0) {
+    buf_append(buf, "-");
+    u = (unsigned long)(-(value + 1)) + 1;
+  } else {
+    u = (unsigned long)value;
+  }
+
+  do {
+    tmp[pos++] = digits[u % base];
+    u /= base;
+  } while (u != 0);
+
+  while (pos > 0) {
+    char out[2];
+    out[0] = tmp[--pos];
+    out[1] = 0;
+    buf_append(buf, out);
+  }
+}
+
 static void dump_node(NODE *node) {
   BUFFER buf;
   buf_init(&buf);
@@ -1907,28 +1936,19 @@ static NODE *do_format(ENV *env, NODE *alist) {
           n = n->cdr;
         } else if (f == 'd' && n->car->t == NODE_INT) {
           // TODO: mincol , padchar , commachar , comma-interval
-          snprintf(atmp, sizeof(atmp) - 1, "%ld", n->car->i);
-          buf_append(&buf, atmp);
+          buf_append_int_radix(&buf, n->car->i, 10);
           n = n->cdr;
         } else if (f == 'x' && n->car->t == NODE_INT) {
           // TODO: mincol , padchar , commachar , comma-interval
-          snprintf(atmp, sizeof(atmp) - 1, "%lx", n->car->i);
-          buf_append(&buf, atmp);
+          buf_append_int_radix(&buf, n->car->i, 16);
           n = n->cdr;
-        } else if (f == 'x' && n->car->t == NODE_INT) {
+        } else if (f == 'o' && n->car->t == NODE_INT) {
           // TODO: mincol , padchar , commachar , comma-interval
-          snprintf(atmp, sizeof(atmp) - 1, "%lo", n->car->i);
-          buf_append(&buf, atmp);
+          buf_append_int_radix(&buf, n->car->i, 8);
           n = n->cdr;
         } else if (f == 'b' && n->car->t == NODE_INT) {
           // TODO: mincol , padchar , commachar , comma-interval
-          int z;
-          for (z = 128; z > 0; z >>= 1) {
-            if ((n->car->i & z) == z)
-              buf_append(&buf, "1");
-            else
-              buf_append(&buf, "0");
-          }
+          buf_append_int_radix(&buf, n->car->i, 2);
           n = n->cdr;
         } else if (f == 'f' && n->car->t == NODE_INT) {
           // TODO: w , d , k , overflowchar , padchar
