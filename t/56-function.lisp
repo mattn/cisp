@@ -1,0 +1,6 @@
+(setq prin1 10)
+(funcall (function +) 1 2 3)
+(funcall #'prin1 20)
+(prin1 (type-of (function +)))
+(prin1 (funcall (function (lambda (a b) (+ a b))) 4 5))
+(prin1 (funcall #'(lambda (x) (+ x 1)) 9))

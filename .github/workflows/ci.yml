@@ -43,6 +43,11 @@ jobs:
         shell: msys2 {0}
 
     steps:
+      - name: Preserve LF line endings
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+
       - uses: actions/checkout@v4
 
       - uses: msys2/setup-msys2@v2
@@ -51,6 +56,7 @@ jobs:
           update: true
           install: >-
             make
+            mingw-w64-x86_64-dlfcn
             mingw-w64-x86_64-gcc
 
       - name: Build

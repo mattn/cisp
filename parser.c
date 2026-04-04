@@ -233,7 +233,7 @@ static NODE *parse_primitive(SCANNER *s) {
   int c;
   NODE *x;
 
-  while (n < sizeof(buf) && !s_eof(s)) {
+  while (n + 1 < sizeof(buf) && !s_eof(s)) {
     c = s_peek(s);
     if (c == -1)
       return NULL;
@@ -306,6 +306,30 @@ static NODE *parse_quote(SCANNER *s) {
   return node;
 }
 
+static NODE *parse_function_quote(SCANNER *s) {
+  NODE *node, *head, *child, *fn;
+
+  s_getc(s);
+  child = parse_any(s, PARSE_ANY);
+  if (child == NULL)
+    return NULL;
+
+  fn = new_node();
+  fn->t = NODE_IDENT;
+  fn->s = (char *)intern("function");
+
+  head = new_node();
+  head->t = NODE_CELL;
+  head->car = fn;
+
+  node = new_node();
+  node->t = NODE_CELL;
+  node->car = child;
+  head->cdr = node;
+
+  return head;
+}
+
 static NODE *parse_bquote(SCANNER *s) {
   NODE *node, *child;
 
@@ -374,6 +398,54 @@ static NODE *parse_string(SCANNER *s) {
   return node;
 }
 
+static NODE *parse_sharp(SCANNER *s) {
+  char buf[BUFSIZ];
+  size_t n = 0;
+  NODE *x;
+  int c;
+
+  s_getc(s);
+  c = s_peek(s);
+  if (c == '\'')
+    return parse_function_quote(s);
+  if (c != '\\')
+    return invalid_token(s);
+
+  buf[n++] = '#';
+  while (n + 1 < sizeof(buf) && !s_eof(s)) {
+    c = s_peek(s);
+    if (c == -1)
+      return NULL;
+    if (n == 1 && buf[0] == '#' && c == '\\')
+      buf[n++] = s_getc(s);
+    else if (isalnum((unsigned char)c) || is_symbol_char(c))
+      buf[n++] = s_getc(s);
+    else
+      break;
+  }
+  buf[n] = 0;
+
+  x = new_node();
+  x->t = NODE_CHARACTER;
+  if (!strcmp(buf + 2, "tab"))
+    x->c = '\t';
+  else if (!strcmp(buf + 2, "return"))
+    x->c = '\r';
+  else if (!strcmp(buf + 2, "space"))
+    x->c = ' ';
+  else if (!strcmp(buf + 2, "newline") || !strcmp(buf + 2, "linefeed"))
+    x->c = '\n';
+  else if (!strcmp(buf + 2, "page"))
+    x->c = '\x0c';
+  else if (n == 3)
+    x->c = buf[2];
+  else {
+    free_node(x);
+    return raise(s, "invalid character");
+  }
+  return x;
+}
+
 NODE *parse_any(SCANNER *s, int mode) {
   NODE *x = NULL;
   int c;
@@ -400,6 +472,8 @@ NODE *parse_any(SCANNER *s, int mode) {
     x = parse_quote(s);
   else if (c == '`')
     return parse_bquote(s);
+  else if (c == '#')
+    x = parse_sharp(s);
   else if (c == '"')
     x = parse_string(s);
   else if (isalnum((unsigned char)c) || is_symbol_char(c))
