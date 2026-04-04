@@ -2,39 +2,61 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
 
 jobs:
-  test:
+  test-linux:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         compiler: [gcc, clang]
-    
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y valgrind
-    
-    - name: Build with ${{ matrix.compiler }}
-      run: |
-        make CC=${{ matrix.compiler }}
-    
-    - name: Run tests
-      run: |
-        make test
-    
-    - name: Run memory leak check (if valgrind available)
-      run: |
-        if command -v valgrind &> /dev/null; then
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y valgrind
+
+      - name: Build with ${{ matrix.compiler }}
+        run: |
+          make CC=${{ matrix.compiler }}
+
+      - name: Run tests
+        run: |
+          make test
+
+      - name: Run memory leak check
+        run: |
           make valgrind
           echo "Valgrind log:"
-          cat valgrind.log | head -50
-        else
-          echo "valgrind not available, skipping memory leak check"
-        fi
+          head -50 valgrind.log
+
+  test-windows:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            make
+            mingw-w64-x86_64-gcc
+
+      - name: Build
+        run: |
+          make CC=gcc
+
+      - name: Run tests
+        run: |
+          make test
