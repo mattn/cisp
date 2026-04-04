@@ -1,0 +1,6 @@
+(prin1 (reverse nil))
+(prin1 (reverse '(1)))
+(prin1 (reverse '(1 2 3)))
+(setq x '(1 2 3))
+(prin1 (reverse x))
+(prin1 x)
