@@ -1,0 +1,6 @@
+(prin1 (atom nil))
+(prin1 (atom 'x))
+(prin1 (atom 1))
+(prin1 (atom "x"))
+(prin1 (atom '(1 2)))
+(prin1 (atom ''x))

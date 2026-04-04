@@ -65,6 +65,16 @@ static INLINE int arg_count_between(NODE *alist, int min_n, int max_n) {
   return count >= min_n && count <= max_n && node_isnull(alist);
 }
 
+static INLINE int node_isproper_list(NODE *node) {
+  if (node_isnull(node))
+    return 1;
+  if (node->t == NODE_QUOTE || node->t == NODE_BQUOTE)
+    return 1;
+  while (node && node->t == NODE_CELL)
+    node = node->cdr;
+  return node_isnull(node);
+}
+
 static void buf_append_int_radix(BUFFER *buf, long value, unsigned int base) {
   char digits[] = "0123456789abcdef";
   char tmp[sizeof(unsigned long) * CHAR_BIT + 2];
@@ -936,6 +946,93 @@ static NODE *do_null(ENV *env, NODE *alist) {
   x = alist->car;
   c = new_node();
   if (node_isnull(x))
+    c->t = NODE_T;
+  return c;
+}
+
+static NODE *do_atom(ENV *env, NODE *alist) {
+  NODE *x, *c;
+  UNUSED(env);
+
+  if (!arg_count_eq(alist, 1))
+    return new_errorn("malformed atom", alist);
+
+  x = alist->car;
+  c = new_node();
+  if (x->t != NODE_QUOTE && x->t != NODE_BQUOTE && x->t != NODE_CELL)
+    c->t = NODE_T;
+  return c;
+}
+
+static NODE *do_symbolp(ENV *env, NODE *alist) {
+  NODE *c;
+  UNUSED(env);
+
+  if (!arg_count_eq(alist, 1))
+    return new_errorn("malformed symbolp", alist);
+
+  c = new_node();
+  if (alist->car->t == NODE_IDENT)
+    c->t = NODE_T;
+  return c;
+}
+
+static NODE *do_numberp(ENV *env, NODE *alist) {
+  NODE *c;
+  UNUSED(env);
+
+  if (!arg_count_eq(alist, 1))
+    return new_errorn("malformed numberp", alist);
+
+  c = new_node();
+  if (alist->car->t == NODE_INT || alist->car->t == NODE_DOUBLE)
+    c->t = NODE_T;
+  return c;
+}
+
+static NODE *do_stringp(ENV *env, NODE *alist) {
+  NODE *c;
+  UNUSED(env);
+
+  if (!arg_count_eq(alist, 1))
+    return new_errorn("malformed stringp", alist);
+
+  c = new_node();
+  if (alist->car->t == NODE_STRING)
+    c->t = NODE_T;
+  return c;
+}
+
+static NODE *do_functionp(ENV *env, NODE *alist) {
+  NODE *c;
+  UNUSED(env);
+
+  if (!arg_count_eq(alist, 1))
+    return new_errorn("malformed functionp", alist);
+
+  c = new_node();
+  switch (alist->car->t) {
+  case NODE_BUILTINFUNC:
+  case NODE_SPECIAL:
+  case NODE_LAMBDA:
+  case NODE_CONTINUATION:
+    c->t = NODE_T;
+    break;
+  default:
+    break;
+  }
+  return c;
+}
+
+static NODE *do_listp(ENV *env, NODE *alist) {
+  NODE *c;
+  UNUSED(env);
+
+  if (!arg_count_eq(alist, 1))
+    return new_errorn("malformed listp", alist);
+
+  c = new_node();
+  if (node_isproper_list(alist->car))
     c->t = NODE_T;
   return c;
 }
@@ -2907,6 +3004,7 @@ static void add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL, "and", do_and);
   add_sym(env, NODE_BUILTINFUNC, "apply", do_apply);
   add_sym(env, NODE_BUILTINFUNC, "aref", do_aref);
+  add_sym(env, NODE_BUILTINFUNC, "atom", do_atom);
   add_sym(env, NODE_BUILTINFUNC, "car", do_car);
   add_sym(env, NODE_BUILTINFUNC, "call/cc", do_call_cc);
   add_sym(env, NODE_BUILTINFUNC, "cdr", do_cdr);
@@ -2927,6 +3025,7 @@ static void add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "float", do_float);
   add_sym(env, NODE_BUILTINFUNC, "format", do_format);
   add_sym(env, NODE_SPECIAL, "function", do_function);
+  add_sym(env, NODE_BUILTINFUNC, "functionp", do_functionp);
   add_sym(env, NODE_BUILTINFUNC, "funcall", do_funcall);
   add_sym(env, NODE_BUILTINFUNC, "getenv", do_getenv);
   add_sym(env, NODE_SPECIAL, "if", do_if);
@@ -2937,6 +3036,7 @@ static void add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL, "let", do_let);
   add_sym(env, NODE_SPECIAL, "let*", do_let_s);
   add_sym(env, NODE_BUILTINFUNC, "list", do_list);
+  add_sym(env, NODE_BUILTINFUNC, "listp", do_listp);
   add_sym(env, NODE_BUILTINFUNC, "load", do_load);
   add_sym(env, NODE_BUILTINFUNC, "make-array", do_make_array);
   add_sym(env, NODE_BUILTINFUNC, "make-string", do_make_string);
@@ -2958,8 +3058,11 @@ static void add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL, "setf", do_setf);
   add_sym(env, NODE_SPECIAL, "setq", do_setq);
   add_sym(env, NODE_BUILTINFUNC, "sleep", do_sleep);
+  add_sym(env, NODE_BUILTINFUNC, "stringp", do_stringp);
+  add_sym(env, NODE_BUILTINFUNC, "symbolp", do_symbolp);
   add_sym(env, NODE_BUILTINFUNC, "type-of", do_type_of);
   add_sym(env, NODE_BUILTINFUNC, "time", do_time);
+  add_sym(env, NODE_BUILTINFUNC, "numberp", do_numberp);
   add_sym(env, NODE_SPECIAL, "while", do_while);
   sort_syms(env);
 
