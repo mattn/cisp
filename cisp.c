@@ -2821,6 +2821,80 @@ static NODE *do_nconc(ENV *env, NODE *alist) {
   return head;
 }
 
+static NODE *do_append(ENV *env, NODE *alist) {
+  NODE *x, *c, *head = NULL, *tail = NULL;
+  UNUSED(env);
+
+  if (node_isnull(alist))
+    return new_node();
+
+  for (c = alist; !node_isnull(c->cdr); c = c->cdr) {
+    x = c->car;
+    if (!node_isnull(x) && x->t != NODE_CELL)
+      return new_errorn("malformed append", alist);
+  }
+
+  for (c = alist; !node_isnull(c->cdr); c = c->cdr) {
+    for (x = c->car; !node_isnull(x); x = x->cdr) {
+      NODE *nc = new_node();
+      nc->t = NODE_CELL;
+      nc->car = x->car;
+      if (nc->car)
+        nc->car->r++;
+      if (head == NULL) {
+        head = tail = nc;
+      } else {
+        tail->cdr = nc;
+        tail = nc;
+      }
+    }
+  }
+
+  x = c->car;
+  if (!head) {
+    x->r++;
+    return x;
+  }
+  tail->cdr = x;
+  x->r++;
+  return head;
+}
+
+static NODE *do_reverse(ENV *env, NODE *alist) {
+  NODE *x, *head = NULL;
+  UNUSED(env);
+
+  if (!arg_count_eq(alist, 1))
+    return new_errorn("malformed reverse", alist);
+
+  x = alist->car;
+  if (!node_isnull(x) && x->t != NODE_CELL)
+    return new_errorn("argument is not a list", alist);
+
+  while (!node_isnull(x)) {
+    NODE *nc = new_node();
+    nc->t = NODE_CELL;
+    nc->car = x->car;
+    if (nc->car)
+      nc->car->r++;
+    if (head == NULL) {
+      nc->cdr = new_node();
+    } else {
+      nc->cdr = head;
+    }
+    head = nc;
+    x = x->cdr;
+    if (x && x->t != NODE_CELL && !node_isnull(x)) {
+      free_node(head);
+      return new_errorn("argument is not a list", alist);
+    }
+  }
+
+  if (head == NULL)
+    return new_node();
+  return head;
+}
+
 static NODE *do_aref(ENV *env, NODE *alist) {
   NODE *x, *c;
   UNUSED(env);
@@ -3002,6 +3076,7 @@ static void add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, ">", do_gt);
   add_sym(env, NODE_BUILTINFUNC, ">=", do_ge);
   add_sym(env, NODE_SPECIAL, "and", do_and);
+  add_sym(env, NODE_BUILTINFUNC, "append", do_append);
   add_sym(env, NODE_BUILTINFUNC, "apply", do_apply);
   add_sym(env, NODE_BUILTINFUNC, "aref", do_aref);
   add_sym(env, NODE_BUILTINFUNC, "atom", do_atom);
@@ -3053,6 +3128,7 @@ static void add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL, "progn", do_progn);
   add_sym(env, NODE_SPECIAL, "quote", do_quote);
   add_sym(env, NODE_BUILTINFUNC, "random", do_random);
+  add_sym(env, NODE_BUILTINFUNC, "reverse", do_reverse);
   add_sym(env, NODE_BUILTINFUNC, "rplaca", do_rplaca);
   add_sym(env, NODE_BUILTINFUNC, "rplacd", do_rplacd);
   add_sym(env, NODE_SPECIAL, "setf", do_setf);
