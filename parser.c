@@ -21,6 +21,20 @@
 
 #define SYMBOL_CHARS "+-*/<>=&%?.@_#$:*"
 
+static unsigned char symbol_char_table[256];
+static int symbol_char_table_ready = 0;
+
+static INLINE int is_symbol_char(int c) {
+  if (!symbol_char_table_ready) {
+    const unsigned char *p = (const unsigned char *)SYMBOL_CHARS;
+    while (*p) {
+      symbol_char_table[*p++] = 1;
+    }
+    symbol_char_table_ready = 1;
+  }
+  return c >= 0 && c < 256 && symbol_char_table[(unsigned char)c];
+}
+
 static NODE *raise(SCANNER *s, const char *p) {
   s->err = strdup(p);
   return NULL;
@@ -225,7 +239,7 @@ static NODE *parse_primitive(SCANNER *s) {
       return NULL;
     if (n == 1 && buf[0] == '#' && c == '\\')
       buf[n++] = s_getc(s);
-    else if (isalnum(c) || strchr(SYMBOL_CHARS, c))
+    else if (isalnum((unsigned char)c) || is_symbol_char(c))
       buf[n++] = s_getc(s);
     else
       break;
@@ -388,7 +402,7 @@ NODE *parse_any(SCANNER *s, int mode) {
     return parse_bquote(s);
   else if (c == '"')
     x = parse_string(s);
-  else if (isalnum((int)c) || strchr(SYMBOL_CHARS, c))
+  else if (isalnum((unsigned char)c) || is_symbol_char(c))
     x = parse_primitive(s);
   else
     return invalid_token(s);

@@ -203,13 +203,29 @@ void buf_init(BUFFER *b) {
   b->pos = 0;
 }
 
+void buf_reserve(BUFFER *b, size_t needed) {
+  size_t newlen;
+
+  if (needed <= b->len)
+    return;
+
+  newlen = b->len ? b->len : 64;
+  while (newlen < needed) {
+    if (newlen > (size_t)-1 / 2) {
+      newlen = needed;
+      break;
+    }
+    newlen *= 2;
+  }
+  b->ptr = (char *)realloc(b->ptr, newlen);
+  if (b->pos == 0)
+    b->ptr[0] = 0;
+  b->len = newlen;
+}
+
 void buf_append(BUFFER *b, const char *s) {
   size_t len = strlen(s);
-  if (b->pos + len + 1 > b->len) {
-    b->ptr = (char *)realloc(b->ptr, b->len + len + 100);
-    *(b->ptr + b->pos) = 0;
-    b->len += len + 100;
-  }
+  buf_reserve(b, b->pos + len + 1);
   while (*s) {
     *(b->ptr + b->pos++) = *s++;
   }
