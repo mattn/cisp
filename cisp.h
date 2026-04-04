@@ -55,6 +55,9 @@ typedef NODE *(*f_do)(ENV *, NODE *);
 struct _NODE {
   NODE_TYPE t;
   int r;
+  int mark;
+  int gc_live;
+  NODE *gc_next;
   union {
     wchar_t c;
     long i;
@@ -89,6 +92,9 @@ struct _ENV {
   ITEM **lm;
   ENV *p;
   int r;
+  int mark;
+  int gc_live;
+  ENV *gc_next;
 };
 
 typedef struct _SCANNER SCANNER;

@@ -141,19 +141,78 @@ void skip_white(SCANNER *s) {
 }
 
 static NODE *node_freelist = NULL;
+static NODE *all_nodes = NULL;
+static ENV *all_envs = NULL;
+
+static void gc_mark_node(NODE *node);
+static void gc_mark_env(ENV *env);
+static void gc_collect(ENV *root);
+
+static void free_node_edges(NODE *node) {
+  if (!node)
+    return;
+  switch (node->t) {
+  case NODE_LAMBDA:
+  case NODE_QUOTE:
+  case NODE_BQUOTE:
+  case NODE_CELL:
+    if (node->cdr)
+      node->cdr->r--;
+    if (node->car)
+      node->car->r--;
+    break;
+  case NODE_STRING:
+  case NODE_ERROR:
+  case NODE_NIL:
+  case NODE_T:
+    free((void *)node->s);
+    break;
+  case NODE_CONTINUATION:
+    free(node->v);
+    break;
+  case NODE_ENV:
+    if (node->p)
+      node->p->r--;
+    free(node->name);
+    break;
+  case NODE_AREF:
+    if (node->car)
+      node->car->r--;
+    break;
+  case NODE_TAIL:
+    if (node->car)
+      node->car->r--;
+    if (node->cdr)
+      ((ENV *)node->cdr)->r--;
+    break;
+  default:
+    break;
+  }
+}
+
+static void recycle_node(NODE *node) {
+  node->gc_live = 0;
+  node->cdr = node_freelist;
+  node_freelist = node;
+}
 
 NODE *new_node() {
   NODE *node;
   if (node_freelist) {
+    NODE *gc_next = node_freelist->gc_next;
     node = node_freelist;
     node_freelist = node->cdr;
     memset(node, 0, sizeof(NODE));
+    node->gc_next = gc_next;
   } else {
     node = (NODE *)malloc(sizeof(NODE));
     memset(node, 0, sizeof(NODE));
+    node->gc_next = all_nodes;
+    all_nodes = node;
   }
   node->t = NODE_NIL;
-  node->r++;
+  node->r = 1;
+  node->gc_live = 1;
   return node;
 }
 
@@ -189,17 +248,20 @@ static ENV *env_freelist = NULL;
 ENV *new_env(ENV *p) {
   ENV *env;
   if (env_freelist) {
+    ENV *gc_next = env_freelist->gc_next;
     env = env_freelist;
     env_freelist = env->p;
-    env->nv = 0;
-    env->p = p;
-    env->r = 1;
+    memset(env, 0, sizeof(ENV));
+    env->gc_next = gc_next;
   } else {
     env = (ENV *)malloc(sizeof(ENV));
     memset(env, 0, sizeof(ENV));
-    env->p = p;
-    env->r = 1;
+    env->gc_next = all_envs;
+    all_envs = env;
   }
+  env->p = p;
+  env->r = 1;
+  env->gc_live = 1;
   if (p) {
     p->r++;
   }
@@ -391,38 +453,41 @@ void free_node(NODE *node) {
     if (node->car)
       free_node(node->car);
     break;
-  case NODE_STRING:
-  case NODE_ERROR:
-  case NODE_NIL:
-  case NODE_T:
-    free((void *)node->s);
-    break;
-  case NODE_SPECIAL:
-  case NODE_BUILTINFUNC:
-  case NODE_IDENT:
-    break;
-  case NODE_CONTINUATION:
-    free(node->v);
-    break;
   case NODE_ENV:
-    free_env(node->p);
+    if (node->p)
+      free_env(node->p);
     free(node->name);
     break;
+  case NODE_AREF:
+    if (node->car)
+      free_node(node->car);
+    break;
+  case NODE_TAIL:
+    if (node->car)
+      free_node(node->car);
+    if (node->cdr)
+      free_env((ENV *)node->cdr);
+    break;
   default:
+    free_node_edges(node);
     break;
   }
-  node->cdr = node_freelist;
-  node_freelist = node;
+  recycle_node(node);
 }
 
 void free_env(ENV *env) {
   int i;
   ENV *parent;
+  if (!env)
+    return;
   env->r--;
   if (env->r > 0)
     return;
   for (i = 0; i < env->nv; i++) {
     free_node(env->lv[i]->v);
+  }
+  for (i = 0; i < env->cv; i++) {
+    free((void *)env->lv[i]);
   }
   for (i = 0; i < env->nf; i++) {
     free_node(env->lf[i]->v);
@@ -432,18 +497,135 @@ void free_env(ENV *env) {
     free_node(env->lm[i]->v);
     free((void *)env->lm[i]);
   }
+  free((void *)env->lv);
   free((void *)env->lf);
   free((void *)env->lm);
   env->nv = 0;
+  env->cv = 0;
   env->nf = 0;
   env->nm = 0;
+  env->lv = NULL;
   env->lf = NULL;
   env->lm = NULL;
   parent = env->p;
+  env->gc_live = 0;
   env->p = env_freelist;
   env_freelist = env;
   if (parent) {
     free_env(parent);
+  }
+}
+
+static void gc_mark_env(ENV *env) {
+  int i;
+
+  if (!env || !env->gc_live || env->mark)
+    return;
+  env->mark = 1;
+  for (i = 0; i < env->nv; i++) {
+    gc_mark_node(env->lv[i]->v);
+  }
+  for (i = 0; i < env->nf; i++) {
+    gc_mark_node(env->lf[i]->v);
+  }
+  for (i = 0; i < env->nm; i++) {
+    gc_mark_node(env->lm[i]->v);
+  }
+  gc_mark_env(env->p);
+}
+
+static void gc_mark_node(NODE *node) {
+  if (!node || !node->gc_live || node->mark)
+    return;
+  node->mark = 1;
+  switch (node->t) {
+  case NODE_LAMBDA:
+  case NODE_QUOTE:
+  case NODE_BQUOTE:
+  case NODE_CELL:
+    gc_mark_node(node->car);
+    gc_mark_node(node->cdr);
+    break;
+  case NODE_ENV:
+    gc_mark_env(node->p);
+    break;
+  case NODE_AREF:
+    gc_mark_node(node->car);
+    break;
+  case NODE_TAIL:
+    gc_mark_node(node->car);
+    gc_mark_env((ENV *)node->cdr);
+    break;
+  default:
+    break;
+  }
+}
+
+static void gc_collect(ENV *root) {
+  NODE *node;
+  ENV *env;
+
+  for (node = all_nodes; node; node = node->gc_next)
+    node->mark = 0;
+  for (env = all_envs; env; env = env->gc_next)
+    env->mark = 0;
+
+  gc_mark_env(root);
+
+  for (node = all_nodes; node; node = node->gc_next) {
+    if (node->gc_live && !node->mark)
+      free_node_edges(node);
+  }
+  for (env = all_envs; env; env = env->gc_next) {
+    int i;
+    if (!env->gc_live || env->mark)
+      continue;
+    for (i = 0; i < env->nv; i++) {
+      if (env->lv[i]->v)
+        env->lv[i]->v->r--;
+    }
+    for (i = 0; i < env->nf; i++) {
+      if (env->lf[i]->v)
+        env->lf[i]->v->r--;
+    }
+    for (i = 0; i < env->nm; i++) {
+      if (env->lm[i]->v)
+        env->lm[i]->v->r--;
+    }
+    if (env->p)
+      env->p->r--;
+  }
+
+  for (node = all_nodes; node; node = node->gc_next) {
+    if (node->gc_live && !node->mark)
+      recycle_node(node);
+  }
+  for (env = all_envs; env; env = env->gc_next) {
+    int i;
+    if (!env->gc_live || env->mark)
+      continue;
+    for (i = 0; i < env->cv; i++) {
+      free((void *)env->lv[i]);
+    }
+    for (i = 0; i < env->nf; i++) {
+      free((void *)env->lf[i]);
+    }
+    for (i = 0; i < env->nm; i++) {
+      free((void *)env->lm[i]);
+    }
+    free((void *)env->lv);
+    free((void *)env->lf);
+    free((void *)env->lm);
+    env->nv = 0;
+    env->cv = 0;
+    env->nf = 0;
+    env->nm = 0;
+    env->lv = NULL;
+    env->lf = NULL;
+    env->lm = NULL;
+    env->gc_live = 0;
+    env->p = env_freelist;
+    env_freelist = env;
   }
 }
 
@@ -3306,6 +3488,7 @@ int main(int argc, char *argv[]) {
       err = 1;
     }
     free_node(ret);
+    gc_collect(env);
     free_env(env);
     exit(err);
   }
@@ -3337,6 +3520,7 @@ int main(int argc, char *argv[]) {
     }
     free_node(ret);
     free_node(node);
+    gc_collect(env);
   }
   free_env(env);
   return 0;
