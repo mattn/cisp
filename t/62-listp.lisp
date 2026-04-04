@@ -1,0 +1,6 @@
+(prin1 (listp nil))
+(prin1 (listp '(1 2)))
+(prin1 (listp '(1 . 2)))
+(prin1 (listp ''x))
+(prin1 (listp '`x))
+(prin1 (listp 'x))
