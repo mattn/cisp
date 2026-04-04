@@ -38,6 +38,7 @@ typedef enum _NODE_TYPE {
   NODE_AREF,
   NODE_ENV,
   NODE_ERROR,
+  NODE_CONTINUATION,
   NODE_TAIL
 } NODE_TYPE;
 
@@ -66,6 +67,7 @@ struct _NODE {
       ENV *p;
       char *name;
     };
+    void *v;
     struct {
       NODE *car;
       NODE *cdr;

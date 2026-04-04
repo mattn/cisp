@@ -10,7 +10,7 @@ A compact Lisp interpreter written in C.
 - **Lightweight**: Single binary with minimal dependencies
 - **Lisp-2**: Functions and variables have separate namespaces
 - **Dynamic library support**: Load shared libraries with the `load` function
-- **First-class continuations**: Supports `call/cc`
+- **Escape continuations**: Supports `call/cc`
 - **Tail call optimization**: Efficient execution of recursive functions
 - **Macro system**: Full macro support with backquote syntax
 - **Rich data types**: Integers, floats, characters, strings, symbols, and cons cells

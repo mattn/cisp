@@ -12,7 +12,7 @@ CFLAGS = -O3 -funroll-loops -Wall -Wextra -Wwrite-strings -Wformat=2 -Werror
 
 ifeq ($(OS),Windows_NT)
 BIN := $(TARGET).exe
-LIBS = -O3 -funroll-loops -ldl -Wl,--export-all-symbols -Wl,--out-implib,libcisp.a
+LIBS = -O3 -funroll-loops -Wl,--export-all-symbols -Wl,--out-implib,libcisp.a
 else
 BIN = $(TARGET)
 LIBS = -O3 -funroll-loops -ldl -Wl,--export-dynamic

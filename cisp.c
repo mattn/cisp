@@ -4,6 +4,7 @@
 #include <float.h>
 #include <limits.h>
 #include <memory.h>
+#include <setjmp.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,8 +37,15 @@
 
 #define ILLEGAL_FUNCTION_CALL "illegal function call"
 
+typedef struct _CONTINUATION {
+  jmp_buf buf;
+  NODE *value;
+  int active;
+} CONTINUATION;
+
 
 static NODE *do_progn(ENV *env, NODE *alist);
+static NODE *run_call_cc(ENV *env, NODE *fn, NODE *args, CONTINUATION *cont);
 
 static INLINE int arg_count_eq(NODE *alist, int n) {
   while (n > 0 && !node_isnull(alist)) {
@@ -347,6 +355,9 @@ void print_node(BUFFER *buf, NODE *node, PRINT_MODE mode) {
     print_args(buf, node->cdr, mode);
     buf_append(buf, ")");
     break;
+  case NODE_CONTINUATION:
+    buf_append(buf, "#<continuation>");
+    break;
   default:
     buf_append(buf, "()");
     break;
@@ -378,6 +389,9 @@ void free_node(NODE *node) {
   case NODE_SPECIAL:
   case NODE_BUILTINFUNC:
   case NODE_IDENT:
+    break;
+  case NODE_CONTINUATION:
+    free(node->v);
     break;
   case NODE_ENV:
     free_env(node->p);
@@ -1747,6 +1761,20 @@ static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro) {
 
   if (x->t == NODE_SPECIAL || x->t == NODE_BUILTINFUNC)
     return x->f(env, alist);
+  if (x->t == NODE_CONTINUATION) {
+    CONTINUATION *cont = (CONTINUATION *)x->v;
+    if (macro)
+      return new_error("illegal continuation call");
+    if (node_narg(alist) != 1)
+      return new_errorn("malformed continuation", alist);
+    if (!cont || !cont->active)
+      return new_error("continuation is no longer active");
+    nn = eval_node(env, alist->car);
+    if (nn->t == NODE_ERROR)
+      return nn;
+    cont->value = nn;
+    longjmp(cont->buf, 1);
+  }
   if (x->t != NODE_LAMBDA)
     return new_errorn("malformed arguments", x);
 
@@ -2018,6 +2046,46 @@ static NODE *do_funcall(ENV *env, NODE *alist) {
   return call_node(env, alist->car, alist->cdr);
 }
 
+static NODE *run_call_cc(ENV *env, NODE *fn, NODE *args, CONTINUATION *cont) {
+  if (setjmp(cont->buf) == 0) {
+    NODE *ret = call_node(env, fn, args);
+    cont->active = 0;
+    return ret;
+  }
+
+  cont->active = 0;
+  {
+    NODE *ret = cont->value;
+    cont->value = NULL;
+    return ret;
+  }
+}
+
+static NODE *do_call_cc(ENV *env, NODE *alist) {
+  CONTINUATION *cont;
+  NODE *args, *ret;
+  NODE *k;
+
+  if (node_narg(alist) != 1)
+    return new_errorn("malformed call/cc", alist);
+
+  cont = (CONTINUATION *)malloc(sizeof(CONTINUATION));
+  memset(cont, 0, sizeof(CONTINUATION));
+  cont->active = 1;
+
+  k = new_node();
+  k->t = NODE_CONTINUATION;
+  k->v = cont;
+
+  args = new_node();
+  args->t = NODE_CELL;
+  args->car = k;
+
+  ret = run_call_cc(env, alist->car, args, cont);
+  free_node(args);
+  return ret;
+}
+
 static NODE *do_defun(ENV *env, NODE *alist) {
   ENV *global;
   NODE *x, *e, *n;
@@ -2222,6 +2290,9 @@ static NODE *do_type_of(ENV *env, NODE *alist) {
     break;
   case NODE_ERROR:
     p = "error";
+    break;
+  case NODE_CONTINUATION:
+    p = "function";
     break;
   case NODE_TAIL:
     p = "tail";
@@ -2808,6 +2879,7 @@ static void add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "apply", do_apply);
   add_sym(env, NODE_BUILTINFUNC, "aref", do_aref);
   add_sym(env, NODE_BUILTINFUNC, "car", do_car);
+  add_sym(env, NODE_BUILTINFUNC, "call/cc", do_call_cc);
   add_sym(env, NODE_BUILTINFUNC, "cdr", do_cdr);
   add_sym(env, NODE_BUILTINFUNC, "concatenate", do_concatenate);
   add_sym(env, NODE_SPECIAL, "cond", do_cond);
@@ -2881,6 +2953,7 @@ static NODE *eval_node_dispatch(ENV *env, NODE *node) {
   case NODE_STRING:
   case NODE_ENV:
   case NODE_ERROR:
+  case NODE_CONTINUATION:
     node->r++;
     return node;
   case NODE_QUOTE:
