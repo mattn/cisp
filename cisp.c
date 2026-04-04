@@ -45,6 +45,7 @@ typedef struct _CONTINUATION {
 
 
 static NODE *do_progn(ENV *env, NODE *alist);
+static NODE *do_lambda(ENV *env, NODE *alist);
 static NODE *run_call_cc(ENV *env, NODE *fn, NODE *args, CONTINUATION *cont);
 
 static INLINE int arg_count_eq(NODE *alist, int n) {
@@ -1325,6 +1326,34 @@ static NODE *do_quote(ENV *env, NODE *alist) {
   alist = alist->car;
   alist->r++;
   return alist;
+}
+
+static NODE *do_function(ENV *env, NODE *alist) {
+  NODE *x;
+
+  if (node_narg(alist) != 1)
+    return new_errorn("malformed function", alist);
+
+  x = alist->car;
+  if (x->t == NODE_IDENT) {
+    NODE *fn = look_func(env, x->s);
+    if (!fn)
+      return new_errorn(ILLEGAL_FUNCTION_CALL, x);
+    return fn;
+  }
+
+  if (x->t == NODE_CELL && x->car && x->car->t == NODE_IDENT &&
+      !strcmp(x->car->s, "lambda")) {
+    return do_lambda(env, x->cdr);
+  }
+
+  if (x->t == NODE_LAMBDA || x->t == NODE_BUILTINFUNC || x->t == NODE_SPECIAL ||
+      x->t == NODE_CONTINUATION) {
+    x->r++;
+    return x;
+  }
+
+  return new_errorn("malformed function", alist);
 }
 
 static NODE *do_let_(ENV *env, NODE *alist, int star) {
@@ -2897,6 +2926,7 @@ static void add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL, "flet", do_flet);
   add_sym(env, NODE_BUILTINFUNC, "float", do_float);
   add_sym(env, NODE_BUILTINFUNC, "format", do_format);
+  add_sym(env, NODE_SPECIAL, "function", do_function);
   add_sym(env, NODE_BUILTINFUNC, "funcall", do_funcall);
   add_sym(env, NODE_BUILTINFUNC, "getenv", do_getenv);
   add_sym(env, NODE_SPECIAL, "if", do_if);

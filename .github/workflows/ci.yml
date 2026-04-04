@@ -51,7 +51,13 @@ jobs:
           update: true
           install: >-
             make
+            mingw-w64-x86_64-dlfcn
             mingw-w64-x86_64-gcc
+
+      - name: Preserve LF line endings
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
 
       - name: Build
         run: |
