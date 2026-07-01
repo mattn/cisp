@@ -1577,6 +1577,16 @@ static NODE *do_println(ENV *env, NODE *alist) {
   return c;
 }
 
+static NODE *do_terpri(ENV *env, NODE *alist) {
+  UNUSED(env);
+
+  if (node_narg(alist) != 0)
+    return new_errorn("malformed terpri", alist);
+
+  putchar('\n');
+  return new_node();
+}
+
 static NODE *do_princ(ENV *env, NODE *alist) {
   NODE *c;
   BUFFER buf;
@@ -2852,6 +2862,22 @@ static NODE *do_length(ENV *env, NODE *alist) {
   return c;
 }
 
+static NODE *do_list_length(ENV *env, NODE *alist) {
+  NODE *x, *c;
+  UNUSED(env);
+
+  if (node_narg(alist) != 1)
+    return new_errorn("malformed list-length", alist);
+
+  x = alist->car;
+  if (x->t != NODE_CELL && x->t != NODE_NIL)
+    return new_errorn("argument is not a list", alist);
+  c = new_node();
+  c->t = NODE_INT;
+  c->i = x->t == NODE_NIL ? 0 : node_narg(x);
+  return c;
+}
+
 static NODE *do_concatenate(ENV *env, NODE *alist) {
   NODE *x, *c, *l, *nn;
   BUFFER buf;
@@ -3290,6 +3316,7 @@ static void add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL, "labels", do_labels);
   add_sym(env, NODE_SPECIAL, "lambda", do_lambda);
   add_sym(env, NODE_BUILTINFUNC, "length", do_length);
+  add_sym(env, NODE_BUILTINFUNC, "list-length", do_list_length);
   add_sym(env, NODE_SPECIAL, "let", do_let);
   add_sym(env, NODE_SPECIAL, "let*", do_let_s);
   add_sym(env, NODE_BUILTINFUNC, "list", do_list);
@@ -3319,6 +3346,7 @@ static void add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "stringp", do_stringp);
   add_sym(env, NODE_BUILTINFUNC, "symbolp", do_symbolp);
   add_sym(env, NODE_BUILTINFUNC, "type-of", do_type_of);
+  add_sym(env, NODE_BUILTINFUNC, "terpri", do_terpri);
   add_sym(env, NODE_BUILTINFUNC, "time", do_time);
   add_sym(env, NODE_BUILTINFUNC, "numberp", do_numberp);
   add_sym(env, NODE_SPECIAL, "while", do_while);

@@ -1,0 +1,6 @@
+(prin1 (list-length '(1 2 3 4 5)))
+(setq x '(a b c))
+(prin1 (list-length (cdr x)))
+(prin1 (list-length nil))
+(prin1 (list-length ()))
+(prin1 (list-length (cons 1 nil)))
