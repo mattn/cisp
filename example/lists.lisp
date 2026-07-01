@@ -5,10 +5,10 @@
       (cons n (create-list (- n 1)))))
 
 ;; List operations
-(defun list-length (lst)
+(defun my-list-length (lst)
   (if (null lst)
       0
-      (+ 1 (list-length (cdr lst)))))
+      (+ 1 (my-list-length (cdr lst)))))
 
 (defun list-reverse (lst)
   (if (null lst)
@@ -24,16 +24,16 @@
 ;; Test list operations
 (princ "Create list 1-5: ")
 (prin1 (create-list 5))
-(princ "\n")
+(terpri)
 
 (princ "Length: ")
-(prin1 (list-length (create-list 5)))
-(princ "\n")
+(prin1 (my-list-length (create-list 5)))
+(terpri)
 
 (princ "Squared: ")
 (prin1 (list-map (lambda (x) (* x x)) (create-list 5)))
-(princ "\n")
+(terpri)
 
 (princ "Reversed: ")
 (prin1 (list-reverse (create-list 5)))
-(princ "\n")
+(terpri)
