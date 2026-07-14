@@ -2247,6 +2247,10 @@ static NODE *do_format(ENV *env, NODE *alist) {
 
       while (isdigit(*p))
         r = r * 10 + (int)(*p++ - '0');
+      if (*p == 0) {
+        buf_free(&buf);
+        return new_errorn("malformed format", alist);
+      }
       if (*p == '~') {
         tmp[0] = '~';
         r = r == 0 ? 1 : r;
@@ -2347,6 +2351,7 @@ static NODE *do_format(ENV *env, NODE *alist) {
     }
     p++;
   }
+  buf_reserve(&buf, 1);
   c = new_node();
   if (alist->car->t == NODE_T) {
     printf("%s", buf.ptr);
