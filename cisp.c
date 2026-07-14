@@ -2990,6 +2990,8 @@ static NODE *do_make_array(ENV *env, NODE *alist) {
   n = x->i;
 
   c = new_node();
+  if (n == 0)
+    return c;
   c->t = NODE_CELL;
   x = c;
   for (i = 0; i < n - 1; i++) {
