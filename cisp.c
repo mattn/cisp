@@ -2522,14 +2522,7 @@ static NODE *do_dotimes(ENV *env, NODE *alist) {
       free_env(newenv);
       return result;
     }
-    // Only free result if we're not in 3-argument mode
-    if (l != 3) {
-      free_node(result);
-    } else {
-    // Keep the last iteration's result for 3-argument mode
-    if (c) free_node(c);
-    c = result;
-    }
+    free_node(result);
   }
 
   if (l == 3) {
