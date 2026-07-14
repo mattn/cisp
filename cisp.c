@@ -1227,7 +1227,7 @@ static NODE *do_listp(ENV *env, NODE *alist) {
 static NODE *do_evenp(ENV *env, NODE *alist) {
   NODE *c, *err = NULL;
 
-  if (!arg_count_eq(alist, 1))
+  if (!arg_count_eq(alist, 1) || alist->car->t != NODE_INT)
     return new_errorn("malformed evenp", alist);
 
   c = new_node();
@@ -1244,7 +1244,7 @@ static NODE *do_evenp(ENV *env, NODE *alist) {
 static NODE *do_oddp(ENV *env, NODE *alist) {
   NODE *c, *err = NULL;
 
-  if (!arg_count_eq(alist, 1))
+  if (!arg_count_eq(alist, 1) || alist->car->t != NODE_INT)
     return new_errorn("malformed oddp", alist);
 
   c = new_node();
