@@ -1,0 +1,7 @@
+(setq z (list 1 2))
+(println `(,@z 9))
+(println `(a ,@z b))
+(println z)
+(println `(,@z))
+(setq w 5)
+(println `(x ,w y))

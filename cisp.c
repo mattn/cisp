@@ -1694,8 +1694,8 @@ static NODE *do_list(ENV *env, NODE *alist) {
 }
 
 static NODE *do_bquote(ENV *env, NODE *alist) {
-  int bq;
-  NODE *c, *v, *nc, *l = NULL, *rr = NULL;
+  int bq = 0;
+  NODE *c, *v, *x, *nc, *l = NULL, *rr = NULL;
   UNUSED(env);
 
   if (alist->t == NODE_BQUOTE) {
@@ -1707,12 +1707,19 @@ static NODE *do_bquote(ENV *env, NODE *alist) {
     int expand = 0;
     v = alist->car;
     if (bq && v->t == NODE_IDENT) {
+      const char *name;
       if (*v->s == '@') {
         expand = 2;
-        c = look_ident(env, intern(v->s + 1));
+        name = intern(v->s + 1);
       } else {
         expand = 1;
-        c = look_ident(env, v->s);
+        name = v->s;
+      }
+      c = look_ident(env, name);
+      if (!c) {
+        if (rr)
+          free_node(rr);
+        return new_errorf("unknown identity: %s", name);
       }
     } else if (bq && v->t == NODE_QUOTE && v->car && v->car->t == NODE_CELL) {
       NODE tmp;
@@ -1728,46 +1735,36 @@ static NODE *do_bquote(ENV *env, NODE *alist) {
         free_node(rr);
       return c;
     }
-    if (l == NULL) {
-      switch (expand) {
-      case 0:
+    if (expand == 2) {
+      for (x = c; !node_isnull(x); x = x->cdr) {
+        if (x->t != NODE_CELL) {
+          free_node(c);
+          if (rr)
+            free_node(rr);
+          return new_errorn("malformed unquote-splicing", alist);
+        }
         nc = new_node();
         nc->t = NODE_CELL;
-        nc->car = c;
-        rr = l = nc;
-        break;
-      case 1:
-        nc = new_node();
-        nc->t = NODE_CELL;
-        nc->car = c;
-        rr = l = nc;
-        break;
-      case 2:
-        rr = l = c->car;
-        rr->r++;
-        free_node(c);
+        nc->car = x->car;
+        if (nc->car)
+          nc->car->r++;
+        if (l == NULL)
+          rr = l = nc;
+        else {
+          l->cdr = nc;
+          l = nc;
+        }
       }
+      free_node(c);
     } else {
-      switch (expand) {
-      case 0:
-        nc = new_node();
-        nc->t = NODE_CELL;
-        nc->car = c;
+      nc = new_node();
+      nc->t = NODE_CELL;
+      nc->car = c;
+      if (l == NULL)
+        rr = l = nc;
+      else {
         l->cdr = nc;
-        l = l->cdr;
-        break;
-      case 1:
-        nc = new_node();
-        nc->t = NODE_CELL;
-        nc->car = c;
-        l->cdr = nc;
-        l = l->cdr;
-        break;
-      case 2:
-        l->cdr = c;
-        while (l->cdr)
-          l = l->cdr;
-        break;
+        l = nc;
       }
     }
     alist = alist->cdr;
