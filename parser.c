@@ -235,8 +235,11 @@ static NODE *parse_primitive(SCANNER *s) {
 
   while (n + 1 < sizeof(buf) && !s_eof(s)) {
     c = s_peek(s);
-    if (c == -1)
-      return NULL;
+    if (c == -1) {
+      if (n == 0)
+        return raise(s, "unexpected end of file");
+      break;
+    }
     if (n == 1 && buf[0] == '#' && c == '\\')
       buf[n++] = s_getc(s);
     else if (isalnum((unsigned char)c) || is_symbol_char(c))
@@ -414,8 +417,11 @@ static NODE *parse_sharp(SCANNER *s) {
   buf[n++] = '#';
   while (n + 1 < sizeof(buf) && !s_eof(s)) {
     c = s_peek(s);
-    if (c == -1)
-      return NULL;
+    if (c == -1) {
+      if (n <= 2)
+        return raise(s, "unexpected end of file");
+      break;
+    }
     if (n == 1 && buf[0] == '#' && c == '\\')
       buf[n++] = s_getc(s);
     else if (isalnum((unsigned char)c) || is_symbol_char(c))
