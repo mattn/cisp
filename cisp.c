@@ -1475,12 +1475,18 @@ static NODE *do_eq(ENV *env, NODE *alist) {
   nn = new_node();
   switch (lhs->t) {
   case NODE_CHARACTER:
-    if (lhs->c == rhs->c) {
+    if (rhs->t != NODE_CHARACTER) {
+      err = new_error("illegal comparing");
+    } else if (lhs->c == rhs->c) {
       nn->t = NODE_T;
     }
     break;
   case NODE_INT:
-    if (int_value(env, lhs, &err) == int_value(env, rhs, &err)) {
+    if (rhs->t == NODE_DOUBLE) {
+      if (double_value(env, lhs, &err) == double_value(env, rhs, &err)) {
+        nn->t = NODE_T;
+      }
+    } else if (int_value(env, lhs, &err) == int_value(env, rhs, &err)) {
       nn->t = NODE_T;
     }
     break;
