@@ -1275,6 +1275,33 @@ static NODE *do_mod(ENV *env, NODE *alist) {
 #else
   c->i = lhs % rhs;
 #endif
+  if (c->i != 0 && ((c->i < 0) != (rhs < 0)))
+    c->i += rhs;
+  return c;
+}
+
+static NODE *do_rem(ENV *env, NODE *alist) {
+  NODE *c, *err = NULL;
+  long lhs, rhs;
+
+  if (!arg_count_eq(alist, 2))
+    return new_errorn("malformed rem", alist);
+
+  lhs = int_value(env, alist->car, &err);
+  rhs = int_value(env, alist->cdr->car, &err);
+  if (err)
+    return err;
+
+  if (rhs == 0)
+    return new_errorn("malformed rem", alist);
+
+  c = new_node();
+  c->t = NODE_INT;
+#if LONG_MIN < -LONG_MAX
+  c->i = (lhs == LONG_MIN && rhs == -1) ? 0 : lhs % rhs;
+#else
+  c->i = lhs % rhs;
+#endif
   return c;
 }
 
@@ -3274,7 +3301,7 @@ void sort_syms(ENV *env) {
 }
 
 static void add_defaults(ENV *env) {
-  add_sym(env, NODE_BUILTINFUNC, "%", do_mod);
+  add_sym(env, NODE_BUILTINFUNC, "%", do_rem);
   add_sym(env, NODE_BUILTINFUNC, "*", do_mul);
   add_sym(env, NODE_BUILTINFUNC, "+", do_plus);
   add_sym(env, NODE_BUILTINFUNC, "-", do_minus);
@@ -3328,6 +3355,7 @@ static void add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "make-array", do_make_array);
   add_sym(env, NODE_BUILTINFUNC, "make-string", do_make_string);
   add_sym(env, NODE_BUILTINFUNC, "mod", do_mod);
+  add_sym(env, NODE_BUILTINFUNC, "rem", do_rem);
   add_sym(env, NODE_BUILTINFUNC, "nconc", do_nconc);
   add_sym(env, NODE_BUILTINFUNC, "not", do_not);
   add_sym(env, NODE_BUILTINFUNC, "null", do_null);
