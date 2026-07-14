@@ -1,5 +1,6 @@
 #define _CRT_SECURE_NO_WARNINGS 1
 #include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -281,8 +282,9 @@ static NODE *parse_primitive(SCANNER *s) {
     }
     return x;
   }
+  errno = 0;
   x->i = strtol(buf, &e, 10);
-  if (e == buf + n) {
+  if (e == buf + n && errno != ERANGE) {
     x->t = NODE_INT;
     return x;
   }
