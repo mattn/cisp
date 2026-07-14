@@ -3172,7 +3172,7 @@ NODE *load_lisp(ENV *env, const char *fname) {
   if (top == NULL) {
     NODE *e = new_node();
     e->t = NODE_ERROR;
-    e->s = strdup(s->err);
+    e->s = strdup(s->err ? s->err : "parse error");
     s_reset(s);
     fclose(fp);
     return e;
