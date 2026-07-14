@@ -1,0 +1,6 @@
+(println (= 1 1.9))
+(println (= 1.9 1))
+(println (= 1 1.0))
+(println (= 2 2))
+(println (= #\a #\a))
+(println (= #\a #\b))
