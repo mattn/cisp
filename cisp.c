@@ -2757,12 +2757,15 @@ static NODE *do_random(ENV *env, NODE *alist) {
   if (alist->car->t != NODE_INT && alist->car->t != NODE_DOUBLE)
     return new_errorn("malformed random", alist);
 
+  if (alist->car->t == NODE_INT ? alist->car->i <= 0 : alist->car->d <= 0.0)
+    return new_errorn("malformed random", alist);
+
   c = new_node();
   c->t = alist->car->t;
   if (c->t == NODE_INT)
     c->i = rand() % alist->car->i;
   else
-    c->d = (double)rand() / RAND_MAX;
+    c->d = alist->car->d * ((double)rand() / ((double)RAND_MAX + 1.0));
   return c;
 }
 
