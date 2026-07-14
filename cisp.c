@@ -1748,32 +1748,35 @@ static CATCH_FRAME *catch_stack = NULL;
 
 static NODE *do_catch(ENV *env, NODE *alist) {
   CATCH_FRAME frame;
-  NODE *tag, *c;
+  NODE *volatile tag;
+  NODE *volatile result = NULL;
 
   if (node_narg(alist) < 1)
     return new_errorn("malformed catch", alist);
 
   tag = eval_node(env, alist->car);
   if (tag->t == NODE_ERROR)
-    return tag;
+    return (NODE *)tag;
 
-  frame.tag = tag;
+  frame.tag = (NODE *)tag;
   frame.value = NULL;
   frame.prev = catch_stack;
   catch_stack = &frame;
 
   if (setjmp(frame.buf) == 0) {
-    c = do_progn(env, alist->cdr);
+    NODE *c = do_progn(env, alist->cdr);
     if (c->t == NODE_TAIL)
       c = eval_node(env, c);
-    catch_stack = frame.prev;
-    free_node(tag);
-    return c;
+    result = c;
+  } else {
+    result = frame.value;
   }
 
   catch_stack = frame.prev;
-  free_node(tag);
-  return frame.value ? frame.value : new_node();
+  free_node((NODE *)tag);
+  if (!result)
+    result = new_node();
+  return (NODE *)result;
 }
 
 static NODE *do_throw(ENV *env, NODE *alist) {
