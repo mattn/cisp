@@ -3211,7 +3211,7 @@ static NODE *do_apply(ENV *env, NODE *alist) {
 
 static NODE *do_while(ENV *env, NODE *alist) {
   ENV *newenv;
-  NODE *c, *err = NULL;
+  NODE *c;
   int r;
 
   if (node_narg(alist) < 1)
@@ -3221,10 +3221,12 @@ static NODE *do_while(ENV *env, NODE *alist) {
 
   while (1) {
     c = eval_node(env, alist->car);
-    r = c->t == NODE_T;
+    if (c->t == NODE_ERROR) {
+      free_env(newenv);
+      return c;
+    }
+    r = !node_isnull(c);
     free_node(c);
-    if (err)
-      return err;
     if (r == 0)
       break;
 
