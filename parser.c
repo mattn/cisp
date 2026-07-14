@@ -346,7 +346,7 @@ static NODE *parse_bquote(SCANNER *s) {
 static NODE *parse_string(SCANNER *s) {
   char *buf = NULL;
   int n = 0, l = 0;
-  int c = 0;
+  int c = 0, closed = 0;
   NODE *node;
 
   buf = (char *)malloc(10);
@@ -356,6 +356,9 @@ static NODE *parse_string(SCANNER *s) {
     if (c == '\\' && !s_eof(s)) {
       c = s_getc(s);
       switch (c) {
+      case '"':
+        c = '"';
+        break;
       case '\\':
         c = '\\';
         break;
@@ -378,8 +381,10 @@ static NODE *parse_string(SCANNER *s) {
         free(buf);
         return invalid_token(s);
       }
-    } else if (c == '"')
+    } else if (c == '"') {
+      closed = 1;
       break;
+    }
     if (n >= l - 1) {
       buf = (char *)realloc(buf, l + 40);
       l += 40;
@@ -387,7 +392,7 @@ static NODE *parse_string(SCANNER *s) {
     buf[n++] = c;
   }
   buf[n] = 0;
-  if (c != '"') {
+  if (!closed) {
     free(buf);
     return invalid_token(s);
   }
