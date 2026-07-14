@@ -1,0 +1,7 @@
+(dolist (x (list 1 2 3))
+  (println x))
+(println (dolist (x (list 1 2) 'done) (println x)))
+(setq acc 0)
+(println (dolist (x (list 1 2 3) acc) (setq acc (+ acc x))))
+(dolist (x nil) (println x))
+(println 'end)
