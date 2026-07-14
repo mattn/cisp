@@ -1,0 +1,10 @@
+(println (catch 'foo (throw 'foo 42) 99))
+(println (catch 'foo 1 2 3))
+(println (catch 'a (catch 'b (throw 'a 'outer))))
+(println (catch 'x (dotimes (i 10) (if (= i 3) (throw 'x i)))))
+(defun safe-div (a b)
+  (catch 'bad
+    (if (= b 0) (throw 'bad 'division-by-zero))
+    (/ a b)))
+(println (safe-div 10 2))
+(println (safe-div 10 0))
