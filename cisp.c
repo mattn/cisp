@@ -290,7 +290,20 @@ static void print_args(BUFFER *buf, NODE *node, int mode) {
   }
 }
 
+#define PRINT_MAX_DEPTH 1000
+
+static int print_depth = 0;
+
 static void print_cell(BUFFER *buf, NODE *node, int mode) {
+  NODE *slow = node;
+  long step = 0;
+
+  if (print_depth >= PRINT_MAX_DEPTH) {
+    buf_append(buf, "...");
+    return;
+  }
+  print_depth++;
+
   buf_append(buf, "(");
 
   while (node) {
@@ -307,9 +320,16 @@ static void print_cell(BUFFER *buf, NODE *node, int mode) {
     }
     buf_append(buf, " ");
     node = node->cdr;
+    if (step++ & 1)
+      slow = slow->cdr;
+    if (node == slow) {
+      buf_append(buf, "...");
+      break;
+    }
   }
 
   buf_append(buf, ")");
+  print_depth--;
 }
 
 static void print_str(BUFFER *buf, NODE *node, int mode) {
@@ -2864,8 +2884,33 @@ static NODE *do_consp(ENV *env, NODE *alist) {
   return c;
 }
 
+/* Count the elements of a proper list. Returns -1 when the list is
+ * circular; sets *improper when it ends in a non-nil tail. */
+static long proper_list_length(NODE *x, int *improper) {
+  NODE *slow = x, *fast = x;
+  long n = 0;
+
+  *improper = 0;
+  while (!node_isnull(fast) && fast->t == NODE_CELL) {
+    fast = fast->cdr;
+    n++;
+    if (node_isnull(fast) || fast->t != NODE_CELL)
+      break;
+    fast = fast->cdr;
+    n++;
+    slow = slow->cdr;
+    if (slow == fast)
+      return -1;
+  }
+  if (!node_isnull(fast) && fast->t != NODE_CELL)
+    *improper = 1;
+  return n;
+}
+
 static NODE *do_length(ENV *env, NODE *alist) {
   NODE *x, *c;
+  int improper;
+  long n = 0;
   UNUSED(env);
 
   if (node_narg(alist) != 1)
@@ -2874,16 +2919,25 @@ static NODE *do_length(ENV *env, NODE *alist) {
   x = alist->car;
   if (x->t != NODE_CELL && x->t != NODE_NIL && x->t != NODE_STRING)
     return new_errorn("argument is not a list", alist);
+  if (x->t == NODE_CELL) {
+    n = proper_list_length(x, &improper);
+    if (n < 0)
+      return new_errorn("circular list", alist);
+    if (improper)
+      return new_errorn("argument is not a list", alist);
+  }
   c = new_node();
   c->t = NODE_INT;
   c->i = x->t == NODE_NIL      ? 0
          : x->t == NODE_STRING ? (long)strlen(x->s)
-                               : node_narg(x);
+                               : n;
   return c;
 }
 
 static NODE *do_list_length(ENV *env, NODE *alist) {
   NODE *x, *c;
+  int improper;
+  long n = 0;
   UNUSED(env);
 
   if (node_narg(alist) != 1)
@@ -2892,9 +2946,16 @@ static NODE *do_list_length(ENV *env, NODE *alist) {
   x = alist->car;
   if (x->t != NODE_CELL && x->t != NODE_NIL)
     return new_errorn("argument is not a list", alist);
+  if (x->t == NODE_CELL) {
+    n = proper_list_length(x, &improper);
+    if (n < 0)
+      return new_node();
+    if (improper)
+      return new_errorn("argument is not a list", alist);
+  }
   c = new_node();
   c->t = NODE_INT;
-  c->i = x->t == NODE_NIL ? 0 : node_narg(x);
+  c->i = n;
   return c;
 }
 
@@ -3028,9 +3089,12 @@ static NODE *do_nconc(ENV *env, NODE *alist) {
     return new_node();
 
   for (c = alist; !node_isnull(c->cdr); c = c->cdr) {
+    int improper;
     x = c->car;
     if (!node_isnull(x) && x->t != NODE_CELL)
       return new_errorn("malformed nconc", alist);
+    if (x->t == NODE_CELL && proper_list_length(x, &improper) < 0)
+      return new_errorn("circular list", alist);
   }
 
   for (c = alist; !node_isnull(c); c = c->cdr) {
@@ -3059,9 +3123,12 @@ static NODE *do_append(ENV *env, NODE *alist) {
     return new_node();
 
   for (c = alist; !node_isnull(c->cdr); c = c->cdr) {
+    int improper;
     x = c->car;
     if (!node_isnull(x) && x->t != NODE_CELL)
       return new_errorn("malformed append", alist);
+    if (x->t == NODE_CELL && proper_list_length(x, &improper) < 0)
+      return new_errorn("circular list", alist);
   }
 
   for (c = alist; !node_isnull(c->cdr); c = c->cdr) {
@@ -3105,6 +3172,11 @@ static NODE *do_reverse(ENV *env, NODE *alist) {
   x = alist->car;
   if (!node_isnull(x) && x->t != NODE_CELL)
     return new_errorn("argument is not a list", alist);
+  if (x->t == NODE_CELL) {
+    int improper;
+    if (proper_list_length(x, &improper) < 0)
+      return new_errorn("circular list", alist);
+  }
 
   while (!node_isnull(x)) {
     NODE *nc = new_node();

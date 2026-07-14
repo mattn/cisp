@@ -1,0 +1,6 @@
+(setq x (list 1 2 3))
+(rplacd (cdr (cdr x)) x)
+(println x)
+(println (list-length x))
+(setq y (list 1 2 3))
+(println (list-length y))
