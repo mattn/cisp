@@ -1084,7 +1084,9 @@ static NODE *do_and(ENV *env, NODE *alist) {
   }
   if (c)
     return c;
-  return new_node();
+  c = new_node();
+  c->t = NODE_T;
+  return c;
 }
 
 static NODE *do_or(ENV *env, NODE *alist) {

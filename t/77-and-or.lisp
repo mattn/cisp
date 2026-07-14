@@ -1,0 +1,6 @@
+(println (and))
+(println (or))
+(println (and 1 2))
+(println (and 1 nil 2))
+(println (or nil 3))
+(println (or nil nil))
