@@ -47,6 +47,7 @@ typedef struct _CONTINUATION {
 static NODE *do_progn(ENV *env, NODE *alist);
 static NODE *do_lambda(ENV *env, NODE *alist);
 static NODE *run_call_cc(ENV *env, NODE *fn, NODE *args, CONTINUATION *cont);
+static ITEM *find_item_in_env_chain(ENV *env, const char *k);
 
 static INLINE int arg_count_eq(NODE *alist, int n) {
   while (n > 0 && !node_isnull(alist)) {
@@ -1339,84 +1340,50 @@ static NODE *do_if(ENV *env, NODE *alist) {
   }
 }
 
-static NODE *do_incf(ENV *env, NODE *alist) {
-  NODE *x, *c = NULL;
+static NODE *do_incf_decf(ENV *env, NODE *alist, int sign, const char *msg) {
+  NODE *x, *c, *nn;
+  ITEM *ni;
 
   if (node_narg(alist) != 2 || alist->car->t != NODE_IDENT)
-    return new_errorn("malformed incf", alist);
-  if (alist->cdr->car->t != NODE_INT && alist->cdr->car->t)
-    return new_errorn("malformed incf", alist);
+    return new_errorn(msg, alist);
 
   x = alist->car;
-  if (!x || x->t != NODE_IDENT)
+  ni = find_item_in_env_chain(env, x->s);
+  if (!ni)
     return new_errorn("invalid identifier", x);
+  if (ni->v->t != NODE_INT && ni->v->t != NODE_DOUBLE)
+    return new_errorn("invalid type", alist);
 
-  while (env) {
-    ITEM *ni = find_item_linear(env->lv, env->nv, x->s);
-    if (ni) {
-      if (ni->v->t != NODE_INT && ni->v->t) {
-        return new_errorn("invalid type", alist);
-      }
-      c = eval_node(env, alist->cdr->car);
-      if (c->t == NODE_ERROR)
-        return c;
-
-      if (c->t == NODE_INT)
-        ni->v->i += c->i;
-      else
-        ni->v->d += c->d;
-      break;
-    }
-    if (!env->p) {
-      break;
-    }
-    env = env->p;
+  c = eval_node(env, alist->cdr->car);
+  if (c->t == NODE_ERROR)
+    return c;
+  if (c->t != NODE_INT && c->t != NODE_DOUBLE) {
+    free_node(c);
+    return new_errorn(msg, alist);
   }
 
-  if (c == NULL)
-    return new_errorn("invalid identifier", x);
-  c->r++;
-  return c;
+  nn = new_node();
+  if (ni->v->t == NODE_DOUBLE || c->t == NODE_DOUBLE) {
+    nn->t = NODE_DOUBLE;
+    nn->d = (ni->v->t == NODE_DOUBLE ? ni->v->d : (double)ni->v->i) +
+            sign * (c->t == NODE_DOUBLE ? c->d : (double)c->i);
+  } else {
+    nn->t = NODE_INT;
+    nn->i = ni->v->i + sign * c->i;
+  }
+  free_node(c);
+  free_node(ni->v);
+  ni->v = nn;
+  nn->r++;
+  return nn;
+}
+
+static NODE *do_incf(ENV *env, NODE *alist) {
+  return do_incf_decf(env, alist, 1, "malformed incf");
 }
 
 static NODE *do_decf(ENV *env, NODE *alist) {
-  NODE *x, *c = NULL;
-
-  if (node_narg(alist) != 2 || alist->car->t != NODE_IDENT)
-    return new_errorn("malformed decf", alist);
-  if (alist->cdr->car->t != NODE_INT && alist->cdr->car->t)
-    return new_errorn("malformed decf", alist);
-
-  x = alist->car;
-  if (!x || x->t != NODE_IDENT)
-    return new_errorn("invalid identifier", x);
-
-  while (env) {
-    ITEM *ni = find_item_linear(env->lv, env->nv, x->s);
-    if (ni) {
-      if (ni->v->t != NODE_INT && ni->v->t) {
-        return new_errorn("invalid type", alist);
-      }
-      c = eval_node(env, alist->cdr->car);
-      if (c->t == NODE_ERROR)
-        return c;
-
-      if (c->t == NODE_INT)
-        ni->v->i -= c->i;
-      else
-        ni->v->d -= c->d;
-      break;
-    }
-    if (!env->p) {
-      break;
-    }
-    env = env->p;
-  }
-
-  if (c == NULL)
-    return new_errorn("invalid identifier", x);
-  c->r++;
-  return c;
+  return do_incf_decf(env, alist, -1, "malformed decf");
 }
 
 static NODE *do_gt(ENV *env, NODE *alist) {
