@@ -1528,121 +1528,110 @@ static NODE *do_decf(ENV *env, NODE *alist) {
   return do_incf_decf(env, alist, -1, "malformed decf");
 }
 
-static NODE *do_gt(ENV *env, NODE *alist) {
+static NODE *do_ordered(ENV *env, NODE *alist, int op, const char *msg) {
   NODE *nn, *err = NULL;
+  double prev, cur;
+  int ok;
 
-  if (!arg_count_eq(alist, 2))
-    return new_errorn("malformed >", alist);
+  if (node_narg(alist) < 1)
+    return new_errorn(msg, alist);
+
+  prev = double_value(env, alist->car, &err);
+  if (err)
+    return err;
 
   nn = new_node();
-  if (double_value(env, alist->car, &err) >
-      double_value(env, alist->cdr->car, &err)) {
-    nn->t = NODE_T;
-  }
-  if (err) {
-    free_node(nn);
-    return err;
-  }
-  return nn;
-}
-
-static NODE *do_ge(ENV *env, NODE *alist) {
-  NODE *nn, *err = NULL;
-
-  if (!arg_count_eq(alist, 2))
-    return new_errorn("malformed >=", alist);
-
-  nn = new_node();
-  if (double_value(env, alist->car, &err) >=
-      double_value(env, alist->cdr->car, &err)) {
-    nn->t = NODE_T;
-  }
-  if (err) {
-    free_node(nn);
-    return err;
+  nn->t = NODE_T;
+  for (alist = alist->cdr; !node_isnull(alist); alist = alist->cdr) {
+    cur = double_value(env, alist->car, &err);
+    if (err) {
+      free_node(nn);
+      return err;
+    }
+    switch (op) {
+    case 0:
+      ok = prev < cur;
+      break;
+    case 1:
+      ok = prev <= cur;
+      break;
+    case 2:
+      ok = prev > cur;
+      break;
+    default:
+      ok = prev >= cur;
+      break;
+    }
+    if (!ok) {
+      nn->t = NODE_NIL;
+      break;
+    }
+    prev = cur;
   }
   return nn;
 }
 
 static NODE *do_lt(ENV *env, NODE *alist) {
-  NODE *nn, *err = NULL;
-
-  if (!arg_count_eq(alist, 2))
-    return new_errorn("malformed <", alist);
-
-  nn = new_node();
-  if (double_value(env, alist->car, &err) <
-      double_value(env, alist->cdr->car, &err)) {
-    nn->t = NODE_T;
-  }
-  if (err) {
-    free_node(nn);
-    return err;
-  }
-  return nn;
+  return do_ordered(env, alist, 0, "malformed <");
 }
 
 static NODE *do_le(ENV *env, NODE *alist) {
-  NODE *nn, *err = NULL;
-
-  if (!arg_count_eq(alist, 2))
-    return new_errorn("malformed <=", alist);
-
-  nn = new_node();
-  if (double_value(env, alist->car, &err) <=
-      double_value(env, alist->cdr->car, &err)) {
-    nn->t = NODE_T;
-  }
-  if (err) {
-    free_node(nn);
-    return err;
-  }
-  return nn;
+  return do_ordered(env, alist, 1, "malformed <=");
 }
 
-static NODE *do_eq(ENV *env, NODE *alist) {
-  NODE *lhs, *rhs, *nn, *err = NULL;
+static NODE *do_gt(ENV *env, NODE *alist) {
+  return do_ordered(env, alist, 2, "malformed >");
+}
 
-  if (!arg_count_eq(alist, 2))
-    return new_errorn("malformed =", alist);
+static NODE *do_ge(ENV *env, NODE *alist) {
+  return do_ordered(env, alist, 3, "malformed >=");
+}
 
-  lhs = alist->car;
-  rhs = alist->cdr->car;
-  nn = new_node();
+static int node_value_eq(ENV *env, NODE *lhs, NODE *rhs, NODE **err) {
   switch (lhs->t) {
   case NODE_CHARACTER:
     if (rhs->t != NODE_CHARACTER) {
-      err = new_error("illegal comparing");
-    } else if (lhs->c == rhs->c) {
-      nn->t = NODE_T;
+      *err = new_error("illegal comparing");
+      return 0;
     }
-    break;
+    return lhs->c == rhs->c;
   case NODE_INT:
-    if (rhs->t == NODE_DOUBLE) {
-      if (double_value(env, lhs, &err) == double_value(env, rhs, &err)) {
-        nn->t = NODE_T;
-      }
-    } else if (int_value(env, lhs, &err) == int_value(env, rhs, &err)) {
-      nn->t = NODE_T;
-    }
-    break;
+    if (rhs->t == NODE_DOUBLE)
+      return double_value(env, lhs, err) == double_value(env, rhs, err);
+    return int_value(env, lhs, err) == int_value(env, rhs, err);
   case NODE_DOUBLE:
-    if (double_value(env, lhs, &err) == double_value(env, rhs, &err)) {
-      nn->t = NODE_T;
-    }
-    break;
+    return double_value(env, lhs, err) == double_value(env, rhs, err);
   case NODE_STRING:
-    if (rhs->t == NODE_STRING && !strcmp(lhs->s, rhs->s)) {
-      nn->t = NODE_T;
-    }
-    break;
+    if (rhs->t != NODE_STRING)
+      return 0;
+    return !strcmp(lhs->s, rhs->s);
   default:
-    err = new_error("illegal comparing");
-    break;
+    *err = new_error("illegal comparing");
+    return 0;
   }
-  if (err) {
-    free_node(nn);
-    return err;
+}
+
+static NODE *do_eq(ENV *env, NODE *alist) {
+  NODE *nn, *err = NULL;
+
+  if (node_narg(alist) < 1)
+    return new_errorn("malformed =", alist);
+
+  nn = new_node();
+  nn->t = NODE_T;
+  for (; !node_isnull(alist->cdr); alist = alist->cdr) {
+    if (!node_value_eq(env, alist->car, alist->cdr->car, &err)) {
+      if (err) {
+        free_node(nn);
+        return err;
+      }
+      nn->t = NODE_NIL;
+      break;
+    }
+    if (err) {
+      free_node(nn);
+      return err;
+    }
   }
   return nn;
 }
