@@ -1737,6 +1737,74 @@ static NODE *do_equal(ENV *env, NODE *alist) {
   return c;
 }
 
+typedef struct _CATCH_FRAME {
+  jmp_buf buf;
+  NODE *tag;
+  NODE *value;
+  struct _CATCH_FRAME *prev;
+} CATCH_FRAME;
+
+static CATCH_FRAME *catch_stack = NULL;
+
+static NODE *do_catch(ENV *env, NODE *alist) {
+  CATCH_FRAME frame;
+  NODE *tag, *c;
+
+  if (node_narg(alist) < 1)
+    return new_errorn("malformed catch", alist);
+
+  tag = eval_node(env, alist->car);
+  if (tag->t == NODE_ERROR)
+    return tag;
+
+  frame.tag = tag;
+  frame.value = NULL;
+  frame.prev = catch_stack;
+  catch_stack = &frame;
+
+  if (setjmp(frame.buf) == 0) {
+    c = do_progn(env, alist->cdr);
+    if (c->t == NODE_TAIL)
+      c = eval_node(env, c);
+    catch_stack = frame.prev;
+    free_node(tag);
+    return c;
+  }
+
+  catch_stack = frame.prev;
+  free_node(tag);
+  return frame.value ? frame.value : new_node();
+}
+
+static NODE *do_throw(ENV *env, NODE *alist) {
+  NODE *tag, *value;
+  CATCH_FRAME *f;
+
+  if (!arg_count_eq(alist, 2))
+    return new_errorn("malformed throw", alist);
+
+  tag = eval_node(env, alist->car);
+  if (tag->t == NODE_ERROR)
+    return tag;
+  value = eval_node(env, alist->cdr->car);
+  if (value->t == NODE_ERROR) {
+    free_node(tag);
+    return value;
+  }
+
+  for (f = catch_stack; f; f = f->prev) {
+    if (node_eql(f->tag, tag)) {
+      free_node(tag);
+      f->value = value;
+      longjmp(f->buf, 1);
+    }
+  }
+
+  free_node(tag);
+  free_node(value);
+  return new_errorn("no catch for throw", alist);
+}
+
 static NODE *do_string_eq(ENV *env, NODE *alist) {
   NODE *a, *b, *c;
   UNUSED(env);
@@ -3707,6 +3775,7 @@ static void add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "call/cc", do_call_cc);
   add_sym(env, NODE_BUILTINFUNC, "cdr", do_cdr);
   add_sym(env, NODE_BUILTINFUNC, "concatenate", do_concatenate);
+  add_sym(env, NODE_SPECIAL, "catch", do_catch);
   add_sym(env, NODE_SPECIAL, "cond", do_cond);
   add_sym(env, NODE_BUILTINFUNC, "cons", do_cons);
   add_sym(env, NODE_BUILTINFUNC, "consp", do_consp);
@@ -3714,6 +3783,7 @@ static void add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL, "defmacro", do_defmacro);
   add_sym(env, NODE_SPECIAL, "defun", do_defun);
   add_sym(env, NODE_SPECIAL, "dotimes", do_dotimes);
+  add_sym(env, NODE_SPECIAL, "throw", do_throw);
   add_sym(env, NODE_BUILTINFUNC, "eq?", do_eq);
   add_sym(env, NODE_BUILTINFUNC, "eq", do_eq_ident);
   add_sym(env, NODE_BUILTINFUNC, "eql", do_eql);
