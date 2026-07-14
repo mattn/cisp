@@ -1,0 +1,8 @@
+(setq n 0)
+(while (< n 3)
+  (println n)
+  (incf n 1))
+(setq m 3)
+(while (and (> m 0) m)
+  (decf m 1))
+(println m)
