@@ -1,0 +1,6 @@
+(println (evenp 4))
+(println (oddp 3))
+(println (evenp -2))
+(println (oddp -3))
+(println (evenp 3))
+(println (oddp 4))
