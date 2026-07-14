@@ -49,6 +49,7 @@ static NODE *do_progn(ENV *env, NODE *alist);
 static NODE *do_lambda(ENV *env, NODE *alist);
 static NODE *run_call_cc(ENV *env, NODE *fn, NODE *args, CONTINUATION *cont);
 static ITEM *find_item_in_env_chain(ENV *env, const char *k);
+static long proper_list_length(NODE *x, int *improper);
 
 static INLINE int arg_count_eq(NODE *alist, int n) {
   while (n > 0 && !node_isnull(alist)) {
@@ -2906,6 +2907,65 @@ static NODE *do_dotimes(ENV *env, NODE *alist) {
   return c;
 }
 
+static NODE *do_dolist(ENV *env, NODE *alist) {
+  ENV *newenv;
+  NODE *c, *x, *lst, *it;
+  int improper;
+  long l;
+
+  if (node_narg(alist) < 1)
+    return new_errorn("malformed dolist", alist);
+
+  x = alist->car;
+  l = node_narg(x);
+  if (!(l == 2 || l == 3) || !(x->car && x->car->t == NODE_IDENT))
+    return new_errorn("malformed dolist", alist);
+
+  lst = eval_node(env, x->cdr->car);
+  if (lst->t == NODE_ERROR)
+    return lst;
+  if (!node_isnull(lst) && lst->t != NODE_CELL) {
+    free_node(lst);
+    return new_errorn("malformed dolist", alist);
+  }
+  if (lst->t == NODE_CELL && proper_list_length(lst, &improper) < 0) {
+    free_node(lst);
+    return new_errorn("circular list", alist);
+  }
+
+  newenv = new_env(env);
+
+  for (it = lst; !node_isnull(it) && it->t == NODE_CELL; it = it->cdr) {
+    NODE *result, *val = it->car;
+    if (val)
+      val->r++;
+    else
+      val = new_node();
+    add_variable(newenv, x->car->s, val);
+    result = do_progn(newenv, alist->cdr);
+    if (result->t == NODE_TAIL) {
+      result = eval_node(newenv, result);
+    }
+    if (result->t == NODE_ERROR) {
+      free_env(newenv);
+      free_node(lst);
+      return result;
+    }
+    free_node(result);
+  }
+
+  if (l == 3) {
+    add_variable(newenv, x->car->s, new_node());
+    c = eval_node(newenv, x->cdr->cdr->car);
+    if (!c)
+      c = new_node();
+  } else
+    c = new_node();
+  free_env(newenv);
+  free_node(lst);
+  return c;
+}
+
 static NODE *do_type_of(ENV *env, NODE *alist) {
   NODE *c;
   const char *p = "unknown";
@@ -3713,6 +3773,7 @@ static void add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL, "decf", do_decf);
   add_sym(env, NODE_SPECIAL, "defmacro", do_defmacro);
   add_sym(env, NODE_SPECIAL, "defun", do_defun);
+  add_sym(env, NODE_SPECIAL, "dolist", do_dolist);
   add_sym(env, NODE_SPECIAL, "dotimes", do_dotimes);
   add_sym(env, NODE_BUILTINFUNC, "eq?", do_eq);
   add_sym(env, NODE_BUILTINFUNC, "eq", do_eq_ident);
