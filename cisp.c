@@ -1929,29 +1929,29 @@ static NODE *do_setf(ENV *env, NODE *alist) {
     switch (x->t) {
     case NODE_AREF:
       c = eval_node(env, alist->cdr->car);
-      y = eval_node(env, x->car->car);
-      while (x) {
-        z = eval_node(env, x->car->cdr);
-        if (z->t == NODE_ERROR) {
+      if (c->t == NODE_ERROR) {
+        free_node(x);
+        return c;
+      }
+      y = x->car->car;
+      z = x->car->cdr ? x->car->cdr->car : NULL;
+      if (!y || y->t != NODE_CELL || !z || z->t != NODE_INT) {
+        free_node(c);
+        free_node(x);
+        return new_errorn("malformed setf", alist);
+      }
+      n = z->i;
+      for (i = 0; i < n; i++) {
+        y = y->cdr;
+        if (!y || y->t != NODE_CELL) {
           free_node(c);
-          free_node(y);
-          return z;
-        }
-        if (z->t != NODE_INT) {
-          free_node(c);
-          free_node(y);
-          free_node(z);
+          free_node(x);
           return new_errorn("malformed setf", alist);
         }
-        n = z->i;
-        free_node(z);
-        for (i = 0; i < n; i++) {
-          y = y->cdr;
-        }
-        free_node(y->car);
-        y->car = c;
-        x = x->cdr;
       }
+      free_node(y->car);
+      y->car = c;
+      free_node(x);
       break;
     case NODE_IDENT:
       c = alist->cdr->car;
@@ -3419,14 +3419,18 @@ static NODE *eval_node_dispatch(ENV *env, NODE *node) {
       return c;
     return new_node();
   case NODE_AREF: {
-    NODE *x = node->car;
-    int i;
-    for (i = 0; i < node->cdr->i; i++) {
-      if (!x)
+    NODE *x = node->car ? node->car->car : NULL;
+    NODE *ix = node->car && node->car->cdr ? node->car->cdr->car : NULL;
+    long i, n;
+    if (!ix || ix->t != NODE_INT)
+      return new_errorn("malformed aref", node);
+    n = ix->i;
+    for (i = 0; i < n; i++) {
+      if (node_isnull(x) || x->t != NODE_CELL)
         break;
       x = x->cdr;
     }
-    if (!x)
+    if (node_isnull(x) || x->t != NODE_CELL || !x->car)
       return new_node();
     x = x->car;
     x->r++;

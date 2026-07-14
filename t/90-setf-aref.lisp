@@ -1,0 +1,8 @@
+(setq lst (list 1 2 3))
+(setf (aref lst 1) 9)
+(println lst)
+(setq a (make-array 3))
+(setf (aref a 0) 5)
+(setf (aref a 2) 7)
+(println a)
+(println (eval (aref lst 1)))
