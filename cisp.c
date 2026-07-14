@@ -2085,9 +2085,28 @@ static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro) {
   c = x->cdr->car;
   p = x->cdr->cdr;
 
-  while (alist && c) {
-    if (c && (c->t == NODE_IDENT || (c->car && !strcmp("&rest", c->car->s)))) {
+  if (!node_isnull(c) && c->t != NODE_CELL && c->t != NODE_IDENT) {
+    free_env(newenv);
+    return new_errorn("malformed arguments", x->cdr->car);
+  }
+
+  while (!node_isnull(alist) && !node_isnull(c)) {
+    if (c->t != NODE_IDENT && (!c->car || c->car->t != NODE_IDENT)) {
+      free_env(newenv);
+      return new_errorn("malformed arguments", x->cdr->car);
+    }
+    if (c->t == NODE_IDENT || !strcmp("&rest", c->car->s)) {
       NODE *l = NULL, *rr = NULL, *nc;
+      const char *name;
+      if (c->t == NODE_IDENT)
+        name = c->s;
+      else if (c->cdr && c->cdr->t == NODE_CELL && c->cdr->car &&
+               c->cdr->car->t == NODE_IDENT)
+        name = c->cdr->car->s;
+      else {
+        free_env(newenv);
+        return new_errorn("malformed arguments", x->cdr->car);
+      }
       while (alist) {
         if (macro) {
           nn = alist->car;
@@ -2110,8 +2129,8 @@ static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro) {
         }
         alist = alist->cdr;
       }
-      if (rr)
-        add_variable(newenv, c->t == NODE_IDENT ? c->s : c->cdr->car->s, rr);
+      add_variable(newenv, name, rr ? rr : new_node());
+      c = NULL;
       break;
     }
     if (macro) {
@@ -2126,6 +2145,17 @@ static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro) {
     add_variable(newenv, c->car->s, nn);
     alist = alist->cdr;
     c = c->cdr;
+  }
+
+  if (!node_isnull(c) && c->t == NODE_CELL && c->car &&
+      c->car->t == NODE_IDENT && !strcmp("&rest", c->car->s)) {
+    if (c->cdr && c->cdr->t == NODE_CELL && c->cdr->car &&
+        c->cdr->car->t == NODE_IDENT)
+      add_variable(newenv, c->cdr->car->s, new_node());
+    else {
+      free_env(newenv);
+      return new_errorn("malformed arguments", x->cdr->car);
+    }
   }
 
   if (macro) {

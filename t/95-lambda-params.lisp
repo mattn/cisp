@@ -1,0 +1,8 @@
+(println ((lambda (a b) (+ a b)) 1 2))
+(println ((lambda (a &rest r) (list a r)) 1 2 3))
+(println ((lambda (&rest r) r) 1 2))
+(println ((lambda (&rest r) r)))
+(println ((lambda args args) 1 2))
+(println ((lambda () 42)))
+((lambda () 1) 2)
+(println 'done)
