@@ -241,6 +241,7 @@ static NODE *new_errorn(const char *msg, NODE *n) {
   buf_append(&buf, ": ");
   print_node(&buf, n, PRINT_DEFAULT);
   node = new_error(buf.ptr);
+  buf_free(&buf);
   return node;
 }
 
