@@ -2225,8 +2225,8 @@ static NODE *do_setq(ENV *env, NODE *alist) {
       free_node(ni->v);
       ni->v = last;
     } else {
-      // Variable not found anywhere, create in current env
-      add_variable(env, x->s, last);
+      // Variable not found anywhere, create a global like CL does
+      add_variable(global_env(env), x->s, last);
     }
     alist = c->cdr;
   }

@@ -1,0 +1,5 @@
+(dotimes (i 3) (setq r i))
+(println r)
+(let ((v 1)) (setq v 2) (println v))
+(println (let ((w 5)) (setq q w) q))
+(println q)
