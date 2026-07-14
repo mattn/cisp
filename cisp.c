@@ -2,6 +2,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <float.h>
+#include <math.h>
 #include <limits.h>
 #include <memory.h>
 #include <setjmp.h>
@@ -1309,6 +1310,123 @@ static NODE *do_rem(ENV *env, NODE *alist) {
   c->i = lhs % rhs;
 #endif
   return c;
+}
+
+static NODE *do_max_min(ENV *env, NODE *alist, int is_max, const char *msg) {
+  NODE *c, *best = NULL, *nn, *err = NULL;
+  double bv = 0, cv;
+
+  if (node_isnull(alist))
+    return new_errorn(msg, alist);
+
+  while (!node_isnull(alist)) {
+    c = alist->car;
+    if (c->t != NODE_INT && c->t != NODE_DOUBLE)
+      return new_errorn(msg, alist);
+    cv = double_value(env, c, &err);
+    if (err)
+      return err;
+    if (!best || (is_max ? cv > bv : cv < bv)) {
+      best = c;
+      bv = cv;
+    }
+    alist = alist->cdr;
+  }
+
+  nn = new_node();
+  nn->t = best->t;
+  if (best->t == NODE_INT)
+    nn->i = best->i;
+  else
+    nn->d = best->d;
+  return nn;
+}
+
+static NODE *do_max(ENV *env, NODE *alist) {
+  return do_max_min(env, alist, 1, "malformed max");
+}
+
+static NODE *do_min(ENV *env, NODE *alist) {
+  return do_max_min(env, alist, 0, "malformed min");
+}
+
+static NODE *do_abs(ENV *env, NODE *alist) {
+  NODE *c, *nn;
+  UNUSED(env);
+
+  if (!arg_count_eq(alist, 1))
+    return new_errorn("malformed abs", alist);
+
+  c = alist->car;
+  nn = new_node();
+  if (c->t == NODE_INT) {
+    nn->t = NODE_INT;
+    nn->i = c->i < 0 ? -c->i : c->i;
+  } else if (c->t == NODE_DOUBLE) {
+    nn->t = NODE_DOUBLE;
+    nn->d = fabs(c->d);
+  } else {
+    free_node(nn);
+    return new_errorn("malformed abs", alist);
+  }
+  return nn;
+}
+
+static NODE *do_expt(ENV *env, NODE *alist) {
+  NODE *b, *e, *nn;
+  UNUSED(env);
+
+  if (!arg_count_eq(alist, 2))
+    return new_errorn("malformed expt", alist);
+
+  b = alist->car;
+  e = alist->cdr->car;
+  if ((b->t != NODE_INT && b->t != NODE_DOUBLE) ||
+      (e->t != NODE_INT && e->t != NODE_DOUBLE))
+    return new_errorn("malformed expt", alist);
+
+  nn = new_node();
+  if (b->t == NODE_INT && e->t == NODE_INT && e->i >= 0) {
+    long r = 1, base = b->i, n = e->i;
+    while (n) {
+      if (n & 1)
+        r *= base;
+      n >>= 1;
+      if (n)
+        base *= base;
+    }
+    nn->t = NODE_INT;
+    nn->i = r;
+  } else {
+    nn->t = NODE_DOUBLE;
+    nn->d = pow(b->t == NODE_INT ? (double)b->i : b->d,
+                e->t == NODE_INT ? (double)e->i : e->d);
+  }
+  return nn;
+}
+
+static NODE *do_sqrt(ENV *env, NODE *alist) {
+  NODE *c, *nn;
+  double v;
+  UNUSED(env);
+
+  if (!arg_count_eq(alist, 1))
+    return new_errorn("malformed sqrt", alist);
+
+  c = alist->car;
+  if (c->t == NODE_INT)
+    v = (double)c->i;
+  else if (c->t == NODE_DOUBLE)
+    v = c->d;
+  else
+    return new_errorn("malformed sqrt", alist);
+  if (v < 0)
+    return new_errorn("malformed sqrt", alist);
+
+  nn = new_node();
+  nn->t = NODE_DOUBLE;
+  nn->d = sqrt(v);
+  return nn;
 }
 
 static NODE *do_if(ENV *env, NODE *alist) {
@@ -3353,7 +3471,12 @@ static void add_defaults(ENV *env) {
   add_sym(env, NODE_BUILTINFUNC, "load", do_load);
   add_sym(env, NODE_BUILTINFUNC, "make-array", do_make_array);
   add_sym(env, NODE_BUILTINFUNC, "make-string", do_make_string);
+  add_sym(env, NODE_BUILTINFUNC, "abs", do_abs);
+  add_sym(env, NODE_BUILTINFUNC, "expt", do_expt);
+  add_sym(env, NODE_BUILTINFUNC, "max", do_max);
+  add_sym(env, NODE_BUILTINFUNC, "min", do_min);
   add_sym(env, NODE_BUILTINFUNC, "mod", do_mod);
+  add_sym(env, NODE_BUILTINFUNC, "sqrt", do_sqrt);
   add_sym(env, NODE_BUILTINFUNC, "rem", do_rem);
   add_sym(env, NODE_BUILTINFUNC, "nconc", do_nconc);
   add_sym(env, NODE_BUILTINFUNC, "not", do_not);
