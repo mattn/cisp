@@ -1508,6 +1508,202 @@ static NODE *do_eq(ENV *env, NODE *alist) {
   return nn;
 }
 
+static int node_eql(NODE *a, NODE *b) {
+  if (a == b)
+    return 1;
+  if (node_isnull(a) || node_isnull(b))
+    return node_isnull(a) && node_isnull(b);
+  if (a->t != b->t)
+    return 0;
+  switch (a->t) {
+  case NODE_T:
+    return 1;
+  case NODE_INT:
+    return a->i == b->i;
+  case NODE_DOUBLE:
+    return a->d == b->d;
+  case NODE_CHARACTER:
+    return a->c == b->c;
+  case NODE_IDENT:
+    return a->s == b->s;
+  default:
+    return 0;
+  }
+}
+
+static int node_equal(NODE *a, NODE *b) {
+  if (node_eql(a, b))
+    return 1;
+  if (node_isnull(a) || node_isnull(b))
+    return 0;
+  if (a->t != b->t)
+    return 0;
+  if (a->t == NODE_STRING)
+    return a->s && b->s && strcmp(a->s, b->s) == 0;
+  if (a->t == NODE_CELL) {
+    while (!node_isnull(a) && a->t == NODE_CELL && !node_isnull(b) &&
+           b->t == NODE_CELL) {
+      if (!node_equal(a->car, b->car))
+        return 0;
+      a = a->cdr;
+      b = b->cdr;
+      if (node_eql(a, b))
+        return 1;
+    }
+    if (node_isnull(a) && node_isnull(b))
+      return 1;
+    if (node_isnull(a) || node_isnull(b))
+      return 0;
+    return node_equal(a, b);
+  }
+  return 0;
+}
+
+static NODE *do_eq_ident(ENV *env, NODE *alist) {
+  NODE *a, *b, *c;
+  UNUSED(env);
+
+  if (!arg_count_eq(alist, 2))
+    return new_errorn("malformed eq", alist);
+  a = alist->car;
+  b = alist->cdr->car;
+  c = new_node();
+  if (a == b || (!node_isnull(a) && !node_isnull(b) && a->t == b->t &&
+                 a->t != NODE_DOUBLE && node_eql(a, b)) ||
+      (node_isnull(a) && node_isnull(b)))
+    c->t = NODE_T;
+  return c;
+}
+
+static NODE *do_eql(ENV *env, NODE *alist) {
+  NODE *c;
+  UNUSED(env);
+
+  if (!arg_count_eq(alist, 2))
+    return new_errorn("malformed eql", alist);
+  c = new_node();
+  if (node_eql(alist->car, alist->cdr->car))
+    c->t = NODE_T;
+  return c;
+}
+
+static NODE *do_equal(ENV *env, NODE *alist) {
+  NODE *c;
+  UNUSED(env);
+
+  if (!arg_count_eq(alist, 2))
+    return new_errorn("malformed equal", alist);
+  c = new_node();
+  if (node_equal(alist->car, alist->cdr->car))
+    c->t = NODE_T;
+  return c;
+}
+
+static NODE *do_string_eq(ENV *env, NODE *alist) {
+  NODE *a, *b, *c;
+  UNUSED(env);
+
+  if (!arg_count_eq(alist, 2))
+    return new_errorn("malformed string=", alist);
+  a = alist->car;
+  b = alist->cdr->car;
+  if (a->t != NODE_STRING || b->t != NODE_STRING)
+    return new_errorn("malformed string=", alist);
+  c = new_node();
+  if (strcmp(a->s, b->s) == 0)
+    c->t = NODE_T;
+  return c;
+}
+
+static NODE *do_string_case(ENV *env, NODE *alist, int up, const char *msg) {
+  NODE *x, *c;
+  char *p;
+  UNUSED(env);
+
+  if (!arg_count_eq(alist, 1))
+    return new_errorn(msg, alist);
+  x = alist->car;
+  if (x->t != NODE_STRING)
+    return new_errorn(msg, alist);
+  c = new_node();
+  c->t = NODE_STRING;
+  c->s = strdup(x->s);
+  for (p = c->s; *p; p++)
+    *p = up ? toupper((unsigned char)*p) : tolower((unsigned char)*p);
+  return c;
+}
+
+static NODE *do_string_upcase(ENV *env, NODE *alist) {
+  return do_string_case(env, alist, 1, "malformed string-upcase");
+}
+
+static NODE *do_string_downcase(ENV *env, NODE *alist) {
+  return do_string_case(env, alist, 0, "malformed string-downcase");
+}
+
+static NODE *do_subseq(ENV *env, NODE *alist) {
+  NODE *x, *c, *err = NULL;
+  long start, end = -1;
+  int narg;
+  UNUSED(env);
+
+  narg = node_narg(alist);
+  if (narg != 2 && narg != 3)
+    return new_errorn("malformed subseq", alist);
+
+  x = alist->car;
+  start = int_value(env, alist->cdr->car, &err);
+  if (!err && narg == 3)
+    end = int_value(env, alist->cdr->cdr->car, &err);
+  if (err)
+    return err;
+  if (start < 0 || (narg == 3 && end < start))
+    return new_errorn("malformed subseq", alist);
+
+  if (x->t == NODE_STRING) {
+    long len = (long)strlen(x->s);
+    if (end < 0)
+      end = len;
+    if (start > len || end > len)
+      return new_errorn("malformed subseq", alist);
+    c = new_node();
+    c->t = NODE_STRING;
+    c->s = (char *)malloc(end - start + 1);
+    memcpy(c->s, x->s + start, end - start);
+    c->s[end - start] = 0;
+    return c;
+  }
+  if (x->t == NODE_CELL || x->t == NODE_NIL) {
+    NODE *head = NULL, *tail = NULL, *nc;
+    long i = 0;
+    for (; !node_isnull(x) && x->t == NODE_CELL && (end < 0 || i < end);
+         x = x->cdr, i++) {
+      if (i < start)
+        continue;
+      nc = new_node();
+      nc->t = NODE_CELL;
+      nc->car = x->car;
+      if (nc->car)
+        nc->car->r++;
+      if (head == NULL)
+        head = tail = nc;
+      else {
+        tail->cdr = nc;
+        tail = nc;
+      }
+    }
+    if (i < start || (end >= 0 && i < end)) {
+      if (head)
+        free_node(head);
+      return new_errorn("malformed subseq", alist);
+    }
+    if (head)
+      return head;
+    return new_node();
+  }
+  return new_errorn("malformed subseq", alist);
+}
+
 static NODE *do_prin1(ENV *env, NODE *alist) {
   NODE *c;
   BUFFER buf;
@@ -3329,6 +3525,13 @@ static void add_defaults(ENV *env) {
   add_sym(env, NODE_SPECIAL, "defun", do_defun);
   add_sym(env, NODE_SPECIAL, "dotimes", do_dotimes);
   add_sym(env, NODE_BUILTINFUNC, "eq?", do_eq);
+  add_sym(env, NODE_BUILTINFUNC, "eq", do_eq_ident);
+  add_sym(env, NODE_BUILTINFUNC, "eql", do_eql);
+  add_sym(env, NODE_BUILTINFUNC, "equal", do_equal);
+  add_sym(env, NODE_BUILTINFUNC, "string=", do_string_eq);
+  add_sym(env, NODE_BUILTINFUNC, "string-upcase", do_string_upcase);
+  add_sym(env, NODE_BUILTINFUNC, "string-downcase", do_string_downcase);
+  add_sym(env, NODE_BUILTINFUNC, "subseq", do_subseq);
   add_sym(env, NODE_BUILTINFUNC, "eval", do_eval);
   add_sym(env, NODE_BUILTINFUNC, "evenp", do_evenp);
   add_sym(env, NODE_BUILTINFUNC, "error", do_error);
