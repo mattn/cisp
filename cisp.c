@@ -1289,26 +1289,10 @@ static NODE *do_if(ENV *env, NODE *alist) {
   c = eval_node(env, alist->car);
   if (c->t == NODE_ERROR)
     return c;
-  switch (c->t) {
-  case NODE_NIL:
-    r = 0;
-    break;
-  case NODE_T:
-    r = 1;
-    break;
-  case NODE_INT:
-    r = c->i;
-    break;
-  case NODE_DOUBLE:
-    r = (long)c->d;
-    break;
-  default:
-    r = 1;
-    break;
-  }
+  r = !node_isnull(c);
   free_node(c);
   if (!has_else) {
-    if (r > 0) {
+    if (r) {
       NODE *tail = new_node();
       tail->t = NODE_TAIL;
       tail->car = alist->cdr->car;
@@ -1320,7 +1304,7 @@ static NODE *do_if(ENV *env, NODE *alist) {
   {
     NODE *tail = new_node();
     tail->t = NODE_TAIL;
-    tail->car = r > 0 ? alist->cdr->car : alist->cdr->cdr->car;
+    tail->car = r ? alist->cdr->car : alist->cdr->cdr->car;
     tail->cdr = NULL;
     return tail;
   }

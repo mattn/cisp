@@ -1,0 +1,8 @@
+(println (if 0 'a 'b))
+(println (if -1 'a 'b))
+(println (if 0.0 'a 'b))
+(println (if "" 'a 'b))
+(println (if nil 'a 'b))
+(println (if '() 'a 'b))
+(if -1 (println 'yes))
+(if 0 (println 'zero-is-true))
