@@ -373,9 +373,11 @@ void print_node(BUFFER *buf, NODE *node, PRINT_MODE mode) {
   switch (node->t) {
   case NODE_CHARACTER:
     if (node->c == '\n')
-      buf_append(buf, "#\\return");
-    else if (node->c == '\r')
       buf_append(buf, "#\\newline");
+    else if (node->c == '\r')
+      buf_append(buf, "#\\return");
+    else if (node->c == ' ')
+      buf_append(buf, "#\\space");
     else if (node->c == '\t')
       buf_append(buf, "#\\tab");
     else if (node->c == '\x0c')

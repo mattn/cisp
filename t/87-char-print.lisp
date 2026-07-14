@@ -1,0 +1,5 @@
+(println #\newline)
+(println #\return)
+(println #\space)
+(println #\tab)
+(println #\a)
