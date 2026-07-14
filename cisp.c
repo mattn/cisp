@@ -1540,7 +1540,7 @@ static NODE *do_prin1(ENV *env, NODE *alist) {
 
   buf_init(&buf);
   print_node(&buf, c, PRINT_QUOTED);
-  puts(buf.ptr);
+  printf("%s", buf.ptr);
   buf_free(&buf);
 
   c->r++;
@@ -1560,7 +1560,7 @@ static NODE *do_print(ENV *env, NODE *alist) {
   buf_init(&buf);
   print_node(&buf, c, PRINT_QUOTED);
   puts("");
-  printf("%s", buf.ptr);
+  printf("%s ", buf.ptr);
   buf_free(&buf);
 
   c->r++;

@@ -1,9 +1,1 @@
-(3 4)
-(b c)
-nil
-nil
-(a)
-2
-nil
-(a)
-'a
+(3 4)(b c)nilnil(a)2nil(a)'a
