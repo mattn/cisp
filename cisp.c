@@ -3044,7 +3044,12 @@ static NODE *do_append(ENV *env, NODE *alist) {
 
   for (c = alist; !node_isnull(c->cdr); c = c->cdr) {
     for (x = c->car; !node_isnull(x); x = x->cdr) {
-      NODE *nc = new_node();
+      NODE *nc;
+      if (x->t != NODE_CELL) {
+        free_node(head);
+        return new_errorn("malformed append", alist);
+      }
+      nc = new_node();
       nc->t = NODE_CELL;
       nc->car = x->car;
       if (nc->car)
