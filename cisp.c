@@ -2256,7 +2256,10 @@ static NODE *do_format(ENV *env, NODE *alist) {
         r = r == 0 ? 1 : r;
         for (i = 0; i < r; i++)
           buf_append(&buf, tmp);
-      } else if (n != NULL) {
+      } else if (node_isnull(n)) {
+        buf_free(&buf);
+        return new_errorn("malformed format", alist);
+      } else {
         // TODO:
         //   ~T: Tabulate
         //   ~P: Plural
