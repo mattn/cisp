@@ -4307,6 +4307,10 @@ static NODE *eval_if(ENV *env, NODE *alist) {
  * it up, NULL otherwise */
 static NODE *eval_node_dispatch(ENV *env, NODE *node, NODE *fn) {
   NODE *c = NULL;
+  /* almost everything that gets here is a call; test for it before the
+   * jump table */
+  if (node->t == NODE_CELL)
+    goto cell;
   switch (node->t) {
   case NODE_TAIL:
     node->r++;
@@ -4334,6 +4338,7 @@ static NODE *eval_node_dispatch(ENV *env, NODE *node, NODE *fn) {
   case NODE_IDENT:
     return do_ident(env, node);
   case NODE_CELL:
+  cell:
     c = node->car;
     if (!c) {
       return new_errorn(ILLEGAL_FUNCTION_CALL, node);
