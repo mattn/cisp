@@ -48,6 +48,8 @@ typedef struct _CONTINUATION {
 
 static NODE *do_progn(ENV *env, NODE *alist);
 static void func_cache_clear(void);
+static void init_shared_nodes(void);
+static char binop_of(f_do f);
 static NODE *do_lambda(ENV *env, NODE *alist);
 static NODE *run_call_cc(ENV *env, NODE *fn, NODE *args, CONTINUATION *cont);
 static ITEM *find_item_in_env_chain(ENV *env, const char *k);
@@ -275,6 +277,9 @@ ENV *new_env(ENV *p) {
   env->gc_live = 1;
   if (p) {
     p->r++;
+  } else {
+    /* a root environment is created before anything is evaluated */
+    init_shared_nodes();
   }
   return env;
 }
@@ -742,7 +747,8 @@ static void func_cache_clear(void) {
   memset(func_cache, 0, sizeof(func_cache));
 }
 
-static NODE *look_func(ENV *env, const char *k) {
+/* Like look_func but does not take a reference to the returned node */
+static NODE *look_func_noref(ENV *env, const char *k) {
   ITEM *ni;
   size_t h;
 
@@ -752,10 +758,8 @@ static NODE *look_func(ENV *env, const char *k) {
   while (env->p) {
     if (env->nf) {
       ni = find_item(env->lf, env->nf, k);
-      if (ni) {
-        ni->v->r++;
+      if (ni)
         return ni->v;
-      }
     }
     env = env->p;
   }
@@ -770,12 +774,17 @@ static NODE *look_func(ENV *env, const char *k) {
       func_cache[h].item = ni;
     }
   }
-  if (ni) {
-    ni->v->r++;
+  if (ni)
     return ni->v;
-  }
 
   return NULL;
+}
+
+static NODE *look_func(ENV *env, const char *k) {
+  NODE *x = look_func_noref(env, k);
+  if (x)
+    x->r++;
+  return x;
 }
 
 static NODE *look_macro(ENV *env, const char *k) {
@@ -3829,6 +3838,8 @@ void add_sym(ENV *env, NODE_TYPE t, const char *n, f_do f) {
   node->t = t;
   node->s = (char *)intern(n);
   node->f = f;
+  if (t == NODE_BUILTINFUNC)
+    node->op = binop_of(f);
   ni = (ITEM *)malloc(sizeof(ITEM));
   memset(ni, 0, sizeof(ITEM));
   ni->k = intern(n);
@@ -3943,9 +3954,76 @@ static void add_defaults(ENV *env) {
   load_libs(env);
 }
 
-static int is_int_binop(f_do f) {
-  return f == do_plus || f == do_minus || f == do_mul || f == do_lt ||
-         f == do_le || f == do_gt || f == do_ge || f == do_eq;
+/* Shared nodes for T, NIL and small integers. They are not on the GC lists
+ * and their reference count starts high enough that it never drops to zero,
+ * so they are never recycled. Nothing modifies a node it did not create, so
+ * sharing them is safe. */
+#define SMALL_INT_MIN (-16)
+#define SMALL_INT_MAX 1024
+#define SHARED_REF (1 << 30)
+static NODE shared_nodes[2 + SMALL_INT_MAX - SMALL_INT_MIN + 1];
+
+static void init_shared_nodes(void) {
+  size_t i;
+  shared_nodes[0].t = NODE_NIL;
+  shared_nodes[1].t = NODE_T;
+  for (i = 2; i < sizeof(shared_nodes) / sizeof(shared_nodes[0]); i++) {
+    shared_nodes[i].t = NODE_INT;
+    shared_nodes[i].i = SMALL_INT_MIN + (long)(i - 2);
+  }
+  for (i = 0; i < sizeof(shared_nodes) / sizeof(shared_nodes[0]); i++)
+    shared_nodes[i].r = SHARED_REF;
+}
+
+static NODE *bool_node(int v) {
+  NODE *nn = &shared_nodes[v ? 1 : 0];
+  nn->r++;
+  return nn;
+}
+
+static NODE *int_node(long v) {
+  NODE *nn;
+  if (v >= SMALL_INT_MIN && v <= SMALL_INT_MAX) {
+    nn = &shared_nodes[v - SMALL_INT_MIN + 2];
+    nn->r++;
+    return nn;
+  }
+  nn = new_node();
+  nn->t = NODE_INT;
+  nn->i = v;
+  return nn;
+}
+
+enum {
+  BINOP_NONE,
+  BINOP_PLUS,
+  BINOP_MINUS,
+  BINOP_MUL,
+  BINOP_LT,
+  BINOP_LE,
+  BINOP_GT,
+  BINOP_GE,
+  BINOP_EQ,
+};
+
+static char binop_of(f_do f) {
+  if (f == do_plus)
+    return BINOP_PLUS;
+  if (f == do_minus)
+    return BINOP_MINUS;
+  if (f == do_mul)
+    return BINOP_MUL;
+  if (f == do_lt)
+    return BINOP_LT;
+  if (f == do_le)
+    return BINOP_LE;
+  if (f == do_gt)
+    return BINOP_GT;
+  if (f == do_ge)
+    return BINOP_GE;
+  if (f == do_eq)
+    return BINOP_EQ;
+  return BINOP_NONE;
 }
 
 /* Apply a two-argument arithmetic or comparison builtin. When both arguments
@@ -3953,7 +4031,9 @@ static int is_int_binop(f_do f) {
  * argument list that the builtin takes. */
 static NODE *eval_int_binop(ENV *env, NODE *fn, NODE *args) {
   NODE *lhs, *rhs, *nn, *x;
+  /* fn may be redefined while the arguments are evaluated */
   f_do f = fn->f;
+  char op = fn->op;
   long a, b;
 
   lhs = eval_node(env, args->car);
@@ -3972,7 +4052,7 @@ static NODE *eval_int_binop(ENV *env, NODE *fn, NODE *args) {
     x->cdr = new_node();
     x->cdr->t = NODE_CELL;
     x->cdr->car = rhs;
-    nn = call_resolved_node(env, fn, x, 0);
+    nn = f(env, x);
     free_node(x);
     return nn;
   }
@@ -3981,23 +4061,24 @@ static NODE *eval_int_binop(ENV *env, NODE *fn, NODE *args) {
   b = rhs->i;
   free_node(lhs);
   free_node(rhs);
-  nn = new_node();
-  if (f == do_plus || f == do_minus || f == do_mul) {
-    nn->t = NODE_INT;
-    nn->i = f == do_plus ? a + b : f == do_minus ? a - b : a * b;
-    return nn;
+  switch (op) {
+  case BINOP_PLUS:
+    return int_node(a + b);
+  case BINOP_MINUS:
+    return int_node(a - b);
+  case BINOP_MUL:
+    return int_node(a * b);
+  case BINOP_LT:
+    return bool_node(a < b);
+  case BINOP_LE:
+    return bool_node(a <= b);
+  case BINOP_GT:
+    return bool_node(a > b);
+  case BINOP_GE:
+    return bool_node(a >= b);
+  default:
+    return bool_node(a == b);
   }
-  if (f == do_lt)
-    nn->t = a < b ? NODE_T : NODE_NIL;
-  else if (f == do_le)
-    nn->t = a <= b ? NODE_T : NODE_NIL;
-  else if (f == do_gt)
-    nn->t = a > b ? NODE_T : NODE_NIL;
-  else if (f == do_ge)
-    nn->t = a >= b ? NODE_T : NODE_NIL;
-  else
-    nn->t = a == b ? NODE_T : NODE_NIL;
-  return nn;
 }
 
 static NODE *eval_node_dispatch(ENV *env, NODE *node) {
@@ -4043,11 +4124,15 @@ static NODE *eval_node_dispatch(ENV *env, NODE *node) {
       c = call_node(env, r, node->cdr);
       free_node(r);
     } else if (c->t == NODE_IDENT) {
-      NODE *r = look_func(env, c->s);
-      if (r && r->t == NODE_BUILTINFUNC && is_int_binop(r->f) &&
-          node_narg(node->cdr) == 2) {
-        c = eval_int_binop(env, r, node->cdr);
-      } else if (r && r->t == NODE_BUILTINFUNC) {
+      NODE *r = look_func_noref(env, c->s);
+      if (r && r->op && node_narg(node->cdr) == 2) {
+        /* no reference needed: eval_int_binop reads what it needs from r
+         * before evaluating the arguments */
+        return eval_int_binop(env, r, node->cdr);
+      }
+      if (r)
+        r->r++;
+      if (r && r->t == NODE_BUILTINFUNC) {
         NODE *x = eval_list(env, node->cdr);
         if (x->t == NODE_ERROR) {
           free_node(r);
@@ -4101,6 +4186,18 @@ NODE *eval_node(ENV *env, NODE *node) {
   ENV **env_stack = env_stack_local;
   int env_stack_size = 0;
   int env_stack_capacity = 8;
+
+  /* literals and variables never produce a tail call */
+  switch (node->t) {
+  case NODE_INT:
+  case NODE_DOUBLE:
+    node->r++;
+    return node;
+  case NODE_IDENT:
+    return do_ident(env, node);
+  default:
+    break;
+  }
 
   while (1) {
     ret = eval_node_dispatch(curr_env, curr_node);

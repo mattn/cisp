@@ -55,8 +55,9 @@ typedef NODE *(*f_do)(ENV *, NODE *);
 struct _NODE {
   NODE_TYPE t;
   int r;
-  int mark;
-  int gc_live;
+  char mark;
+  char gc_live;
+  char op; /* BINOP_* for builtins evaluated by eval_int_binop */
   NODE *gc_next;
   union {
     wchar_t c;
