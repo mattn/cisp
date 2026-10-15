@@ -2514,6 +2514,15 @@ copy_node(ENV *env, NODE *lhs) {
 }
 #endif
 
+/* Parsed identifiers are interned, so compare the pointer first and only
+ * fall back to strcmp for names that could be "&rest" */
+static INLINE int is_rest(const char *s) {
+  static const char *rest;
+  if (!rest)
+    rest = intern("&rest");
+  return s == rest || (s[0] == '&' && !strcmp(s, "&rest"));
+}
+
 /* direct: the caller is eval_node_dispatch, which may return &direct_tail */
 static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro,
                                 int direct) {
@@ -2553,7 +2562,7 @@ static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro,
       free_env(newenv);
       return new_errorn("malformed arguments", x->cdr->car);
     }
-    if (c->t == NODE_IDENT || !strcmp("&rest", c->car->s)) {
+    if (c->t == NODE_IDENT || is_rest(c->car->s)) {
       NODE *l = NULL, *rr = NULL, *nc;
       const char *name;
       if (c->t == NODE_IDENT)
@@ -2606,7 +2615,7 @@ static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro,
   }
 
   if (!node_isnull(c) && c->t == NODE_CELL && c->car &&
-      c->car->t == NODE_IDENT && !strcmp("&rest", c->car->s)) {
+      c->car->t == NODE_IDENT && is_rest(c->car->s)) {
     if (c->cdr && c->cdr->t == NODE_CELL && c->cdr->car &&
         c->cdr->car->t == NODE_IDENT)
       add_variable(newenv, c->cdr->car->s, new_node());
