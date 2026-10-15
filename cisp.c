@@ -8,6 +8,7 @@
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -46,6 +47,7 @@ typedef struct _CONTINUATION {
 
 
 static NODE *do_progn(ENV *env, NODE *alist);
+static void func_cache_clear(void);
 static NODE *do_lambda(ENV *env, NODE *alist);
 static NODE *run_call_cc(ENV *env, NODE *fn, NODE *args, CONTINUATION *cont);
 static ITEM *find_item_in_env_chain(ENV *env, const char *k);
@@ -517,6 +519,8 @@ void free_env(ENV *env) {
   for (i = 0; i < env->nv; i++) {
     free_node(env->lv[i]->v);
   }
+  if (env->nf)
+    func_cache_clear();
   for (i = 0; i < env->nf; i++) {
     free_node(env->lf[i]->v);
     free((void *)env->lf[i]);
@@ -633,6 +637,8 @@ static void gc_collect(ENV *root) {
     for (i = 0; i < env->cv; i++) {
       free((void *)env->lv[i]);
     }
+    if (env->nf)
+      func_cache_clear();
     for (i = 0; i < env->nf; i++) {
       free((void *)env->lf[i]);
     }
@@ -723,20 +729,51 @@ static NODE *look_ident(ENV *env, const char *k) {
   return NULL;
 }
 
+/* Cache of functions found in the global environment, keyed by the interned
+ * name. An ITEM stays valid until its environment is freed, which clears the
+ * cache. */
+#define FUNC_CACHE_SIZE 256
+static struct {
+  const char *k;
+  ITEM *item;
+} func_cache[FUNC_CACHE_SIZE];
+
+static void func_cache_clear(void) {
+  memset(func_cache, 0, sizeof(func_cache));
+}
+
 static NODE *look_func(ENV *env, const char *k) {
   ITEM *ni;
+  size_t h;
 
   if (!k)
     return NULL;
 
-  ni = find_item(env->lf, env->nf, k);
+  while (env->p) {
+    if (env->nf) {
+      ni = find_item(env->lf, env->nf, k);
+      if (ni) {
+        ni->v->r++;
+        return ni->v;
+      }
+    }
+    env = env->p;
+  }
+
+  h = ((uintptr_t)k >> 4) % FUNC_CACHE_SIZE;
+  if (func_cache[h].k == k) {
+    ni = func_cache[h].item;
+  } else {
+    ni = find_item(env->lf, env->nf, k);
+    if (ni) {
+      func_cache[h].k = k;
+      func_cache[h].item = ni;
+    }
+  }
   if (ni) {
     ni->v->r++;
     return ni->v;
   }
-
-  if (env->p)
-    return look_func(env->p, k);
 
   return NULL;
 }
@@ -3906,6 +3943,63 @@ static void add_defaults(ENV *env) {
   load_libs(env);
 }
 
+static int is_int_binop(f_do f) {
+  return f == do_plus || f == do_minus || f == do_mul || f == do_lt ||
+         f == do_le || f == do_gt || f == do_ge || f == do_eq;
+}
+
+/* Apply a two-argument arithmetic or comparison builtin. When both arguments
+ * are integers the result is computed directly, without building the
+ * argument list that the builtin takes. */
+static NODE *eval_int_binop(ENV *env, NODE *fn, NODE *args) {
+  NODE *lhs, *rhs, *nn, *x;
+  f_do f = fn->f;
+  long a, b;
+
+  lhs = eval_node(env, args->car);
+  if (lhs->t == NODE_ERROR)
+    return lhs;
+  rhs = eval_node(env, args->cdr->car);
+  if (rhs->t == NODE_ERROR) {
+    free_node(lhs);
+    return rhs;
+  }
+
+  if (lhs->t != NODE_INT || rhs->t != NODE_INT) {
+    x = new_node();
+    x->t = NODE_CELL;
+    x->car = lhs;
+    x->cdr = new_node();
+    x->cdr->t = NODE_CELL;
+    x->cdr->car = rhs;
+    nn = call_resolved_node(env, fn, x, 0);
+    free_node(x);
+    return nn;
+  }
+
+  a = lhs->i;
+  b = rhs->i;
+  free_node(lhs);
+  free_node(rhs);
+  nn = new_node();
+  if (f == do_plus || f == do_minus || f == do_mul) {
+    nn->t = NODE_INT;
+    nn->i = f == do_plus ? a + b : f == do_minus ? a - b : a * b;
+    return nn;
+  }
+  if (f == do_lt)
+    nn->t = a < b ? NODE_T : NODE_NIL;
+  else if (f == do_le)
+    nn->t = a <= b ? NODE_T : NODE_NIL;
+  else if (f == do_gt)
+    nn->t = a > b ? NODE_T : NODE_NIL;
+  else if (f == do_ge)
+    nn->t = a >= b ? NODE_T : NODE_NIL;
+  else
+    nn->t = a == b ? NODE_T : NODE_NIL;
+  return nn;
+}
+
 static NODE *eval_node_dispatch(ENV *env, NODE *node) {
   NODE *c = NULL;
   switch (node->t) {
@@ -3950,7 +4044,10 @@ static NODE *eval_node_dispatch(ENV *env, NODE *node) {
       free_node(r);
     } else if (c->t == NODE_IDENT) {
       NODE *r = look_func(env, c->s);
-      if (r && r->t == NODE_BUILTINFUNC) {
+      if (r && r->t == NODE_BUILTINFUNC && is_int_binop(r->f) &&
+          node_narg(node->cdr) == 2) {
+        c = eval_int_binop(env, r, node->cdr);
+      } else if (r && r->t == NODE_BUILTINFUNC) {
         NODE *x = eval_list(env, node->cdr);
         if (x->t == NODE_ERROR) {
           free_node(r);
