@@ -157,6 +157,8 @@ void skip_white(SCANNER *s) {
 
 static NODE *node_freelist = NULL;
 static NODE *all_nodes = NULL;
+static unsigned short func_epoch = 1;
+static int local_fn_envs; /* non-root environments with local functions */
 static ENV *all_envs = NULL;
 
 static void gc_mark_node(NODE *node);
@@ -219,6 +221,7 @@ NODE *new_node() {
     /* clear everything but gc_next without calling memset */
     node->mark = 0;
     node->op = 0;
+    node->simple = 0;
     node->car = NULL;
     node->cdr = NULL;
   } else {
@@ -536,8 +539,11 @@ void free_env(ENV *env) {
   for (i = 0; i < env->nv; i++) {
     free_node(env->lv[i]->v);
   }
-  if (env->nf)
+  if (env->nf) {
     func_cache_clear();
+    if (env->p)
+      local_fn_envs--;
+  }
   for (i = 0; i < env->nf; i++) {
     free_node(env->lf[i]->v);
     free((void *)env->lf[i]);
@@ -656,8 +662,11 @@ static void gc_collect(ENV *root) {
     for (i = 0; i < env->cv; i++) {
       free((void *)env->lv[i]);
     }
-    if (env->nf)
+    if (env->nf) {
       func_cache_clear();
+      if (env->p)
+        local_fn_envs--;
+    }
     for (i = 0; i < env->nf; i++) {
       free((void *)env->lf[i]);
     }
@@ -757,8 +766,20 @@ static struct {
   NODE *v;
 } func_cache[FUNC_CACHE_SIZE];
 
+/* Identifiers also cache the function they name (fn_cache), valid while
+ * their epoch equals func_epoch and no environment other than the root has
+ * local functions (flet/labels), since those could shadow it. */
 static void func_cache_clear(void) {
+  NODE *node;
+
   memset(func_cache, 0, sizeof(func_cache));
+  if (++func_epoch == 0xFFFF) {
+    /* reset identifier caches before the epoch wraps around */
+    for (node = all_nodes; node; node = node->gc_next)
+      if (node->t == NODE_IDENT)
+        node->epoch = 0;
+    func_epoch = 1;
+  }
 }
 
 /* Like look_func but does not take a reference to the returned node */
@@ -787,6 +808,19 @@ static NODE *look_func_noref(ENV *env, const char *k) {
   func_cache[h].k = k;
   func_cache[h].v = ni->v;
   return ni->v;
+}
+
+static NODE *look_func_ident(ENV *env, NODE *id) {
+  NODE *fn;
+
+  if (!local_fn_envs && id->epoch == func_epoch)
+    return id->fn_cache;
+  fn = look_func_noref(env, id->s);
+  if (fn && !local_fn_envs) {
+    id->fn_cache = fn;
+    id->epoch = func_epoch;
+  }
+  return fn;
 }
 
 static NODE *look_func(ENV *env, const char *k) {
@@ -841,6 +875,10 @@ void add_function(ENV *env, const char *k, NODE *node) {
     free_node(ni->v);
     ni->v = node;
     return;
+  }
+  if (env->p && !env->nf) {
+    local_fn_envs++;
+    func_cache_clear();
   }
   add_item(&env->lf, &env->nf, k, node, 1);
 }
@@ -2516,6 +2554,41 @@ static const char *rest_sym;
 
 static INLINE int is_rest(const char *s) { return s == rest_sym; }
 
+/* Whether lambda x takes only distinct plain parameters, so a call can bind
+ * them without the general checks. Computed once per lambda node. */
+static int lambda_params_simple(NODE *x) {
+  NODE *c, *d;
+
+  if (x->simple)
+    return x->simple == 1;
+  x->simple = 2;
+  c = x->cdr->car;
+  if (!node_isnull(c) && c->t != NODE_CELL)
+    return 0;
+  for (; !node_isnull(c); c = c->cdr) {
+    if (c->t != NODE_CELL || !c->car || c->car->t != NODE_IDENT ||
+        is_rest(c->car->s))
+      return 0;
+    for (d = x->cdr->car; d != c; d = d->cdr)
+      if (d->car->s == c->car->s)
+        return 0;
+  }
+  x->simple = 1;
+  return 1;
+}
+
+/* Bind k in env, which is known not to have it yet */
+static INLINE void append_variable(ENV *env, const char *k, NODE *node) {
+  ITEM *ni;
+  if (env->nv >= env->cv) {
+    add_variable(env, k, node);
+    return;
+  }
+  ni = env->lv[env->nv++];
+  ni->k = k;
+  ni->v = node;
+}
+
 /* direct: the caller is eval_node_dispatch, which may return &direct_tail */
 static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro,
                                 int direct) {
@@ -2540,6 +2613,21 @@ static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro,
   }
   if (x->t != NODE_LAMBDA)
     return new_errorn("malformed arguments", x);
+
+  if (!macro && lambda_params_simple(x)) {
+    newenv = new_env(x->car->p);
+    for (c = x->cdr->car; !node_isnull(alist) && !node_isnull(c);
+         alist = alist->cdr, c = c->cdr) {
+      nn = eval_node(env, alist->car);
+      if (nn->t == NODE_ERROR) {
+        free_env(newenv);
+        return nn;
+      }
+      append_variable(newenv, c->car->s, nn);
+    }
+    p = x->cdr->cdr;
+    goto body;
+  }
 
   newenv = new_env(x->car->p);
   c = x->cdr->car;
@@ -2618,6 +2706,7 @@ static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro,
     }
   }
 
+body:
   if (macro) {
     nn = do_progn(newenv, p);
     if (nn->t == NODE_TAIL)
@@ -4141,7 +4230,7 @@ static int int_compare_in_place(ENV *env, NODE *x, int *r) {
 
   if (x->t != NODE_CELL || !x->car || x->car->t != NODE_IDENT)
     return 0;
-  fn = look_func_noref(env, x->car->s);
+  fn = look_func_ident(env, x->car);
   if (!fn || fn->op < BINOP_LT || node_narg(x->cdr) != 2)
     return 0;
   lhs = borrow_value(env, x->cdr->car);
@@ -4242,7 +4331,7 @@ static NODE *eval_node_dispatch(ENV *env, NODE *node, NODE *fn) {
       c = call_node(env, r, node->cdr);
       free_node(r);
     } else if (c->t == NODE_IDENT) {
-      NODE *r = fn ? fn : look_func_noref(env, c->s);
+      NODE *r = fn ? fn : look_func_ident(env, c);
       if (r && r->op && node_narg(node->cdr) == 2) {
         /* no reference needed: eval_int_binop reads what it needs from r
          * before evaluating the arguments */
@@ -4333,7 +4422,7 @@ NODE *eval_node(ENV *env, NODE *node) {
     return do_ident(env, node);
   case NODE_CELL:
     if (node->car && node->car->t == NODE_IDENT) {
-      fn = look_func_noref(env, node->car->s);
+      fn = look_func_ident(env, node->car);
       if (fn && fn->op && node_narg(node->cdr) == 2)
         return eval_int_binop(env, fn, node->cdr);
     }
