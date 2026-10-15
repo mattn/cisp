@@ -539,6 +539,17 @@ void free_env(ENV *env) {
   for (i = 0; i < env->nv; i++) {
     free_node(env->lv[i]->v);
   }
+  env->nv = 0;
+  if (!env->nf && !env->nm) {
+    /* the common case of a function call's environment */
+    parent = env->p;
+    env->gc_live = 0;
+    env->p = env_freelist;
+    env_freelist = env;
+    if (parent)
+      free_env(parent);
+    return;
+  }
   if (env->nf) {
     func_cache_clear();
     if (env->p)
@@ -4222,6 +4233,12 @@ compute:
   }
 }
 
+/* Whether alist has exactly two elements, without counting all of them */
+static INLINE int has_two_args(NODE *alist) {
+  return !node_isnull(alist) && !node_isnull(alist->cdr) &&
+         node_isnull(alist->cdr->cdr);
+}
+
 /* If x is an integer comparison whose operands are integer literals or
  * variables, store its truth in *r and return 1 */
 static int int_compare_in_place(ENV *env, NODE *x, int *r) {
@@ -4231,7 +4248,7 @@ static int int_compare_in_place(ENV *env, NODE *x, int *r) {
   if (x->t != NODE_CELL || !x->car || x->car->t != NODE_IDENT)
     return 0;
   fn = look_func_ident(env, x->car);
-  if (!fn || fn->op < BINOP_LT || node_narg(x->cdr) != 2)
+  if (!fn || fn->op < BINOP_LT || !has_two_args(x->cdr))
     return 0;
   lhs = borrow_value(env, x->cdr->car);
   if (!lhs || lhs->t != NODE_INT)
@@ -4332,7 +4349,7 @@ static NODE *eval_node_dispatch(ENV *env, NODE *node, NODE *fn) {
       free_node(r);
     } else if (c->t == NODE_IDENT) {
       NODE *r = fn ? fn : look_func_ident(env, c);
-      if (r && r->op && node_narg(node->cdr) == 2) {
+      if (r && r->op && has_two_args(node->cdr)) {
         /* no reference needed: eval_int_binop reads what it needs from r
          * before evaluating the arguments */
         return eval_int_binop(env, r, node->cdr);
@@ -4423,7 +4440,7 @@ NODE *eval_node(ENV *env, NODE *node) {
   case NODE_CELL:
     if (node->car && node->car->t == NODE_IDENT) {
       fn = look_func_ident(env, node->car);
-      if (fn && fn->op && node_narg(node->cdr) == 2)
+      if (fn && fn->op && has_two_args(node->cdr))
         return eval_int_binop(env, fn, node->cdr);
     }
     break;
