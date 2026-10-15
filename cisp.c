@@ -253,10 +253,15 @@ ENV *new_env(ENV *p) {
   ENV *env;
   if (env_freelist) {
     ENV *gc_next = env_freelist->gc_next;
+    /* keep the variable slots allocated by the previous use */
+    ITEM **lv = env_freelist->lv;
+    int cv = env_freelist->cv;
     env = env_freelist;
     env_freelist = env->p;
     memset(env, 0, sizeof(ENV));
     env->gc_next = gc_next;
+    env->lv = lv;
+    env->cv = cv;
   } else {
     env = (ENV *)malloc(sizeof(ENV));
     memset(env, 0, sizeof(ENV));
@@ -512,9 +517,6 @@ void free_env(ENV *env) {
   for (i = 0; i < env->nv; i++) {
     free_node(env->lv[i]->v);
   }
-  for (i = 0; i < env->cv; i++) {
-    free((void *)env->lv[i]);
-  }
   for (i = 0; i < env->nf; i++) {
     free_node(env->lf[i]->v);
     free((void *)env->lf[i]);
@@ -523,14 +525,12 @@ void free_env(ENV *env) {
     free_node(env->lm[i]->v);
     free((void *)env->lm[i]);
   }
-  free((void *)env->lv);
+  /* lv and its slots are kept for reuse by new_env */
   free((void *)env->lf);
   free((void *)env->lm);
   env->nv = 0;
-  env->cv = 0;
   env->nf = 0;
   env->nm = 0;
-  env->lv = NULL;
   env->lf = NULL;
   env->lm = NULL;
   parent = env->p;
