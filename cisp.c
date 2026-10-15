@@ -8,6 +8,7 @@
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -46,6 +47,17 @@ typedef struct _CONTINUATION {
 
 
 static NODE *do_progn(ENV *env, NODE *alist);
+static void func_cache_clear(void);
+static void init_shared_nodes(void);
+
+/* eval_node_dispatch returns &direct_tail for a tail call of an if branch
+ * or a function body, with the form to evaluate next in direct_tail_next and
+ * its environment (if new) in direct_tail_env. eval_node consumes it right
+ * away, so a single static is enough and no TAIL node has to be allocated. */
+static NODE direct_tail;
+static NODE *direct_tail_next;
+static ENV *direct_tail_env;
+static char binop_of(f_do f);
 static NODE *do_lambda(ENV *env, NODE *alist);
 static NODE *run_call_cc(ENV *env, NODE *fn, NODE *args, CONTINUATION *cont);
 static ITEM *find_item_in_env_chain(ENV *env, const char *k);
@@ -145,6 +157,8 @@ void skip_white(SCANNER *s) {
 
 static NODE *node_freelist = NULL;
 static NODE *all_nodes = NULL;
+static unsigned short func_epoch = 1;
+static int local_fn_envs; /* non-root environments with local functions */
 static ENV *all_envs = NULL;
 
 static void gc_mark_node(NODE *node);
@@ -202,11 +216,14 @@ static void recycle_node(NODE *node) {
 NODE *new_node() {
   NODE *node;
   if (node_freelist) {
-    NODE *gc_next = node_freelist->gc_next;
     node = node_freelist;
     node_freelist = node->cdr;
-    memset(node, 0, sizeof(NODE));
-    node->gc_next = gc_next;
+    /* clear everything but gc_next without calling memset */
+    node->mark = 0;
+    node->op = 0;
+    node->simple = 0;
+    node->car = NULL;
+    node->cdr = NULL;
   } else {
     node = (NODE *)malloc(sizeof(NODE));
     memset(node, 0, sizeof(NODE));
@@ -253,9 +270,16 @@ ENV *new_env(ENV *p) {
   ENV *env;
   if (env_freelist) {
     ENV *gc_next = env_freelist->gc_next;
+    /* keep the variable slots allocated by the previous use */
     env = env_freelist;
     env_freelist = env->p;
-    memset(env, 0, sizeof(ENV));
+    /* free_env already cleared the tables; lv and cv are kept */
+    env->nv = 0;
+    env->nf = 0;
+    env->lf = NULL;
+    env->nm = 0;
+    env->lm = NULL;
+    env->mark = 0;
     env->gc_next = gc_next;
   } else {
     env = (ENV *)malloc(sizeof(ENV));
@@ -268,6 +292,9 @@ ENV *new_env(ENV *p) {
   env->gc_live = 1;
   if (p) {
     p->r++;
+  } else {
+    /* a root environment is created before anything is evaluated */
+    init_shared_nodes();
   }
   return env;
 }
@@ -512,8 +539,21 @@ void free_env(ENV *env) {
   for (i = 0; i < env->nv; i++) {
     free_node(env->lv[i]->v);
   }
-  for (i = 0; i < env->cv; i++) {
-    free((void *)env->lv[i]);
+  env->nv = 0;
+  if (!env->nf && !env->nm) {
+    /* the common case of a function call's environment */
+    parent = env->p;
+    env->gc_live = 0;
+    env->p = env_freelist;
+    env_freelist = env;
+    if (parent)
+      free_env(parent);
+    return;
+  }
+  if (env->nf) {
+    func_cache_clear();
+    if (env->p)
+      local_fn_envs--;
   }
   for (i = 0; i < env->nf; i++) {
     free_node(env->lf[i]->v);
@@ -523,14 +563,14 @@ void free_env(ENV *env) {
     free_node(env->lm[i]->v);
     free((void *)env->lm[i]);
   }
-  free((void *)env->lv);
-  free((void *)env->lf);
-  free((void *)env->lm);
+  /* lv and its slots are kept for reuse by new_env */
+  if (env->lf)
+    free((void *)env->lf);
+  if (env->lm)
+    free((void *)env->lm);
   env->nv = 0;
-  env->cv = 0;
   env->nf = 0;
   env->nm = 0;
-  env->lv = NULL;
   env->lf = NULL;
   env->lm = NULL;
   parent = env->p;
@@ -633,6 +673,11 @@ static void gc_collect(ENV *root) {
     for (i = 0; i < env->cv; i++) {
       free((void *)env->lv[i]);
     }
+    if (env->nf) {
+      func_cache_clear();
+      if (env->p)
+        local_fn_envs--;
+    }
     for (i = 0; i < env->nf; i++) {
       free((void *)env->lf[i]);
     }
@@ -723,22 +768,77 @@ static NODE *look_ident(ENV *env, const char *k) {
   return NULL;
 }
 
-static NODE *look_func(ENV *env, const char *k) {
+/* Cache of functions found in the global environment, keyed by the interned
+ * name. Freeing an environment with functions or redefining a function
+ * clears the cache. */
+#define FUNC_CACHE_SIZE 256
+static struct {
+  const char *k;
+  NODE *v;
+} func_cache[FUNC_CACHE_SIZE];
+
+/* Identifiers also cache the function they name (fn_cache), valid while
+ * their epoch equals func_epoch and no environment other than the root has
+ * local functions (flet/labels), since those could shadow it. */
+static void func_cache_clear(void) {
+  NODE *node;
+
+  memset(func_cache, 0, sizeof(func_cache));
+  if (++func_epoch == 0xFFFF) {
+    /* reset identifier caches before the epoch wraps around */
+    for (node = all_nodes; node; node = node->gc_next)
+      if (node->t == NODE_IDENT)
+        node->epoch = 0;
+    func_epoch = 1;
+  }
+}
+
+/* Like look_func but does not take a reference to the returned node */
+static NODE *look_func_noref(ENV *env, const char *k) {
   ITEM *ni;
+  size_t h;
 
   if (!k)
     return NULL;
 
-  ni = find_item(env->lf, env->nf, k);
-  if (ni) {
-    ni->v->r++;
-    return ni->v;
+  while (env->p) {
+    if (env->nf) {
+      ni = find_item(env->lf, env->nf, k);
+      if (ni)
+        return ni->v;
+    }
+    env = env->p;
   }
 
-  if (env->p)
-    return look_func(env->p, k);
+  h = ((uintptr_t)k >> 4) % FUNC_CACHE_SIZE;
+  if (func_cache[h].k == k)
+    return func_cache[h].v;
+  ni = find_item(env->lf, env->nf, k);
+  if (!ni)
+    return NULL;
+  func_cache[h].k = k;
+  func_cache[h].v = ni->v;
+  return ni->v;
+}
 
-  return NULL;
+static NODE *look_func_ident(ENV *env, NODE *id) {
+  NODE *fn;
+
+  if (!local_fn_envs && id->epoch == func_epoch)
+    return id->fn_cache;
+  fn = look_func_noref(env, id->s);
+  if (fn && !local_fn_envs) {
+    id->fn_cache = fn;
+    id->epoch = func_epoch;
+  }
+  return fn;
+}
+
+static NODE *look_func(ENV *env, const char *k) {
+  NODE *x = look_func_noref(env, k);
+  if (x)
+    x->r++;
+  return x;
 }
 
 static NODE *look_macro(ENV *env, const char *k) {
@@ -782,9 +882,14 @@ void add_variable(ENV *env, const char *k, NODE *node) {
 void add_function(ENV *env, const char *k, NODE *node) {
   ITEM *ni = find_item(env->lf, env->nf, k);
   if (ni) {
+    func_cache_clear();
     free_node(ni->v);
     ni->v = node;
     return;
+  }
+  if (env->p && !env->nf) {
+    local_fn_envs++;
+    func_cache_clear();
   }
   add_item(&env->lf, &env->nf, k, node, 1);
 }
@@ -2454,7 +2559,50 @@ copy_node(ENV *env, NODE *lhs) {
 }
 #endif
 
-static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro) {
+/* Identifiers are interned (variable lookup relies on it too), so "&rest"
+ * is recognized by its pointer */
+static const char *rest_sym;
+
+static INLINE int is_rest(const char *s) { return s == rest_sym; }
+
+/* Whether lambda x takes only distinct plain parameters, so a call can bind
+ * them without the general checks. Computed once per lambda node. */
+static int lambda_params_simple(NODE *x) {
+  NODE *c, *d;
+
+  if (x->simple)
+    return x->simple == 1;
+  x->simple = 2;
+  c = x->cdr->car;
+  if (!node_isnull(c) && c->t != NODE_CELL)
+    return 0;
+  for (; !node_isnull(c); c = c->cdr) {
+    if (c->t != NODE_CELL || !c->car || c->car->t != NODE_IDENT ||
+        is_rest(c->car->s))
+      return 0;
+    for (d = x->cdr->car; d != c; d = d->cdr)
+      if (d->car->s == c->car->s)
+        return 0;
+  }
+  x->simple = 1;
+  return 1;
+}
+
+/* Bind k in env, which is known not to have it yet */
+static INLINE void append_variable(ENV *env, const char *k, NODE *node) {
+  ITEM *ni;
+  if (env->nv >= env->cv) {
+    add_variable(env, k, node);
+    return;
+  }
+  ni = env->lv[env->nv++];
+  ni->k = k;
+  ni->v = node;
+}
+
+/* direct: the caller is eval_node_dispatch, which may return &direct_tail */
+static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro,
+                                int direct) {
   ENV *newenv = NULL;
   NODE *p = NULL, *c = NULL, *nn = NULL;
 
@@ -2477,6 +2625,21 @@ static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro) {
   if (x->t != NODE_LAMBDA)
     return new_errorn("malformed arguments", x);
 
+  if (!macro && lambda_params_simple(x)) {
+    newenv = new_env(x->car->p);
+    for (c = x->cdr->car; !node_isnull(alist) && !node_isnull(c);
+         alist = alist->cdr, c = c->cdr) {
+      nn = eval_node(env, alist->car);
+      if (nn->t == NODE_ERROR) {
+        free_env(newenv);
+        return nn;
+      }
+      append_variable(newenv, c->car->s, nn);
+    }
+    p = x->cdr->cdr;
+    goto body;
+  }
+
   newenv = new_env(x->car->p);
   c = x->cdr->car;
   p = x->cdr->cdr;
@@ -2491,7 +2654,7 @@ static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro) {
       free_env(newenv);
       return new_errorn("malformed arguments", x->cdr->car);
     }
-    if (c->t == NODE_IDENT || !strcmp("&rest", c->car->s)) {
+    if (c->t == NODE_IDENT || is_rest(c->car->s)) {
       NODE *l = NULL, *rr = NULL, *nc;
       const char *name;
       if (c->t == NODE_IDENT)
@@ -2544,7 +2707,7 @@ static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro) {
   }
 
   if (!node_isnull(c) && c->t == NODE_CELL && c->car &&
-      c->car->t == NODE_IDENT && !strcmp("&rest", c->car->s)) {
+      c->car->t == NODE_IDENT && is_rest(c->car->s)) {
     if (c->cdr && c->cdr->t == NODE_CELL && c->cdr->car &&
         c->cdr->car->t == NODE_IDENT)
       add_variable(newenv, c->cdr->car->s, new_node());
@@ -2554,6 +2717,7 @@ static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro) {
     }
   }
 
+body:
   if (macro) {
     nn = do_progn(newenv, p);
     if (nn->t == NODE_TAIL)
@@ -2566,6 +2730,12 @@ static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro) {
       free_env(newenv);
       return tail;
     }
+  }
+
+  if (direct && !node_isnull(p) && node_isnull(p->cdr)) {
+    direct_tail_next = p->car;
+    direct_tail_env = newenv;
+    return &direct_tail;
   }
 
   c = do_progn(newenv, p);
@@ -2598,7 +2768,7 @@ static NODE *call_node(ENV *env, NODE *node, NODE *alist) {
     x->r++;
   }
 
-  c = call_resolved_node(env, x, alist, macro);
+  c = call_resolved_node(env, x, alist, macro, 0);
   free_node(x);
   return c;
 }
@@ -3792,6 +3962,8 @@ void add_sym(ENV *env, NODE_TYPE t, const char *n, f_do f) {
   node->t = t;
   node->s = (char *)intern(n);
   node->f = f;
+  if (t == NODE_BUILTINFUNC)
+    node->op = binop_of(f);
   ni = (ITEM *)malloc(sizeof(ITEM));
   memset(ni, 0, sizeof(ITEM));
   ni->k = intern(n);
@@ -3906,8 +4078,239 @@ static void add_defaults(ENV *env) {
   load_libs(env);
 }
 
-static NODE *eval_node_dispatch(ENV *env, NODE *node) {
+/* Shared nodes for T, NIL and small integers. They are not on the GC lists
+ * and their reference count starts high enough that it never drops to zero,
+ * so they are never recycled. Nothing modifies a node it did not create, so
+ * sharing them is safe. */
+#define SMALL_INT_MIN (-16)
+#define SMALL_INT_MAX 1024
+#define SHARED_REF (1 << 30)
+static NODE shared_nodes[2 + SMALL_INT_MAX - SMALL_INT_MIN + 1];
+
+static void init_shared_nodes(void) {
+  size_t i;
+  rest_sym = intern("&rest");
+  shared_nodes[0].t = NODE_NIL;
+  shared_nodes[1].t = NODE_T;
+  for (i = 2; i < sizeof(shared_nodes) / sizeof(shared_nodes[0]); i++) {
+    shared_nodes[i].t = NODE_INT;
+    shared_nodes[i].i = SMALL_INT_MIN + (long)(i - 2);
+  }
+  for (i = 0; i < sizeof(shared_nodes) / sizeof(shared_nodes[0]); i++)
+    shared_nodes[i].r = SHARED_REF;
+}
+
+static NODE *bool_node(int v) {
+  NODE *nn = &shared_nodes[v ? 1 : 0];
+  nn->r++;
+  return nn;
+}
+
+static NODE *int_node(long v) {
+  NODE *nn;
+  if (v >= SMALL_INT_MIN && v <= SMALL_INT_MAX) {
+    nn = &shared_nodes[v - SMALL_INT_MIN + 2];
+    nn->r++;
+    return nn;
+  }
+  nn = new_node();
+  nn->t = NODE_INT;
+  nn->i = v;
+  return nn;
+}
+
+enum {
+  BINOP_NONE,
+  BINOP_PLUS,
+  BINOP_MINUS,
+  BINOP_MUL,
+  BINOP_LT,
+  BINOP_LE,
+  BINOP_GT,
+  BINOP_GE,
+  BINOP_EQ,
+};
+
+static char binop_of(f_do f) {
+  if (f == do_plus)
+    return BINOP_PLUS;
+  if (f == do_minus)
+    return BINOP_MINUS;
+  if (f == do_mul)
+    return BINOP_MUL;
+  if (f == do_lt)
+    return BINOP_LT;
+  if (f == do_le)
+    return BINOP_LE;
+  if (f == do_gt)
+    return BINOP_GT;
+  if (f == do_ge)
+    return BINOP_GE;
+  if (f == do_eq)
+    return BINOP_EQ;
+  return BINOP_NONE;
+}
+
+/* Apply a two-argument arithmetic or comparison builtin. When both arguments
+ * are integers the result is computed directly, without building the
+ * argument list that the builtin takes. */
+/* The value of a literal or a bound variable, without taking a reference.
+ * NULL when x needs a real evaluation. */
+static INLINE NODE *borrow_value(ENV *env, NODE *x) {
+  ITEM *ni;
+  if (x->t == NODE_INT)
+    return x;
+  if (x->t != NODE_IDENT)
+    return NULL;
+  for (; env; env = env->p) {
+    ni = find_item_linear(env->lv, env->nv, x->s);
+    if (ni)
+      return ni->v;
+  }
+  return NULL;
+}
+
+static NODE *eval_int_binop(ENV *env, NODE *fn, NODE *args) {
+  NODE *lhs, *rhs, *nn, *x;
+  /* fn may be redefined while the arguments are evaluated */
+  f_do f = fn->f;
+  char op = fn->op;
+  long a, b;
+
+  /* integer literals and variables are read in place; looking them up has
+   * no side effects, so anything else falls back to evaluating both */
+  lhs = borrow_value(env, args->car);
+  rhs = lhs && lhs->t == NODE_INT ? borrow_value(env, args->cdr->car) : NULL;
+  if (rhs && rhs->t == NODE_INT) {
+    a = lhs->i;
+    b = rhs->i;
+    goto compute;
+  }
+
+  lhs = eval_node(env, args->car);
+  if (lhs->t == NODE_ERROR)
+    return lhs;
+  rhs = eval_node(env, args->cdr->car);
+  if (rhs->t == NODE_ERROR) {
+    free_node(lhs);
+    return rhs;
+  }
+
+  if (lhs->t != NODE_INT || rhs->t != NODE_INT) {
+    x = new_node();
+    x->t = NODE_CELL;
+    x->car = lhs;
+    x->cdr = new_node();
+    x->cdr->t = NODE_CELL;
+    x->cdr->car = rhs;
+    nn = f(env, x);
+    free_node(x);
+    return nn;
+  }
+
+  a = lhs->i;
+  b = rhs->i;
+  free_node(lhs);
+  free_node(rhs);
+compute:
+  switch (op) {
+  case BINOP_PLUS:
+    return int_node(a + b);
+  case BINOP_MINUS:
+    return int_node(a - b);
+  case BINOP_MUL:
+    return int_node(a * b);
+  case BINOP_LT:
+    return bool_node(a < b);
+  case BINOP_LE:
+    return bool_node(a <= b);
+  case BINOP_GT:
+    return bool_node(a > b);
+  case BINOP_GE:
+    return bool_node(a >= b);
+  default:
+    return bool_node(a == b);
+  }
+}
+
+/* Whether alist has exactly two elements, without counting all of them */
+static INLINE int has_two_args(NODE *alist) {
+  return !node_isnull(alist) && !node_isnull(alist->cdr) &&
+         node_isnull(alist->cdr->cdr);
+}
+
+/* If x is an integer comparison whose operands are integer literals or
+ * variables, store its truth in *r and return 1 */
+static int int_compare_in_place(ENV *env, NODE *x, int *r) {
+  NODE *fn, *lhs, *rhs;
+  long a, b;
+
+  if (x->t != NODE_CELL || !x->car || x->car->t != NODE_IDENT)
+    return 0;
+  fn = look_func_ident(env, x->car);
+  if (!fn || fn->op < BINOP_LT || !has_two_args(x->cdr))
+    return 0;
+  lhs = borrow_value(env, x->cdr->car);
+  if (!lhs || lhs->t != NODE_INT)
+    return 0;
+  rhs = borrow_value(env, x->cdr->cdr->car);
+  if (!rhs || rhs->t != NODE_INT)
+    return 0;
+  a = lhs->i;
+  b = rhs->i;
+  switch (fn->op) {
+  case BINOP_LT:
+    *r = a < b;
+    break;
+  case BINOP_LE:
+    *r = a <= b;
+    break;
+  case BINOP_GT:
+    *r = a > b;
+    break;
+  case BINOP_GE:
+    *r = a >= b;
+    break;
+  default:
+    *r = a == b;
+    break;
+  }
+  return 1;
+}
+
+static NODE *eval_if(ENV *env, NODE *alist) {
+  NODE *c;
+  int r;
+
+  if (!arg_count_between(alist, 2, 3))
+    return new_errorn("malformed if", alist);
+  /* a plain integer comparison needs no T/NIL node */
+  if (!int_compare_in_place(env, alist->car, &r)) {
+    c = eval_node(env, alist->car);
+    if (c->t == NODE_ERROR)
+      return c;
+    r = !node_isnull(c);
+    free_node(c);
+  }
+  if (r) {
+    direct_tail_next = alist->cdr->car;
+  } else {
+    if (node_isnull(alist->cdr->cdr))
+      return new_node();
+    direct_tail_next = alist->cdr->cdr->car;
+  }
+  direct_tail_env = NULL;
+  return &direct_tail;
+}
+
+/* fn: the function named by the head of node if the caller already looked
+ * it up, NULL otherwise */
+static NODE *eval_node_dispatch(ENV *env, NODE *node, NODE *fn) {
   NODE *c = NULL;
+  /* almost everything that gets here is a call; test for it before the
+   * jump table */
+  if (node->t == NODE_CELL)
+    goto cell;
   switch (node->t) {
   case NODE_TAIL:
     node->r++;
@@ -3935,6 +4338,7 @@ static NODE *eval_node_dispatch(ENV *env, NODE *node) {
   case NODE_IDENT:
     return do_ident(env, node);
   case NODE_CELL:
+  cell:
     c = node->car;
     if (!c) {
       return new_errorn(ILLEGAL_FUNCTION_CALL, node);
@@ -3949,22 +4353,46 @@ static NODE *eval_node_dispatch(ENV *env, NODE *node) {
       c = call_node(env, r, node->cdr);
       free_node(r);
     } else if (c->t == NODE_IDENT) {
-      NODE *r = look_func(env, c->s);
+      NODE *r = fn ? fn : look_func_ident(env, c);
+      if (r && r->op && has_two_args(node->cdr)) {
+        /* no reference needed: eval_int_binop reads what it needs from r
+         * before evaluating the arguments */
+        return eval_int_binop(env, r, node->cdr);
+      }
+      /* builtins and special forms need no reference either: their
+       * function pointer is read before anything else is evaluated */
+      if (r && r->t == NODE_SPECIAL) {
+        if (r->f == do_if)
+          return eval_if(env, node->cdr);
+        c = r->f(env, node->cdr);
+        return c ? c : new_node();
+      }
+      if (r && r->t == NODE_BUILTINFUNC) {
+        f_do f = r->f;
+        NODE *x = eval_list(env, node->cdr);
+        if (x->t == NODE_ERROR)
+          return x;
+        c = f(env, x);
+        free_node(x);
+        return c ? c : new_node();
+      }
+      if (r)
+        r->r++;
       if (r && r->t == NODE_BUILTINFUNC) {
         NODE *x = eval_list(env, node->cdr);
         if (x->t == NODE_ERROR) {
           free_node(r);
           return x;
         }
-        c = call_resolved_node(env, r, x, 0);
+        c = call_resolved_node(env, r, x, 0, 0);
         free_node(x);
       } else if (r) {
-        c = call_resolved_node(env, r, node->cdr, 0);
+        c = call_resolved_node(env, r, node->cdr, 0, 1);
       } else {
         r = look_macro(env, c->s);
         if (!r)
           return new_errorn(ILLEGAL_FUNCTION_CALL, node);
-        c = call_resolved_node(env, r, node->cdr, 1);
+        c = call_resolved_node(env, r, node->cdr, 1, 0);
       }
       free_node(r);
     } else {
@@ -3997,7 +4425,7 @@ static NODE *eval_node_dispatch(ENV *env, NODE *node) {
 }
 
 NODE *eval_node(ENV *env, NODE *node) {
-  NODE *ret = NULL;
+  NODE *ret = NULL, *fn = NULL;
   ENV *curr_env = env;
   NODE *curr_node = node;
   ENV *env_stack_local[8];
@@ -4005,18 +4433,49 @@ NODE *eval_node(ENV *env, NODE *node) {
   int env_stack_size = 0;
   int env_stack_capacity = 8;
 
+  /* literals, variables and integer arithmetic never produce a tail call,
+   * so they skip the tail-call loop */
+  switch (node->t) {
+  case NODE_INT:
+  case NODE_DOUBLE:
+    node->r++;
+    return node;
+  case NODE_IDENT:
+    return do_ident(env, node);
+  case NODE_CELL:
+    if (node->car && node->car->t == NODE_IDENT) {
+      fn = look_func_ident(env, node->car);
+      if (fn && fn->op && has_two_args(node->cdr))
+        return eval_int_binop(env, fn, node->cdr);
+    }
+    break;
+  default:
+    break;
+  }
+
   while (1) {
-    ret = eval_node_dispatch(curr_env, curr_node);
-    if (ret && ret->t == NODE_TAIL) {
-      NODE *next_node = ret->car;
-      ENV *next_env = (ENV *)ret->cdr;
+    ret = eval_node_dispatch(curr_env, curr_node, fn);
+    fn = NULL;
+    if (ret == &direct_tail || (ret && ret->t == NODE_TAIL)) {
+      NODE *next_node;
+      ENV *next_env;
+
+      if (ret == &direct_tail) {
+        next_node = direct_tail_next;
+        next_env = direct_tail_env;
+      } else {
+        next_node = ret->car;
+        next_env = (ENV *)ret->cdr;
+      }
 
       if (next_node)
         next_node->r++;
 
-      ret->car = NULL;
-      ret->cdr = NULL;
-      free_node(ret);
+      if (ret != &direct_tail) {
+        ret->car = NULL;
+        ret->cdr = NULL;
+        free_node(ret);
+      }
 
       if (curr_node != node) {
         free_node(curr_node);

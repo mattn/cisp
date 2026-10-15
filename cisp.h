@@ -55,8 +55,16 @@ typedef NODE *(*f_do)(ENV *, NODE *);
 struct _NODE {
   NODE_TYPE t;
   int r;
-  int mark;
-  int gc_live;
+  char mark;
+  char gc_live;
+  union {
+    struct {
+      char op;     /* BINOP_* for builtins evaluated by eval_int_binop */
+      char simple; /* lambdas: 1 if the parameters are distinct plain
+                      names, 2 if not, 0 if not checked yet */
+    };
+    unsigned short epoch; /* identifiers: func_epoch of fn_cache */
+  };
   NODE *gc_next;
   union {
     wchar_t c;
@@ -64,7 +72,10 @@ struct _NODE {
     double d;
     struct {
       char *s;
-      f_do f;
+      union {
+        f_do f;
+        NODE *fn_cache; /* identifiers: the function they named */
+      };
     };
     struct {
       ENV *p;
