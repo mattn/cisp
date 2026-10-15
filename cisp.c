@@ -49,6 +49,14 @@ typedef struct _CONTINUATION {
 static NODE *do_progn(ENV *env, NODE *alist);
 static void func_cache_clear(void);
 static void init_shared_nodes(void);
+
+/* eval_node_dispatch returns &direct_tail for a tail call of an if branch
+ * or a function body, with the form to evaluate next in direct_tail_next and
+ * its environment (if new) in direct_tail_env. eval_node consumes it right
+ * away, so a single static is enough and no TAIL node has to be allocated. */
+static NODE direct_tail;
+static NODE *direct_tail_next;
+static ENV *direct_tail_env;
 static char binop_of(f_do f);
 static NODE *do_lambda(ENV *env, NODE *alist);
 static NODE *run_call_cc(ENV *env, NODE *fn, NODE *args, CONTINUATION *cont);
@@ -206,11 +214,13 @@ static void recycle_node(NODE *node) {
 NODE *new_node() {
   NODE *node;
   if (node_freelist) {
-    NODE *gc_next = node_freelist->gc_next;
     node = node_freelist;
     node_freelist = node->cdr;
-    memset(node, 0, sizeof(NODE));
-    node->gc_next = gc_next;
+    /* clear everything but gc_next without calling memset */
+    node->mark = 0;
+    node->op = 0;
+    node->car = NULL;
+    node->cdr = NULL;
   } else {
     node = (NODE *)malloc(sizeof(NODE));
     memset(node, 0, sizeof(NODE));
@@ -258,14 +268,16 @@ ENV *new_env(ENV *p) {
   if (env_freelist) {
     ENV *gc_next = env_freelist->gc_next;
     /* keep the variable slots allocated by the previous use */
-    ITEM **lv = env_freelist->lv;
-    int cv = env_freelist->cv;
     env = env_freelist;
     env_freelist = env->p;
-    memset(env, 0, sizeof(ENV));
+    /* free_env already cleared the tables; lv and cv are kept */
+    env->nv = 0;
+    env->nf = 0;
+    env->lf = NULL;
+    env->nm = 0;
+    env->lm = NULL;
+    env->mark = 0;
     env->gc_next = gc_next;
-    env->lv = lv;
-    env->cv = cv;
   } else {
     env = (ENV *)malloc(sizeof(ENV));
     memset(env, 0, sizeof(ENV));
@@ -535,8 +547,10 @@ void free_env(ENV *env) {
     free((void *)env->lm[i]);
   }
   /* lv and its slots are kept for reuse by new_env */
-  free((void *)env->lf);
-  free((void *)env->lm);
+  if (env->lf)
+    free((void *)env->lf);
+  if (env->lm)
+    free((void *)env->lm);
   env->nv = 0;
   env->nf = 0;
   env->nm = 0;
@@ -2500,7 +2514,9 @@ copy_node(ENV *env, NODE *lhs) {
 }
 #endif
 
-static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro) {
+/* direct: the caller is eval_node_dispatch, which may return &direct_tail */
+static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro,
+                                int direct) {
   ENV *newenv = NULL;
   NODE *p = NULL, *c = NULL, *nn = NULL;
 
@@ -2614,6 +2630,12 @@ static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro) {
     }
   }
 
+  if (direct && !node_isnull(p) && node_isnull(p->cdr)) {
+    direct_tail_next = p->car;
+    direct_tail_env = newenv;
+    return &direct_tail;
+  }
+
   c = do_progn(newenv, p);
   if (c && c->t == NODE_TAIL) {
     c->cdr = (NODE *)newenv;
@@ -2644,7 +2666,7 @@ static NODE *call_node(ENV *env, NODE *node, NODE *alist) {
     x->r++;
   }
 
-  c = call_resolved_node(env, x, alist, macro);
+  c = call_resolved_node(env, x, alist, macro, 0);
   free_node(x);
   return c;
 }
@@ -4081,6 +4103,28 @@ static NODE *eval_int_binop(ENV *env, NODE *fn, NODE *args) {
   }
 }
 
+static NODE *eval_if(ENV *env, NODE *alist) {
+  NODE *c;
+  int r;
+
+  if (!arg_count_between(alist, 2, 3))
+    return new_errorn("malformed if", alist);
+  c = eval_node(env, alist->car);
+  if (c->t == NODE_ERROR)
+    return c;
+  r = !node_isnull(c);
+  free_node(c);
+  if (r) {
+    direct_tail_next = alist->cdr->car;
+  } else {
+    if (node_isnull(alist->cdr->cdr))
+      return new_node();
+    direct_tail_next = alist->cdr->cdr->car;
+  }
+  direct_tail_env = NULL;
+  return &direct_tail;
+}
+
 static NODE *eval_node_dispatch(ENV *env, NODE *node) {
   NODE *c = NULL;
   switch (node->t) {
@@ -4130,6 +4174,23 @@ static NODE *eval_node_dispatch(ENV *env, NODE *node) {
          * before evaluating the arguments */
         return eval_int_binop(env, r, node->cdr);
       }
+      /* builtins and special forms need no reference either: their
+       * function pointer is read before anything else is evaluated */
+      if (r && r->t == NODE_SPECIAL) {
+        if (r->f == do_if)
+          return eval_if(env, node->cdr);
+        c = r->f(env, node->cdr);
+        return c ? c : new_node();
+      }
+      if (r && r->t == NODE_BUILTINFUNC) {
+        f_do f = r->f;
+        NODE *x = eval_list(env, node->cdr);
+        if (x->t == NODE_ERROR)
+          return x;
+        c = f(env, x);
+        free_node(x);
+        return c ? c : new_node();
+      }
       if (r)
         r->r++;
       if (r && r->t == NODE_BUILTINFUNC) {
@@ -4138,15 +4199,15 @@ static NODE *eval_node_dispatch(ENV *env, NODE *node) {
           free_node(r);
           return x;
         }
-        c = call_resolved_node(env, r, x, 0);
+        c = call_resolved_node(env, r, x, 0, 0);
         free_node(x);
       } else if (r) {
-        c = call_resolved_node(env, r, node->cdr, 0);
+        c = call_resolved_node(env, r, node->cdr, 0, 1);
       } else {
         r = look_macro(env, c->s);
         if (!r)
           return new_errorn(ILLEGAL_FUNCTION_CALL, node);
-        c = call_resolved_node(env, r, node->cdr, 1);
+        c = call_resolved_node(env, r, node->cdr, 1, 0);
       }
       free_node(r);
     } else {
@@ -4201,16 +4262,26 @@ NODE *eval_node(ENV *env, NODE *node) {
 
   while (1) {
     ret = eval_node_dispatch(curr_env, curr_node);
-    if (ret && ret->t == NODE_TAIL) {
-      NODE *next_node = ret->car;
-      ENV *next_env = (ENV *)ret->cdr;
+    if (ret == &direct_tail || (ret && ret->t == NODE_TAIL)) {
+      NODE *next_node;
+      ENV *next_env;
+
+      if (ret == &direct_tail) {
+        next_node = direct_tail_next;
+        next_env = direct_tail_env;
+      } else {
+        next_node = ret->car;
+        next_env = (ENV *)ret->cdr;
+      }
 
       if (next_node)
         next_node->r++;
 
-      ret->car = NULL;
-      ret->cdr = NULL;
-      free_node(ret);
+      if (ret != &direct_tail) {
+        ret->car = NULL;
+        ret->cdr = NULL;
+        free_node(ret);
+      }
 
       if (curr_node != node) {
         free_node(curr_node);
