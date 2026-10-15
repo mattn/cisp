@@ -749,12 +749,12 @@ static NODE *look_ident(ENV *env, const char *k) {
 }
 
 /* Cache of functions found in the global environment, keyed by the interned
- * name. An ITEM stays valid until its environment is freed, which clears the
- * cache. */
+ * name. Freeing an environment with functions or redefining a function
+ * clears the cache. */
 #define FUNC_CACHE_SIZE 256
 static struct {
   const char *k;
-  ITEM *item;
+  NODE *v;
 } func_cache[FUNC_CACHE_SIZE];
 
 static void func_cache_clear(void) {
@@ -779,19 +779,14 @@ static NODE *look_func_noref(ENV *env, const char *k) {
   }
 
   h = ((uintptr_t)k >> 4) % FUNC_CACHE_SIZE;
-  if (func_cache[h].k == k) {
-    ni = func_cache[h].item;
-  } else {
-    ni = find_item(env->lf, env->nf, k);
-    if (ni) {
-      func_cache[h].k = k;
-      func_cache[h].item = ni;
-    }
-  }
-  if (ni)
-    return ni->v;
-
-  return NULL;
+  if (func_cache[h].k == k)
+    return func_cache[h].v;
+  ni = find_item(env->lf, env->nf, k);
+  if (!ni)
+    return NULL;
+  func_cache[h].k = k;
+  func_cache[h].v = ni->v;
+  return ni->v;
 }
 
 static NODE *look_func(ENV *env, const char *k) {
@@ -842,6 +837,7 @@ void add_variable(ENV *env, const char *k, NODE *node) {
 void add_function(ENV *env, const char *k, NODE *node) {
   ITEM *ni = find_item(env->lf, env->nf, k);
   if (ni) {
+    func_cache_clear();
     free_node(ni->v);
     ni->v = node;
     return;
@@ -2514,14 +2510,11 @@ copy_node(ENV *env, NODE *lhs) {
 }
 #endif
 
-/* Parsed identifiers are interned, so compare the pointer first and only
- * fall back to strcmp for names that could be "&rest" */
-static INLINE int is_rest(const char *s) {
-  static const char *rest;
-  if (!rest)
-    rest = intern("&rest");
-  return s == rest || (s[0] == '&' && !strcmp(s, "&rest"));
-}
+/* Identifiers are interned (variable lookup relies on it too), so "&rest"
+ * is recognized by its pointer */
+static const char *rest_sym;
+
+static INLINE int is_rest(const char *s) { return s == rest_sym; }
 
 /* direct: the caller is eval_node_dispatch, which may return &direct_tail */
 static NODE *call_resolved_node(ENV *env, NODE *x, NODE *alist, int macro,
@@ -3996,6 +3989,7 @@ static NODE shared_nodes[2 + SMALL_INT_MAX - SMALL_INT_MIN + 1];
 
 static void init_shared_nodes(void) {
   size_t i;
+  rest_sym = intern("&rest");
   shared_nodes[0].t = NODE_NIL;
   shared_nodes[1].t = NODE_T;
   for (i = 2; i < sizeof(shared_nodes) / sizeof(shared_nodes[0]); i++) {
@@ -4139,17 +4133,59 @@ compute:
   }
 }
 
+/* If x is an integer comparison whose operands are integer literals or
+ * variables, store its truth in *r and return 1 */
+static int int_compare_in_place(ENV *env, NODE *x, int *r) {
+  NODE *fn, *lhs, *rhs;
+  long a, b;
+
+  if (x->t != NODE_CELL || !x->car || x->car->t != NODE_IDENT)
+    return 0;
+  fn = look_func_noref(env, x->car->s);
+  if (!fn || fn->op < BINOP_LT || node_narg(x->cdr) != 2)
+    return 0;
+  lhs = borrow_value(env, x->cdr->car);
+  if (!lhs || lhs->t != NODE_INT)
+    return 0;
+  rhs = borrow_value(env, x->cdr->cdr->car);
+  if (!rhs || rhs->t != NODE_INT)
+    return 0;
+  a = lhs->i;
+  b = rhs->i;
+  switch (fn->op) {
+  case BINOP_LT:
+    *r = a < b;
+    break;
+  case BINOP_LE:
+    *r = a <= b;
+    break;
+  case BINOP_GT:
+    *r = a > b;
+    break;
+  case BINOP_GE:
+    *r = a >= b;
+    break;
+  default:
+    *r = a == b;
+    break;
+  }
+  return 1;
+}
+
 static NODE *eval_if(ENV *env, NODE *alist) {
   NODE *c;
   int r;
 
   if (!arg_count_between(alist, 2, 3))
     return new_errorn("malformed if", alist);
-  c = eval_node(env, alist->car);
-  if (c->t == NODE_ERROR)
-    return c;
-  r = !node_isnull(c);
-  free_node(c);
+  /* a plain integer comparison needs no T/NIL node */
+  if (!int_compare_in_place(env, alist->car, &r)) {
+    c = eval_node(env, alist->car);
+    if (c->t == NODE_ERROR)
+      return c;
+    r = !node_isnull(c);
+    free_node(c);
+  }
   if (r) {
     direct_tail_next = alist->cdr->car;
   } else {
@@ -4161,7 +4197,9 @@ static NODE *eval_if(ENV *env, NODE *alist) {
   return &direct_tail;
 }
 
-static NODE *eval_node_dispatch(ENV *env, NODE *node) {
+/* fn: the function named by the head of node if the caller already looked
+ * it up, NULL otherwise */
+static NODE *eval_node_dispatch(ENV *env, NODE *node, NODE *fn) {
   NODE *c = NULL;
   switch (node->t) {
   case NODE_TAIL:
@@ -4204,7 +4242,7 @@ static NODE *eval_node_dispatch(ENV *env, NODE *node) {
       c = call_node(env, r, node->cdr);
       free_node(r);
     } else if (c->t == NODE_IDENT) {
-      NODE *r = look_func_noref(env, c->s);
+      NODE *r = fn ? fn : look_func_noref(env, c->s);
       if (r && r->op && node_narg(node->cdr) == 2) {
         /* no reference needed: eval_int_binop reads what it needs from r
          * before evaluating the arguments */
@@ -4276,7 +4314,7 @@ static NODE *eval_node_dispatch(ENV *env, NODE *node) {
 }
 
 NODE *eval_node(ENV *env, NODE *node) {
-  NODE *ret = NULL;
+  NODE *ret = NULL, *fn = NULL;
   ENV *curr_env = env;
   NODE *curr_node = node;
   ENV *env_stack_local[8];
@@ -4284,7 +4322,8 @@ NODE *eval_node(ENV *env, NODE *node) {
   int env_stack_size = 0;
   int env_stack_capacity = 8;
 
-  /* literals and variables never produce a tail call */
+  /* literals, variables and integer arithmetic never produce a tail call,
+   * so they skip the tail-call loop */
   switch (node->t) {
   case NODE_INT:
   case NODE_DOUBLE:
@@ -4292,12 +4331,20 @@ NODE *eval_node(ENV *env, NODE *node) {
     return node;
   case NODE_IDENT:
     return do_ident(env, node);
+  case NODE_CELL:
+    if (node->car && node->car->t == NODE_IDENT) {
+      fn = look_func_noref(env, node->car->s);
+      if (fn && fn->op && node_narg(node->cdr) == 2)
+        return eval_int_binop(env, fn, node->cdr);
+    }
+    break;
   default:
     break;
   }
 
   while (1) {
-    ret = eval_node_dispatch(curr_env, curr_node);
+    ret = eval_node_dispatch(curr_env, curr_node, fn);
+    fn = NULL;
     if (ret == &direct_tail || (ret && ret->t == NODE_TAIL)) {
       NODE *next_node;
       ENV *next_env;
