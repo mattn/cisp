@@ -4060,12 +4060,38 @@ static char binop_of(f_do f) {
 /* Apply a two-argument arithmetic or comparison builtin. When both arguments
  * are integers the result is computed directly, without building the
  * argument list that the builtin takes. */
+/* The value of a literal or a bound variable, without taking a reference.
+ * NULL when x needs a real evaluation. */
+static INLINE NODE *borrow_value(ENV *env, NODE *x) {
+  ITEM *ni;
+  if (x->t == NODE_INT)
+    return x;
+  if (x->t != NODE_IDENT)
+    return NULL;
+  for (; env; env = env->p) {
+    ni = find_item_linear(env->lv, env->nv, x->s);
+    if (ni)
+      return ni->v;
+  }
+  return NULL;
+}
+
 static NODE *eval_int_binop(ENV *env, NODE *fn, NODE *args) {
   NODE *lhs, *rhs, *nn, *x;
   /* fn may be redefined while the arguments are evaluated */
   f_do f = fn->f;
   char op = fn->op;
   long a, b;
+
+  /* integer literals and variables are read in place; looking them up has
+   * no side effects, so anything else falls back to evaluating both */
+  lhs = borrow_value(env, args->car);
+  rhs = lhs && lhs->t == NODE_INT ? borrow_value(env, args->cdr->car) : NULL;
+  if (rhs && rhs->t == NODE_INT) {
+    a = lhs->i;
+    b = rhs->i;
+    goto compute;
+  }
 
   lhs = eval_node(env, args->car);
   if (lhs->t == NODE_ERROR)
@@ -4092,6 +4118,7 @@ static NODE *eval_int_binop(ENV *env, NODE *fn, NODE *args) {
   b = rhs->i;
   free_node(lhs);
   free_node(rhs);
+compute:
   switch (op) {
   case BINOP_PLUS:
     return int_node(a + b);
